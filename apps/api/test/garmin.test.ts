@@ -133,6 +133,10 @@ describe('Garmin Connect through the app', () => {
     expect(down.json()).toMatchObject({ code: 'garmin_unreachable' });
   });
 
+  it('treats disconnecting an unlinked account as done', async () => {
+    expect((await call('POST', '/api/garmin/disconnect')).json()).toEqual({ ok: true });
+  });
+
   it('never stores or echoes the Garmin password', async () => {
     const res = await call('POST', '/api/garmin/login', {
       email: 'runner@garmin.test',

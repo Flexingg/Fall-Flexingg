@@ -66,7 +66,7 @@ export function describeGarminError(err: unknown): GarminProblem | null {
     };
   return {
     code: 'garmin_error',
-    message: `Garmin sign-in failed: ${detail.slice(0, 200)}`,
+    message: `Garmin said: ${detail.slice(0, 200)}`,
     status: 502,
   };
 }

@@ -6,7 +6,7 @@ import {
   type GarminLoginResult,
   type GarminStatus,
 } from '@gauntlet/shared';
-import { describeGarminError } from '@gauntlet/sparky';
+import { describeGarminError, SparkyError } from '@gauntlet/sparky';
 import type { FastifyInstance } from 'fastify';
 import { requireUser } from '../auth.js';
 import type { AppContext } from '../context.js';
@@ -104,6 +104,8 @@ export function garminRoutes(app: FastifyInstance, ctx: AppContext) {
     try {
       await ctx.sparky.garminUnlink(await tokenFor(req.userId));
     } catch (err) {
+      // Already disconnected (say, from SparkyFitness itself) is the outcome they wanted.
+      if (err instanceof SparkyError && err.status === 400) return { ok: true };
       return fail(err);
     }
     return { ok: true };
