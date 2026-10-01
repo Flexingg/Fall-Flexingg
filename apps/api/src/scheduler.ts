@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppContext } from './context.js';
 import { challengeParticipants, challenges, users } from './db/schema.js';
-import { finalizeChallenge } from './services/challenges.js';
+import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
 import { syncUser } from './services/sync.js';
 
 /** Only one API instance runs the background loop at a time. */
@@ -47,10 +47,12 @@ async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: numb
   for (let i = 0; i < competitors.length; i += 4) {
     const batch = competitors.slice(i, i + 4);
     const results = await Promise.all(
-      batch.map((c) => syncUser(ctx, c.userId).catch(() => ({ ok: false }))),
+      batch.map((c) => syncUser(ctx, c.userId, { settle: false }).catch(() => ({ ok: false }))),
     );
     synced += results.filter((r) => r.ok).length;
   }
+  // Syncs finish in any order, so settle every running challenge once all the data is in.
+  for (const ch of open) await refreshChallenge(ctx, ch.id);
   let finalized = 0;
   for (const ch of open) if (await finalizeChallenge(ctx, ch)) finalized++;
   await ctx.db.execute(

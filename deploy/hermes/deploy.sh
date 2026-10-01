@@ -24,13 +24,12 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "version '$VERSION' has characters that aren't safe in a file name"
 [[ -f "$APK" ]] || die "APK not found: $APK"
-[[ -f "$ENV_FILE" ]] || die "$ENV_FILE not found. Copy deploy/hermes/.env.example there and fill it in."
-command -v docker >/dev/null || die "docker is not installed or not on PATH"
+
+# Fails with plain instructions if Docker, folders, settings or the port aren't ready.
+export GAUNTLET_ENV_FILE="$ENV_FILE" GAUNTLET_DOWNLOADS_DIR="$DOWNLOADS"
+"$ROOT/deploy/hermes/preflight.sh" || die "this machine isn't ready (see above)"
 
 set -a; source "$ENV_FILE"; set +a
-for v in POSTGRES_PASSWORD JWT_SECRET ENCRYPTION_KEY PUBLIC_WEB_URL; do
-  [[ -n "${!v:-}" ]] || die "$v is empty in $ENV_FILE"
-done
 export GAUNTLET_DOWNLOADS_DIR="$DOWNLOADS"
 PORT="${GAUNTLET_PORT:-3333}"
 compose() { docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }

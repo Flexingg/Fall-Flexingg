@@ -1,6 +1,9 @@
 # On every GitHub release: build + sign the Android APK, attach it to the release,
 # then deploy the web app (and publish the APK) on hermes-pc, port 3333.
 #
+# Dry run: Actions -> Release -> Run workflow with the tag left empty builds a signed APK from the
+# selected branch and deploys it as "dev-<sha>", without touching any GitHub release.
+#
 # One-time setup: see deploy/hermes/README.md.
 name: Release
 
@@ -10,8 +13,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to (re)build and deploy, e.g. v0.2.0
-        required: true
+        description: 'Existing release tag to rebuild, e.g. v0.2.0. Leave empty for a dry run from the selected branch (no release is touched).'
+        required: false
+        default: ''
+      deploy:
+        description: Deploy to hermes-pc after building
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -20,19 +28,45 @@ concurrency:
   group: release-hermes
   cancel-in-progress: false
 
-env:
-  TAG: ${{ github.event.release.tag_name || inputs.tag }}
-
 jobs:
+  meta:
+    name: Work out version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.m.outputs.version }}
+      ref: ${{ steps.m.outputs.ref }}
+      publish: ${{ steps.m.outputs.publish }}
+    steps:
+      - id: m
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          tag="${RELEASE_TAG:-$INPUT_TAG}"
+          if [ -n "$tag" ]; then
+            version="$tag"; ref="$tag"; publish=true
+          else
+            version="dev-${SHA::7}"; ref="$SHA"; publish=false
+          fi
+          if ! printf '%s' "$version" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+            echo "::error::Version '$version' can only contain letters, digits, '.', '_' and '-' (it becomes a file name). Rename the tag."; exit 1
+          fi
+          { echo "version=$version"; echo "ref=$ref"; echo "publish=$publish"; } >> "$GITHUB_OUTPUT"
+          echo "Building $version (publish to release: $publish)"
+
   apk:
     name: Build signed APK
+    needs: meta
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.meta.outputs.version }}
     outputs:
       file: ${{ steps.name.outputs.file }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ needs.meta.outputs.ref }}
 
       - name: Check configuration
         env:
@@ -42,13 +76,6 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          case "$TAG" in
-            [A-Za-z0-9]*) ;;
-            *) echo "::error::Release tag '$TAG' must start with a letter or digit"; exit 1;;
-          esac
-          if ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
-            echo "::error::Release tag '$TAG' can only contain letters, digits, '.', '_' and '-' (it becomes a file name)"; exit 1
-          fi
           missing=()
           [ -n "$PUBLIC_URL" ] || missing+=("variable GAUNTLET_PUBLIC_URL")
           [ -n "$KEYSTORE" ]   || missing+=("secret ANDROID_KEYSTORE_BASE64")
@@ -70,7 +97,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
+      - uses: ./.github/actions/setup-android-sdk
       - run: pnpm install --frozen-lockfile
 
       - name: Build web assets for Android
@@ -106,6 +133,7 @@ jobs:
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
       - name: Attach to the release
+        if: needs.meta.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "dist/${{ steps.name.outputs.file }}" "dist/${{ steps.name.outputs.file }}.sha256" --clobber
@@ -118,13 +146,16 @@ jobs:
 
   deploy:
     name: Deploy to hermes-pc (port 3333)
-    needs: apk
+    needs: [meta, apk]
+    if: github.event_name == 'release' || inputs.deploy
     runs-on: [self-hosted, hermes-pc]
     environment: hermes-pc
+    env:
+      TAG: ${{ needs.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ needs.meta.outputs.ref }}
       - uses: actions/download-artifact@v4
         with:
           name: gauntlet-apk

@@ -324,50 +324,54 @@ export async function openChallengesForUser(
 /**
  * Recompute a challenge after new data: record today's ranks for the rank
  * history chart and announce a new leader.
+ *
+ * Several people's syncs can finish at the same moment, so this runs under a
+ * per-challenge lock and works from the database, never from a challenge row
+ * loaded earlier: a stale row would carry an out-of-date leader.
  */
-export async function refreshChallenge(ctx: AppContext, ch: ChallengeRow): Promise<void> {
-  if (challengeStatus(ctx, ch) !== 'active') return;
-  const parts = await getParticipants(ctx, ch.id);
-  const { standings, asOf } = await computeChallengeStandings(ctx, ch, parts);
-  const ranked = standings.filter((s) => s.score != null);
-  if (ranked.length) {
-    await ctx.db
-      .insert(rankSnapshots)
-      .values(
-        ranked.map((s) => ({ challengeId: ch.id, userId: s.userId, date: asOf, rank: s.rank })),
-      )
-      .onConflictDoUpdate({
-        target: [rankSnapshots.challengeId, rankSnapshots.userId, rankSnapshots.date],
-        set: { rank: sqlExcluded('rank') },
-      });
-  }
-  const top = ranked[0];
-  const soleLeader =
-    top &&
-    top.rank === 1 &&
-    ranked.filter((s) => s.rank === 1).length === 1 &&
-    (top.score ?? 0) > 0;
-  if (soleLeader && top.userId !== ch.leaderId) {
-    // Compare-and-set, so two syncs finishing together announce the change once.
-    const [changed] = await ctx.db
-      .update(challenges)
-      .set({ leaderId: top.userId })
-      .where(
-        and(
-          eq(challenges.id, ch.id),
-          ch.leaderId ? eq(challenges.leaderId, ch.leaderId) : isNull(challenges.leaderId),
-        ),
-      )
-      .returning({ id: challenges.id });
-    if (changed && ch.leaderId && ranked.length > 1) {
-      await ctx.db.insert(feedEvents).values({
+export async function refreshChallenge(ctx: AppContext, challengeId: string): Promise<void> {
+  await ctx.db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`challenge:${challengeId}`}, 0))`,
+    );
+    const txCtx: AppContext = { ...ctx, db: tx as unknown as AppContext['db'] };
+    const [ch] = await tx.select().from(challenges).where(eq(challenges.id, challengeId));
+    if (!ch || challengeStatus(txCtx, ch) !== 'active') return;
+
+    const parts = await getParticipants(txCtx, ch.id);
+    const { standings, asOf } = await computeChallengeStandings(txCtx, ch, parts);
+    const ranked = standings.filter((s) => s.score != null);
+    if (ranked.length) {
+      await tx
+        .insert(rankSnapshots)
+        .values(
+          ranked.map((s) => ({ challengeId: ch.id, userId: s.userId, date: asOf, rank: s.rank })),
+        )
+        .onConflictDoUpdate({
+          target: [rankSnapshots.challengeId, rankSnapshots.userId, rankSnapshots.date],
+          set: { rank: sqlExcluded('rank') },
+        });
+    }
+
+    const top = ranked[0];
+    const soleLeader =
+      top &&
+      top.rank === 1 &&
+      ranked.filter((s) => s.rank === 1).length === 1 &&
+      (top.score ?? 0) > 0;
+    if (!soleLeader || top.userId === ch.leaderId) return;
+
+    await tx.update(challenges).set({ leaderId: top.userId }).where(eq(challenges.id, ch.id));
+    // The first leader is not an overtake.
+    if (ch.leaderId && ranked.length > 1) {
+      await tx.insert(feedEvents).values({
         actorId: top.userId,
         challengeId: ch.id,
         kind: 'took_lead',
         payload: { previousLeaderId: ch.leaderId },
       });
     }
-  }
+  });
 }
 
 /** Close challenges whose last day has passed: freeze ranks and announce the winner. */

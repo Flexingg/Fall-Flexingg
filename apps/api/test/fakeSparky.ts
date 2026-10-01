@@ -36,6 +36,8 @@ export class FakeSparky {
   tokens = new Map<string, { userId: string; kind: 'session' | 'key'; keyId?: string }>();
   pendingTwoFactor = new Map<string, string>();
   calls: string[] = [];
+  /** Artificial response delay per user id (ms), to force sync interleavings in tests. */
+  latencyMs: Record<string, number> = {};
   private seq = 0;
 
   addUser(u: Pick<FakeUser, 'id' | 'email' | 'password' | 'name'> & Partial<FakeUser>): FakeUser {
@@ -120,6 +122,8 @@ export class FakeSparky {
     const who = auth ? this.tokens.get(auth) : undefined;
     if (!who) return json(401, { error: 'Authentication required.' });
     const user = this.users.get(who.userId)!;
+    const delay = this.latencyMs[user.id];
+    if (delay) await new Promise((r) => setTimeout(r, delay));
     const q = url.searchParams;
     const inRange = (d: string, s: string, e: string) => d >= s && d <= e;
 

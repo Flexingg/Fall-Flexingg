@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
     tags: ['v*']
   pull_request:
 
@@ -62,8 +62,6 @@ jobs:
   android:
     needs: test
     runs-on: ubuntu-latest
-    env:
-      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -75,32 +73,20 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
+      - uses: ./.github/actions/setup-android-sdk
       - run: pnpm install --frozen-lockfile
       - name: Build web assets for Android
         run: pnpm --filter @gauntlet/web cap:sync
-      - name: Decode signing key
-        if: env.HAS_KEYSTORE == 'true'
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/gauntlet.jks"
-      - name: Gradle build
+      - name: Build debug APK
         working-directory: apps/web/android
         env:
           GAUNTLET_VERSION_CODE: ${{ github.run_number }}
-          GAUNTLET_VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('0.1.{0}', github.run_number) }}
-          GAUNTLET_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          GAUNTLET_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          GAUNTLET_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ "$HAS_KEYSTORE" = "true" ]; then
-            export GAUNTLET_KEYSTORE_PATH="$RUNNER_TEMP/gauntlet.jks"
-            ./gradlew assembleDebug assembleRelease --no-daemon
-          else
-            ./gradlew assembleDebug --no-daemon
-          fi
+          GAUNTLET_VERSION_NAME: 0.1.${{ github.run_number }}
+        run: ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: gauntlet-android
-          path: apps/web/android/app/build/outputs/apk/**/*.apk
+          name: gauntlet-android-debug
+          path: apps/web/android/app/build/outputs/apk/debug/*.apk
 
   docker:
     needs: test

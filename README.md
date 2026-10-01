@@ -81,7 +81,8 @@ pnpm --filter @gauntlet/web build && pnpm --filter @gauntlet/web e2e   # needs t
 
 Publishing a GitHub release builds a signed Android APK, attaches it to the release, and deploys the
 web app and API on hermes-pc (port 3333, published by Cloudflare), with the APK downloadable from the
-app's Profile page. Setup and operation: [`deploy/hermes/README.md`](deploy/hermes/README.md).
+app's Profile page. Setup and operation: [`deploy/hermes/README.md`](deploy/hermes/README.md). Run _Actions → Hermes check_ once
+to confirm the machine is ready.
 
 For any other host, `deploy/docker-compose.yml` runs the same image (API + PWA on port 8080) with
 Postgres; copy `deploy/.env.example` to `deploy/.env` and run

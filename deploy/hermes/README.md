@@ -65,6 +65,16 @@ cache rule to bypass the cache for `/api/*`, `/sw.js` and `/downloads/gauntlet-l
 Set `GAUNTLET_BIND=127.0.0.1` in `/opt/gauntlet/.env` if `cloudflared` runs on the same machine and you
 don't want 3333 open on your LAN.
 
+### 5. Check it works (do this before your first release)
+
+Run **Actions → Hermes check → Run workflow**. It runs on the hermes-pc runner and tells you, in plain
+words, whether Docker is usable by the runner, `/opt/gauntlet` is writable, `/opt/gauntlet/.env` is
+complete, port 3333 is free and the machine can reach Docker Hub and SparkyFitness. The same check runs
+at the start of every deploy. You can also run it by hand: `deploy/hermes/preflight.sh`.
+
+To try the whole pipeline without publishing a release, run **Actions → Release → Run workflow** and
+leave _tag_ empty. It builds a signed APK from the selected branch and deploys it as `dev-<commit>`.
+
 ## Releasing
 
 Create a release in GitHub (tag such as `v0.2.0`, letters, digits, `.`, `_` and `-` only). The workflow

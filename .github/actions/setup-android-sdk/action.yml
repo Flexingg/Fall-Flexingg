@@ -1,0 +1,38 @@
+name: Set up Android SDK
+description: >
+  Uses the Android SDK that ships on GitHub's ubuntu runners and makes sure the platform and
+  build-tools Gauntlet needs are installed and licensed. (android-actions/setup-android@v3 asks for a
+  legacy "tools" package that no longer exists, so it fails on current runners.)
+inputs:
+  platform:
+    description: Android platform API level
+    default: '36'
+  build-tools:
+    description: Build-tools version
+    default: 36.0.0
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        BUILD_TOOLS: ${{ inputs.build-tools }}
+      run: |
+        set -euo pipefail
+        SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+        [ -d "$SDK" ] || { echo "::error::No Android SDK at $SDK. This action expects a GitHub-hosted ubuntu runner."; exit 1; }
+        SDKMANAGER="$(find "$SDK/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)"
+        [ -n "$SDKMANAGER" ] || { echo "::error::sdkmanager not found under $SDK/cmdline-tools"; exit 1; }
+        echo "Using $SDKMANAGER"
+
+        run() { if [ -w "$SDK" ]; then "$@"; else sudo -E "$@"; fi; }
+        yes | run "$SDKMANAGER" --sdk_root="$SDK" --licenses > /dev/null || true
+        if [ ! -d "$SDK/platforms/android-$PLATFORM" ] || [ ! -d "$SDK/build-tools/$BUILD_TOOLS" ]; then
+          run "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-$PLATFORM" "build-tools;$BUILD_TOOLS"
+        fi
+        [ -d "$SDK/platforms/android-$PLATFORM" ] || { echo "::error::platform android-$PLATFORM is missing"; exit 1; }
+        [ -x "$SDK/build-tools/$BUILD_TOOLS/apksigner" ] || { echo "::error::build-tools $BUILD_TOOLS is missing"; exit 1; }
+
+        echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+        echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+        echo "SDK ready: platform android-$PLATFORM, build-tools $BUILD_TOOLS"

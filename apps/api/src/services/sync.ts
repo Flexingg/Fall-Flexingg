@@ -47,7 +47,20 @@ const queued = new Map<string, Promise<SyncResult>>();
  * runs once more, so it always sees data written before the call; any further
  * callers share that queued run.
  */
-export function syncUser(ctx: AppContext, userId: string): Promise<SyncResult> {
+export interface SyncOptions {
+  /**
+   * Re-rank the user's challenges when done (default). The background cycle turns this off and
+   * settles every challenge once all syncs are in, so a leader isn't announced and then
+   * overtaken just because of the order people happened to sync in.
+   */
+  settle?: boolean;
+}
+
+export function syncUser(
+  ctx: AppContext,
+  userId: string,
+  opts: SyncOptions = {},
+): Promise<SyncResult> {
   const running = inFlight.get(userId);
   if (running) {
     const existing = queued.get(userId);
@@ -56,17 +69,17 @@ export function syncUser(ctx: AppContext, userId: string): Promise<SyncResult> {
       .catch(() => undefined)
       .then(() => {
         queued.delete(userId);
-        return syncUser(ctx, userId);
+        return syncUser(ctx, userId, opts);
       });
     queued.set(userId, next);
     return next;
   }
-  const p = doSync(ctx, userId).finally(() => inFlight.delete(userId));
+  const p = doSync(ctx, userId, opts).finally(() => inFlight.delete(userId));
   inFlight.set(userId, p);
   return p;
 }
 
-async function doSync(ctx: AppContext, userId: string): Promise<SyncResult> {
+async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promise<SyncResult> {
   const user = await getUser(ctx, userId);
   if (user.keyStatus !== 'active' || !user.sparkyKeyEnc)
     return { userId, ok: false, changed: 0, error: 'sparky_key_invalid' };
@@ -104,7 +117,7 @@ async function doSync(ctx: AppContext, userId: string): Promise<SyncResult> {
 
   // First sync pulls weeks of history at once; don't post that as "progress".
   if (user.lastSyncedAt) await postProgress(ctx, userId, open, changes);
-  for (const ch of open) await refreshChallenge(ctx, ch);
+  if (opts.settle !== false) for (const ch of open) await refreshChallenge(ctx, ch.id);
   return { userId, ok: true, changed: changes.length };
 }
 

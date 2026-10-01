@@ -1,0 +1,19 @@
+# Run this by hand (Actions -> Hermes check -> Run workflow) before your first release.
+# It runs on the hermes-pc runner and reports whether the machine is ready to deploy Gauntlet:
+# Docker access, folders, settings in /opt/gauntlet/.env, the port, and network access.
+name: Hermes check
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release-hermes
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Check hermes-pc
+    runs-on: [self-hosted, hermes-pc]
+    steps:
+      - uses: actions/checkout@v4
+      - run: deploy/hermes/preflight.sh
