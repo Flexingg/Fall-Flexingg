@@ -8,12 +8,32 @@
 #   FLY_API_TOKEN=... FLY_APP_PREFIX=gauntlet GAUNTLET_PUBLIC_URL=https://... \
 #     SPARKY_PUBLIC_URL=https://... deploy/fly/setup.sh
 source "$(dirname "$0")/common.sh"
-ORG="${FLY_ORG:-personal}"
+ORG="${FLY_ORG:-}"
 need() { command -v "$1" >/dev/null || { echo "setup: needs $1" >&2; exit 2; }; }
 need jq; need openssl; need "$FLY"
 
+log "Checking the Fly token"
+if ! orgs_json="$("$FLY" orgs list --json 2>&1)" || ! jq -e . >/dev/null 2>&1 <<<"$orgs_json"; then
+  cat >&2 <<MSG
+setup: Fly rejected FLY_API_TOKEN ("${orgs_json:0:120}").
+  - It must be a token for your Fly account or organisation: dashboard -> Tokens -> create an
+    organisation token (or run: fly tokens create org), or: fly auth token for a personal token.
+  - Paste the whole value, including a leading "FlyV1 " if there is one, with no quotes or spaces.
+  - A deploy token made for a single app can't create apps.
+MSG
+  exit 1
+fi
+slugs="$(jq -r '.[] | (.Slug // .slug)' <<<"$orgs_json")"
+echo "  token can see organisations: $(tr '\n' ' ' <<<"$slugs")"
+if [ -z "$ORG" ]; then
+  if [ "$(wc -l <<<"$slugs")" -eq 1 ]; then ORG="$slugs"
+  elif grep -qx personal <<<"$slugs"; then ORG=personal
+  else echo "setup: several organisations found; set the FLY_ORG variable to one of them." >&2; exit 1; fi
+fi
+grep -qx "$ORG" <<<"$slugs" || { echo "setup: the token can't see organisation '$ORG' (set FLY_ORG to one listed above)." >&2; exit 1; }
+
 log "Apps (org: $ORG, region: $REGION)"
-existing="$("$FLY" apps list --org "$ORG" --json | jq -r '.[].Name // .[].name')"
+existing="$("$FLY" apps list --org "$ORG" --json | jq -r '.[] | (.Name // .name)')"
 for app in "$APP_DB" "$APP_SPARKY_API" "$APP_SPARKY_WEB" "$APP_GAUNTLET"; do
   if grep -qx "$app" <<<"$existing"; then
     echo "  exists  $app"
