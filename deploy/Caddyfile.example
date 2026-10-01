@@ -1,8 +1,0 @@
-# If you use Caddy in front of SparkyFitness, add Gauntlet next to it:
-gauntlet.randalls.cc {
-	reverse_proxy localhost:8080
-}
-
-# Android App Links: lets invite links open the app directly. Replace the
-# fingerprint with your release key's SHA-256 (keytool -list -v -keystore ...).
-# Serve deploy/assetlinks.json at https://gauntlet.randalls.cc/.well-known/assetlinks.json

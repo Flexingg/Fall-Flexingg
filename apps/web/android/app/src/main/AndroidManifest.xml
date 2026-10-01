@@ -23,12 +23,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Invite links (https://gauntlet.randalls.cc/j/<code>) open in the app. -->
+            <!-- Invite links (https://<Gauntlet host>/j/<code>) open in the app. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="gauntlet.randalls.cc" android:pathPrefix="/j/" />
+                <data android:scheme="https" android:host="${appLinkHost}" android:pathPrefix="/j/" />
             </intent-filter>
 
             <!-- Health Connect (Android 13 and lower) opens this to show why we need access. -->

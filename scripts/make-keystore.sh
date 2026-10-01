@@ -33,8 +33,7 @@ Add these in GitHub: repo → Settings → Secrets and variables → Actions →
   ANDROID_KEY_ALIAS          $ALIAS
   ANDROID_KEY_PASSWORD       $PASS
 
-Optional, so invite links open the app: set this in /opt/gauntlet/.env on hermes-pc
-
-  ASSETLINKS_SHA256=$SHA
+Invite links open the app automatically: releases publish this key's fingerprint
+($SHA) at /.well-known/assetlinks.json.
 
 MSG

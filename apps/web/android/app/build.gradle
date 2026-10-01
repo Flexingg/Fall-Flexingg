@@ -10,6 +10,8 @@ android {
         // CI sets these from the git tag / run number.
         versionCode Integer.parseInt(System.getenv("GAUNTLET_VERSION_CODE") ?: "1")
         versionName System.getenv("GAUNTLET_VERSION_NAME") ?: "0.1.0"
+        // Invite links on this host open the app (release builds set it from GAUNTLET_PUBLIC_URL).
+        manifestPlaceholders = [appLinkHost: System.getenv("GAUNTLET_LINK_HOST") ?: "gauntlet.randalls.cc"]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

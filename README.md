@@ -20,18 +20,22 @@ SparkyFitness custom measurement), set the rules, invite your crew, and race.
 ## How it fits together
 
 ```
-PWA / Android app ──HTTPS──▶ Gauntlet API (Node + Postgres) ──per-user API key──▶ SparkyFitness
-        │                          │
-   Health Connect ── records ──────┘ (forwarded to SparkyFitness, not stored)
+PWA / Android app ──HTTPS──▶ Gauntlet API (Node) ──per-user API key──▶ SparkyFitness (bundled)
+        │                          │                                      │
+   Health Connect ── records ──────┘ (forwarded, not stored)        one Postgres, two databases
 ```
 
-- **Sign-in:** the API signs in to SparkyFitness for you (email/password, with 2FA if enabled),
-  creates an API key named "Gauntlet" in your account, stores it encrypted (AES-256-GCM), and signs
-  the SparkyFitness session out. Accounts created with Google sign-in have no password, so they
-  paste an API key instead (SparkyFitness → Settings → API keys).
+Gauntlet ships with its own SparkyFitness, which holds everyone's health data; Gauntlet itself
+stores accounts, friends and challenges. Both run on Fly.io (see Release and deploy).
+
+- **Accounts:** "Create an account" in the app makes the SparkyFitness account behind the scenes.
+  Signing in (email/password, with 2FA if enabled) gets the API to create an API key named
+  "Gauntlet" in your SparkyFitness account, store it encrypted (AES-256-GCM), and sign the
+  SparkyFitness session out. People who'd rather use another SparkyFitness can sign in with an API
+  key from it (Android: Advanced).
 - **Sync:** every 15 minutes the API pulls data for everyone in a running challenge, and on demand
   when you pull to refresh. SparkyFitness stores the same metric in different places depending on the
-  source; `apps/api/src/sparky/merge.ts` turns that into one number per day. Sources are never added
+  source; `packages/sparky/src/merge.ts` turns that into one number per day. Sources are never added
   together (a watch and a phone count the same walk), the highest single source wins.
 - **Privacy:** friends see challenge totals and ranks only. Which app your data came from is shown
   on the feed only if you allow it.
@@ -41,9 +45,10 @@ PWA / Android app ──HTTPS──▶ Gauntlet API (Node + Postgres) ──per-
 | Path              | What                                                                                               |
 | ----------------- | -------------------------------------------------------------------------------------------------- |
 | `packages/shared` | Metric catalog, scoring engine (total, race to target, daily average, best day, streak), API types |
-| `apps/api`        | Fastify API, SparkyFitness client and merge, friends, invites, challenges, feed, scheduler         |
+| `packages/sparky` | SparkyFitness client and the multi-source merge, shared by the API and the Android app             |
+| `apps/api`        | Fastify API: accounts, friends, invites, challenges, feed, scheduler                               |
 | `apps/web`        | React PWA; `apps/web/android` is the Capacitor Android project                                     |
-| `deploy/`         | `hermes/`: release deploy on hermes-pc (port 3333); plus a generic Docker Compose setup            |
+| `deploy/`         | `fly/`: Fly.io deploy; `docker-compose.yml`: the whole backend on one machine; `smoke.sh`          |
 | `scripts/`        | `make-keystore.sh`: creates the Android release signing key                                        |
 | `design/`         | Mockups, icon, and screenshots of the real app (`design/app/`)                                     |
 
@@ -79,22 +84,19 @@ pnpm --filter @gauntlet/web build && pnpm --filter @gauntlet/web e2e   # needs t
 
 ## Release and deploy
 
-Publishing a GitHub release builds a signed Android APK, attaches it to the release, and deploys the
-web app and API on hermes-pc (port 3333, published by Cloudflare), with the APK downloadable from the
-app's Profile page. Setup and operation: [`deploy/hermes/README.md`](deploy/hermes/README.md). Run _Actions → Hermes check_ once
-to confirm the machine is ready.
+Everything runs on [Fly.io](https://fly.io) as four small apps: Gauntlet (API + PWA), the
+SparkyFitness server, the SparkyFitness website, and one Postgres holding both databases.
+Publishing a GitHub release builds the signed APK, attaches it to the release and deploys all of it,
+with the APK downloadable from the app's Profile page. One-time setup, custom domains through
+Cloudflare, backups and costs (about $9–11 a month): [`deploy/fly/README.md`](deploy/fly/README.md).
 
-For any other host, `deploy/docker-compose.yml` runs the same image (API + PWA on port 8080) with
-Postgres; copy `deploy/.env.example` to `deploy/.env` and run
-`docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build`. Keep
-`ENCRYPTION_KEY` stable: changing it makes every stored SparkyFitness key unreadable, and everyone has
-to sign in again.
+To run the same backend on any machine with Docker: copy `deploy/.env.example` to `deploy/.env`,
+fill in the secrets, and run `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build`.
+`deploy/smoke.sh <gauntlet url> <sparkyfitness url>` then signs up a test account, pushes steps and
+reads them back (CI does this on every push).
 
-No changes are needed on the SparkyFitness server: Gauntlet calls it server-side, so its CORS and
-trusted-origin settings don't apply to the apps. One thing to know: SparkyFitness allows 4 sign-ins
-per minute per IP, and every Gauntlet sign-in comes from Gauntlet's server. If several people sign
-in at once they may see "too many attempts"; raise `SPARKY_FITNESS_SIGN_IN_RATELIMIT_*` on the
-SparkyFitness server if that becomes a problem. (Syncing uses API keys and isn't affected.)
+Keep `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET` and the SparkyFitness encryption key stable: changing
+them makes stored keys unreadable and signs everyone out.
 
 ## Android
 
@@ -103,13 +105,13 @@ pnpm --filter @gauntlet/web cap:sync      # builds with apps/web/.env.native (VI
 cd apps/web/android && ./gradlew assembleDebug
 ```
 
-- **One APK, two ways to use it, chosen at sign-in.** Enter your SparkyFitness address and an API key
-  (SparkyFitness → Settings → API keys) and leave "Gauntlet server" empty: the phone talks straight to
-  SparkyFitness (Today, Trends, Data sources, Health Connect sync; no web app needed). Fill in a Gauntlet
-  server too and you get friends, challenges and the feed. Switch later under Me. Direct mode signs in
-  with an API key only (the key is kept in Android Keystore-backed storage).
-- Releases are built by CI. Optional repo variables pre-fill the sign-in screen: `GAUNTLET_PUBLIC_URL`
-  (Gauntlet server) and `SPARKY_URL` (default `https://fit.randalls.cc`). `.env.native` is only for local builds.
+- The app signs in (or creates an account) through your Gauntlet server. Release builds point at
+  `GAUNTLET_PUBLIC_URL` and `SPARKY_PUBLIC_URL` (repository variables; `.env.native` for local
+  builds).
+- **Advanced: SparkyFitness only.** With an API key (SparkyFitness → Settings → API keys) and no
+  Gauntlet server, the phone talks straight to SparkyFitness (Today, Trends, Data sources, Health
+  Connect sync). Friends and challenges need a server; connect one later under Me. The key is kept in
+  Android Keystore-backed storage.
 - Pushes and pull requests build a debug APK (artifact `gauntlet-android`).
 - Health Connect: the app asks for read access only (steps, distance, active calories, resting heart
   rate, sleep, exercise, history) and syncs when opened or resumed. Records use the same format and
@@ -124,7 +126,11 @@ walkthrough of every screen), the production layout, and an Android debug build.
 
 Verified against fit.randalls.cc with a real account: API-key sign-in, sync, Today, a steps
 challenge, Trends and Data sources. That data led to the workout clean-up rules in
-`apps/api/src/sparky/merge.ts`, which drop stuck sessions over 6 hours and duplicates written by two
-apps, and cap sleep at time in bed. Not yet verified: password and 2FA sign-in against the real server,
-and Health Connect on a physical device. Push notifications and background Health Connect sync
+`packages/sparky/src/merge.ts`, which drop stuck sessions over 6 hours and duplicates written by two
+apps, and cap sleep at time in bed.
+
+Verified against the bundled SparkyFitness (v1.7.3, real container): creating an account through
+Gauntlet, password sign-in, pushing Health Connect-style records and reading them back on Today.
+Not yet verified: the live Fly.io deploy (needs your Fly account), 2FA against a real server, and
+Health Connect on a physical device. Push notifications and background Health Connect sync
 (WorkManager) are planned follow-ups.

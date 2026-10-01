@@ -23,3 +23,5 @@ apps/web/android/capacitor-cordova-android-plugins/
 
 *.jks.b64
 apps/web/dist-direct/
+deploy/fly/downloads/*
+!deploy/fly/downloads/.gitkeep

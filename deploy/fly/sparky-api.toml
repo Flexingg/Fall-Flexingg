@@ -1,0 +1,44 @@
+# SparkyFitness server (pinned release). Private: Gauntlet calls <prefix>-sparky-api.internal:3010,
+# and the public SparkyFitness site (<prefix>-sparky) proxies /api to it.
+primary_region = 'iad'
+# SparkyFitness can spike above 512 MB while importing; swap avoids an out-of-memory restart.
+swap_size_mb = 512
+
+[build]
+  image = 'codewithcj/sparkyfitness_server:v1.7.3'
+
+[env]
+  NODE_ENV = 'production'
+  TZ = 'America/New_York'
+  SPARKY_FITNESS_SERVER_PORT = '3010'
+  SPARKY_FITNESS_DB_NAME = 'sparkyfitness_db'
+  SPARKY_FITNESS_DB_USER = 'sparky'
+  SPARKY_FITNESS_APP_DB_USER = 'sparky_app'
+  SPARKY_FITNESS_LOG_LEVEL = 'INFO'
+  # Fly's proxy and the site's nginx both sit in front of browser requests.
+  SPARKY_FITNESS_TRUSTED_PROXY_HOPS = '2'
+  # Gauntlet passes each person's address, so this stays a per-person limit.
+  SPARKY_FITNESS_SIGN_IN_RATELIMIT_MAX = '10'
+  SPARKY_FITNESS_CUSTOM_UPLOADS_DIRECTORY = '/data/uploads'
+  SPARKY_FITNESS_CUSTOM_BACKUP_DIRECTORY = '/data/backup'
+
+[mounts]
+  source = 'sparky_data'
+  destination = '/data'
+  initial_size = '1gb'
+  snapshot_retention = 14
+
+[checks]
+  [checks.health]
+    type = 'http'
+    port = 3010
+    method = 'GET'
+    path = '/api/health'
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '60s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+

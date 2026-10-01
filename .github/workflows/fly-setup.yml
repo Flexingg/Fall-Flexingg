@@ -1,0 +1,53 @@
+# Run once (and again any time, it's safe): creates the Fly.io apps, generates their secrets,
+# registers your custom domains and deploys everything. Releases then deploy on their own.
+# See deploy/fly/README.md for the one-time steps before running this.
+name: Fly setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy after setting up (without an APK; the next release adds it)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-fly
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP_PREFIX: ${{ vars.FLY_APP_PREFIX }}
+      FLY_ORG: ${{ vars.FLY_ORG }}
+      GAUNTLET_PUBLIC_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
+      SPARKY_PUBLIC_URL: ${{ vars.SPARKY_PUBLIC_URL }}
+      SPARKY_ADMIN_EMAIL: ${{ vars.SPARKY_ADMIN_EMAIL }}
+    steps:
+      - name: Check configuration
+        run: |
+          missing=()
+          [ -n "$FLY_API_TOKEN" ]  || missing+=("secret FLY_API_TOKEN")
+          [ -n "$FLY_APP_PREFIX" ] || missing+=("variable FLY_APP_PREFIX")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing: ${missing[*]}. See deploy/fly/README.md."; exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Create apps, secrets and domains
+        run: deploy/fly/setup.sh
+      - name: Validate the Fly configs
+        run: |
+          for c in db sparky-api sparky-web gauntlet; do
+            app="$FLY_APP_PREFIX"; [ "$c" = gauntlet ] || app="$FLY_APP_PREFIX-$c"
+            [ "$c" = sparky-web ] && app="$FLY_APP_PREFIX-sparky"
+            flyctl config validate --strict --config "deploy/fly/$c.toml" --app "$app"
+          done
+      - name: Deploy
+        if: inputs.deploy
+        run: deploy/fly/deploy.sh

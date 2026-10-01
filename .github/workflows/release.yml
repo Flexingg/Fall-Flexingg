@@ -1,10 +1,10 @@
-# On every GitHub release: build + sign the Android APK, attach it to the release,
-# then deploy the web app (and publish the APK) on hermes-pc, port 3333.
+# On every GitHub release: build + sign the Android APK, attach it to the release, then deploy
+# the backend to Fly.io (Postgres, SparkyFitness, Gauntlet) with the APK inside the Gauntlet image.
 #
 # Dry run: Actions -> Release -> Run workflow with the tag left empty builds a signed APK from the
 # selected branch and deploys it as "dev-<sha>", without touching any GitHub release.
 #
-# One-time setup: see deploy/hermes/README.md.
+# One-time setup: see deploy/fly/README.md.
 name: Release
 
 on:
@@ -17,7 +17,7 @@ on:
         required: false
         default: ''
       deploy:
-        description: Deploy to hermes-pc after building
+        description: Deploy to Fly.io after building
         type: boolean
         default: true
 
@@ -25,7 +25,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-hermes
+  group: release-fly
   cancel-in-progress: false
 
 jobs:
@@ -63,6 +63,7 @@ jobs:
       TAG: ${{ needs.meta.outputs.version }}
     outputs:
       file: ${{ steps.name.outputs.file }}
+      fingerprint: ${{ steps.name.outputs.fingerprint }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,7 +71,6 @@ jobs:
 
       - name: Check configuration
         env:
-          PUBLIC_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -82,14 +82,30 @@ jobs:
           [ -n "$KEY_ALIAS" ]  || missing+=("secret ANDROID_KEY_ALIAS")
           [ -n "$KEY_PW" ]     || missing+=("secret ANDROID_KEY_PASSWORD")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Missing: ${missing[*]}. A release APK must be signed with the same key every time, or phones can't update it in place. Run scripts/make-keystore.sh and see deploy/hermes/README.md."
+            echo "::error::Missing: ${missing[*]}. A release APK must be signed with the same key every time, or phones can't update it in place. Run scripts/make-keystore.sh and see deploy/fly/README.md."
             exit 1
           fi
-          # Optional: it only pre-fills the "Gauntlet server" field at sign-in. Without it the APK
-          # still works in direct mode (SparkyFitness only).
-          if [ -n "$PUBLIC_URL" ]; then
-            case "$PUBLIC_URL" in https://*) ;; *) echo "::error::GAUNTLET_PUBLIC_URL must start with https://"; exit 1;; esac
-          fi
+
+      - name: Work out the addresses the app uses
+        env:
+          PREFIX: ${{ vars.FLY_APP_PREFIX }}
+          G_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
+          S_URL: ${{ vars.SPARKY_PUBLIC_URL }}
+        run: |
+          # Defaults follow deploy/fly/common.sh: <prefix>.fly.dev and <prefix>-sparky.fly.dev.
+          if [ -z "$G_URL" ] && [ -n "$PREFIX" ]; then G_URL="https://$PREFIX.fly.dev"; fi
+          if [ -z "$S_URL" ] && [ -n "$PREFIX" ]; then S_URL="https://$PREFIX-sparky.fly.dev"; fi
+          for u in "$G_URL" "$S_URL"; do
+            case "$u" in https://*) ;; '') ;; *) echo "::error::Public URLs must start with https:// (got $u)"; exit 1;; esac
+          done
+          [ -n "$G_URL" ] || echo "::warning::No GAUNTLET_PUBLIC_URL or FLY_APP_PREFIX: the APK will ask for a server address."
+          host="${G_URL#https://}"; host="${host%%/*}"
+          {
+            echo "VITE_API_URL=${G_URL%/}"
+            echo "VITE_SPARKY_URL=${S_URL%/}"
+            if [ -n "$host" ]; then echo "GAUNTLET_LINK_HOST=$host"; fi
+          } >> "$GITHUB_ENV"
+          echo "App uses Gauntlet: ${G_URL:-<asks>}  SparkyFitness: ${S_URL:-<asks>}"
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -104,9 +120,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build web assets for Android
-        env:
-          VITE_API_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
-          VITE_SPARKY_URL: ${{ vars.SPARKY_URL }}
         run: pnpm --filter @gauntlet/web cap:sync
 
       - name: Prepare signing key
@@ -137,6 +150,10 @@ jobs:
           mkdir -p dist && cp "$SRC" "dist/$FILE"
           (cd dist && sha256sum "$FILE" > "$FILE.sha256")
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          # Signing-certificate fingerprint for Android App Links (AB:CD:... form).
+          FP="$("$BT/apksigner" verify --print-certs "$SRC" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1 \
+            | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')"
+          echo "fingerprint=$FP" >> "$GITHUB_OUTPUT"
 
       - name: Attach to the release
         if: needs.meta.outputs.publish == 'true'
@@ -151,14 +168,27 @@ jobs:
           if-no-files-found: error
 
   deploy:
-    name: Deploy to hermes-pc (port 3333)
+    name: Deploy to Fly.io
     needs: [meta, apk]
     if: github.event_name == 'release' || inputs.deploy
-    runs-on: [self-hosted, hermes-pc]
-    environment: hermes-pc
+    runs-on: ubuntu-latest
     env:
       TAG: ${{ needs.meta.outputs.version }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP_PREFIX: ${{ vars.FLY_APP_PREFIX }}
+      GAUNTLET_PUBLIC_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
+      SPARKY_PUBLIC_URL: ${{ vars.SPARKY_PUBLIC_URL }}
+      SPARKY_ADMIN_EMAIL: ${{ vars.SPARKY_ADMIN_EMAIL }}
+      ASSETLINKS_SHA256: ${{ needs.apk.outputs.fingerprint }}
     steps:
+      - name: Check configuration
+        run: |
+          missing=()
+          [ -n "$FLY_API_TOKEN" ]  || missing+=("secret FLY_API_TOKEN")
+          [ -n "$FLY_APP_PREFIX" ] || missing+=("variable FLY_APP_PREFIX")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing: ${missing[*]}. See deploy/fly/README.md, then run the Fly setup workflow once."; exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.meta.outputs.ref }}
@@ -166,5 +196,19 @@ jobs:
         with:
           name: gauntlet-apk
           path: apk
+      - name: Put the APK into the Gauntlet image
+        env:
+          FILE: ${{ needs.apk.outputs.file }}
+        run: |
+          D=deploy/fly/downloads
+          cp "apk/$FILE" "$D/$FILE"
+          cp "apk/$FILE" "$D/gauntlet-latest.apk"
+          printf '{"version":"%s","builtAt":"%s","sha256":"%s","file":"%s","sizeBytes":%s}\n' \
+            "$TAG" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(sha256sum "$D/$FILE" | cut -d' ' -f1)" \
+            "$FILE" "$(stat -c %s "$D/$FILE")" > "$D/latest.json"
+          cat "$D/latest.json"
+      - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Deploy
-        run: deploy/hermes/deploy.sh "$TAG" "apk/${{ needs.apk.outputs.file }}"
+        env:
+          EXPECT_APK_VERSION: ${{ needs.meta.outputs.version }}
+        run: deploy/fly/deploy.sh
