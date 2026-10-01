@@ -107,7 +107,7 @@ export class SparkyClient {
 
   constructor(opts: SparkyClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '');
-    this.fetchImpl = opts.fetch ?? fetch;
+    this.fetchImpl = opts.fetch ?? ((input, init) => fetch(input, init));
     this.timeoutMs = opts.timeoutMs ?? 20_000;
   }
 

@@ -52,6 +52,13 @@ jobs:
           for i in $(seq 1 60); do curl -sf localhost:8080/api/health && break; sleep 1; done
           mkdir -p screens
           E2E_APK=1 SCREENSHOT_DIR=$PWD/screens pnpm --filter @gauntlet/web e2e
+      - name: End-to-end (direct mode, no Gauntlet server)
+        run: |
+          cd apps/web
+          VITE_ALLOW_DIRECT_IN_BROWSER=1 pnpm vite build --outDir dist-direct
+          pnpm vite preview --outDir dist-direct --port 4175 --strictPort &
+          for i in $(seq 1 30); do curl -sf localhost:4175 >/dev/null && break; sleep 1; done
+          E2E_DIRECT=1 E2E_BASE_URL=http://localhost:4175 SCREENSHOT_DIR=$PWD/../../screens pnpm exec playwright test e2e/direct.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

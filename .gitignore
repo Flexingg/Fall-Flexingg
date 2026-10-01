@@ -22,3 +22,4 @@ apps/web/android/capacitor-cordova-android-plugins/
 *.jks
 
 *.jks.b64
+apps/web/dist-direct/
