@@ -12,6 +12,7 @@ import { challengeRoutes } from './routes/challenges.js';
 import { connectionRoutes } from './routes/connections.js';
 import { garminRoutes } from './routes/garmin.js';
 import { friendRoutes } from './routes/friends.js';
+import { userRoutes } from './routes/users.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
 import { miscRoutes } from './routes/misc.js';
@@ -71,6 +72,7 @@ export async function buildApp(
   authRoutes(app, full);
   meRoutes(app, full);
   friendRoutes(app, full);
+  userRoutes(app, full);
   inviteRoutes(app, full);
   challengeRoutes(app, full);
   miscRoutes(app, full);

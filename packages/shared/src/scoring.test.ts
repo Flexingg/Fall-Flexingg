@@ -132,3 +132,46 @@ describe('ordinal', () => {
     ]);
   });
 });
+
+describe('"last" metrics (running figures like % toward a target)', () => {
+  const rules = {
+    aggregate: 'last' as const,
+    lowerIsBetter: false,
+    startDate: '2026-01-01',
+    endDate: '2026-01-10',
+    asOf: '2026-01-05',
+  };
+  const series = [
+    {
+      userId: 'a',
+      days: [
+        { date: '2026-01-01', value: 10 },
+        { date: '2026-01-04', value: 60 },
+      ],
+    },
+    {
+      userId: 'b',
+      days: [
+        { date: '2026-01-02', value: 80 },
+        { date: '2026-01-05', value: 40 },
+      ],
+    },
+  ];
+
+  it('total scores the latest value', () => {
+    const s = computeStandings({ ...rules, scoring: 'total' }, series);
+    expect(s.map((x) => [x.userId, x.score])).toEqual([
+      ['a', 60],
+      ['b', 40],
+    ]);
+  });
+
+  it('race to target is won by the first to reach it, not by adding days up', () => {
+    const s = computeStandings({ ...rules, scoring: 'race_to_goal', goal: 50 }, series);
+    expect(s.map((x) => [x.userId, x.reachedGoalOn])).toEqual([
+      ['b', '2026-01-02'],
+      ['a', '2026-01-04'],
+    ]);
+    expect(validateRules({ scoring: 'race_to_goal', aggregate: 'last', goal: 100 })).toBeNull();
+  });
+});

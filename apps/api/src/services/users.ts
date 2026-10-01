@@ -19,7 +19,11 @@ export function toPublicUser(u: Pick<UserRow, 'id' | 'displayName'>): PublicUser
   return { id: u.id, displayName: u.displayName, initials: initials(u.displayName) };
 }
 
-export function toMe(u: UserRow): MeUser {
+export function isAdmin(ctx: Pick<AppContext, 'cfg'>, u: Pick<UserRow, 'email'>): boolean {
+  return ctx.cfg.adminEmails.has(u.email.toLowerCase());
+}
+
+export function toMe(u: UserRow, ctx: Pick<AppContext, 'cfg'>): MeUser {
   return {
     ...toPublicUser(u),
     email: u.email,
@@ -29,6 +33,9 @@ export function toMe(u: UserRow): MeUser {
       healthConnectSync: u.healthConnectSync,
     },
     sparkyKeyStatus: u.keyStatus,
+    visibility: u.visibility,
+    handle: u.handle,
+    isAdmin: isAdmin(ctx, u),
   };
 }
 

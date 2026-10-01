@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { isDateString } from './dates.js';
-import { isMetricKey, type MetricKey } from './metrics.js';
+import { isMetricKey, type MetricAggregate, type MetricKey } from './metrics.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
 
 const dateString = z.string().refine(isDateString, 'Expected a YYYY-MM-DD date');
@@ -56,12 +56,33 @@ export interface PublicUser {
   initials: string;
 }
 
+export type Visibility = 'private' | 'public';
+
 export interface MeUser extends PublicUser {
   email: string;
   timezone: string;
   settings: UserSettings;
   sparkyKeyStatus: 'active' | 'invalid' | 'revoked';
+  /** private (default): only friends and challenge-mates see you. public: searchable, can join public challenges. */
+  visibility: Visibility;
+  handle: string | null;
+  /** Server admin: can feature public challenges. */
+  isAdmin: boolean;
 }
+
+/** 3-20 lowercase letters, digits or underscores. */
+export const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
+
+/** What anyone may see about a public user (never email or health data). */
+export interface UserCard extends PublicUser {
+  handle: string | null;
+  /** Challenges finished and won. */
+  challenges: { played: number; won: number };
+  /** My relationship with them. */
+  friendship: 'none' | 'friends' | 'outgoing' | 'incoming' | 'me';
+}
+
+export const userSearchSchema = z.object({ q: z.string().trim().min(2).max(40) });
 
 export interface UserSettings {
   shareWorkoutDetails: boolean;
@@ -76,6 +97,15 @@ export const updateMeSchema = z.object({
       shareWorkoutDetails: z.boolean().optional(),
       healthConnectSync: z.boolean().optional(),
     })
+    .optional(),
+  visibility: z.enum(['private', 'public']).optional(),
+  handle: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .transform((v) => v.replace(/^@/, ''))
+    .refine((v) => v === '' || HANDLE_RE.test(v), 'Use 3-20 letters, numbers or _')
+    .nullable()
     .optional(),
 });
 
@@ -102,7 +132,10 @@ export interface FriendsResponse {
   requests: FriendRequest[];
 }
 
-export const friendRequestSchema = z.object({ email: z.string().trim().email() });
+export const friendRequestSchema = z.union([
+  z.object({ email: z.string().trim().email() }),
+  z.object({ userId: z.string().uuid() }),
+]);
 
 // ---------- Invites ----------
 
@@ -150,6 +183,8 @@ export const createChallengeSchema = z
     endDate: dateString,
     timezone: z.string().min(1).max(64),
     inviteUserIds: z.array(z.string().uuid()).max(50).default([]),
+    /** public: listed in Discover so anyone public can join. */
+    visibility: z.enum(['private', 'public']).default('private'),
   })
   .refine((v) => v.endDate >= v.startDate, {
     message: 'End date must be on or after start date',
@@ -186,6 +221,8 @@ export interface ChallengeSummary {
   gap: { user: PublicUser; amount: number; ahead: boolean } | null;
   daysLeft: number;
   createdBy: string;
+  visibility: Visibility;
+  featured: boolean;
 }
 
 export interface StandingRow {
@@ -202,7 +239,7 @@ export interface StandingRow {
 
 export interface ChallengeDetail extends ChallengeSummary {
   lowerIsBetter: boolean;
-  aggregate: 'sum' | 'avg';
+  aggregate: MetricAggregate;
   standings: StandingRow[];
   invited: PublicUser[];
   rematchOf: string | null;
@@ -220,6 +257,14 @@ export interface ChallengeResult {
 }
 
 export const respondChallengeSchema = z.object({ accept: z.boolean() });
+
+export const featureChallengeSchema = z.object({ featured: z.boolean() });
+
+export interface DiscoverResponse {
+  challenges: ChallengeSummary[];
+  /** False while the viewer is private: they can look but not join. */
+  canJoin: boolean;
+}
 
 // ---------- Feed ----------
 

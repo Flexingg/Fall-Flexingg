@@ -31,6 +31,8 @@ const envSchema = z.object({
   OAUTH_OURA_CLIENT_SECRET: z.string().optional(),
   OAUTH_POLAR_CLIENT_ID: z.string().optional(),
   OAUTH_POLAR_CLIENT_SECRET: z.string().optional(),
+  /** Comma-separated emails of server admins (can feature public challenges). */
+  ADMIN_EMAILS: z.string().default(''),
   /** Release key SHA-256 fingerprint(s), comma separated, for Android App Links (invite links open the app). */
   ASSETLINKS_SHA256: z.string().default(''),
 });
@@ -43,6 +45,7 @@ export type Config = Omit<z.infer<typeof envSchema>, 'SPARKY_PUBLIC_URL'> & {
   >;
   allowedOrigins: string[];
   encryptionKey: Buffer;
+  adminEmails: Set<string>;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -70,5 +73,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     const clientSecret = (env[`OAUTH_${up}_CLIENT_SECRET`] ?? '').trim();
     if (clientId && clientSecret) oauthApps[id] = { clientId, clientSecret };
   }
-  return { ...cfg, SPARKY_URL, SPARKY_PUBLIC_URL, oauthApps, allowedOrigins, encryptionKey };
+  const adminEmails = new Set(
+    cfg.ADMIN_EMAILS.split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  return {
+    ...cfg,
+    SPARKY_URL,
+    SPARKY_PUBLIC_URL,
+    oauthApps,
+    allowedOrigins,
+    encryptionKey,
+    adminEmails,
+  };
 }

@@ -12,6 +12,7 @@ import { badRequest, HttpError, notFound } from '../context.js';
 import { friendships, users } from '../db/schema.js';
 import { listForUser, loadDetail } from '../services/challenges.js';
 import { pair } from '../services/friends.js';
+import { canSeeUser } from '../services/privacy.js';
 import { getUsers, toPublicUser } from '../services/users.js';
 
 const ONLINE_WINDOW_MS = 6 * 3_600_000;
@@ -73,11 +74,19 @@ export function friendRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.post('/api/friends/requests', auth, async (req) => {
-    const { email } = friendRequestSchema.parse(req.body);
-    const [target] = await ctx.db
-      .select()
-      .from(users)
-      .where(sql`lower(${users.email}) = ${email.toLowerCase()}`);
+    const body = friendRequestSchema.parse(req.body);
+    let target: typeof users.$inferSelect | undefined;
+    if ('email' in body) {
+      [target] = await ctx.db
+        .select()
+        .from(users)
+        .where(sql`lower(${users.email}) = ${body.email.toLowerCase()}`);
+    } else {
+      [target] = await ctx.db.select().from(users).where(eq(users.id, body.userId));
+      // Only people you can see (public, or sharing a challenge) can be asked by id.
+      if (!target || !(await canSeeUser(ctx, req.userId, target)))
+        throw notFound('Person not found');
+    }
     if (!target) {
       throw new HttpError(
         404,

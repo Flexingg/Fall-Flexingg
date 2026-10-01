@@ -12,11 +12,11 @@ import {
   type TodayResponse,
   type TrendsResponse,
 } from '@gauntlet/shared';
-import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { requireUser, revokeAllRefreshTokens } from '../auth.js';
 import type { AppContext } from '../context.js';
-import { badRequest } from '../context.js';
+import { badRequest, HttpError } from '../context.js';
 import { challengeParticipants, dailyMetrics, rankSnapshots, users } from '../db/schema.js';
 import { listForUser } from '../services/challenges.js';
 import { syncUser } from '../services/sync.js';
@@ -26,11 +26,18 @@ import { DISTANCE_CATEGORIES, RESTING_HR_CATEGORIES } from '@gauntlet/sparky';
 export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
 
-  app.get('/api/me', auth, async (req) => toMe(await getUser(ctx, req.userId)));
+  app.get('/api/me', auth, async (req) => toMe(await getUser(ctx, req.userId), ctx));
 
   app.patch('/api/me', auth, async (req) => {
     const body = updateMeSchema.parse(req.body);
     if (body.timezone && !isValidTimeZone(body.timezone)) throw badRequest('Unknown time zone');
+    if (body.handle) {
+      const [taken] = await ctx.db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.handle, body.handle), ne(users.id, req.userId)));
+      if (taken) throw new HttpError(409, 'That handle is taken', 'handle_taken');
+    }
     const [u] = await ctx.db
       .update(users)
       .set({
@@ -42,10 +49,12 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
         ...(body.settings?.healthConnectSync != null
           ? { healthConnectSync: body.settings.healthConnectSync }
           : {}),
+        ...(body.visibility ? { visibility: body.visibility } : {}),
+        ...(body.handle !== undefined ? { handle: body.handle || null } : {}),
       })
       .where(eq(users.id, req.userId))
       .returning();
-    return toMe(u!);
+    return toMe(u!, ctx);
   });
 
   /** Pull fresh data from SparkyFitness now (pull-to-refresh). */

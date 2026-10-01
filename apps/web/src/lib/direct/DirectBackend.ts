@@ -160,6 +160,10 @@ export class DirectBackend {
       timezone: this.o.timezone,
       settings: await this.settings(),
       sparkyKeyStatus: 'active',
+      // Direct mode has no Gauntlet server, so there's no one to be public to.
+      visibility: 'private',
+      handle: null,
+      isAdmin: false,
     };
     await this.o.kv.set(ME_KEY, JSON.stringify(me));
     return me;

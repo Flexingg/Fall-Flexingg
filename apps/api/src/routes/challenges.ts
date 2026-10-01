@@ -1,6 +1,7 @@
 import {
   addDays,
   createChallengeSchema,
+  featureChallengeSchema,
   daysBetween,
   isCustomMetric,
   metricDef,
@@ -9,9 +10,11 @@ import {
   validateRules,
   type ChallengeResult,
   type ChallengeStatus,
+  type DiscoverResponse,
+  type MetricAggregate,
   type MetricKey,
 } from '@gauntlet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
@@ -26,18 +29,21 @@ import {
   getParticipants,
   listForUser,
   loadDetail,
+  summarize,
 } from '../services/challenges.js';
 import { friendIds } from '../services/friends.js';
 import { syncUser } from '../services/sync.js';
 import {
   getUser,
   getUsers,
+  isAdmin,
   isValidTimeZone,
   sparkyToken,
   toPublicUser,
 } from '../services/users.js';
 
 const MAX_DAYS = 366;
+const DISCOVER_LIMIT = 30;
 
 export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
@@ -59,7 +65,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
 
     let metric: MetricKey = body.metric;
     let custom: { label: string; unit: string | null } | null = null;
-    let aggregate: 'sum' | 'avg';
+    let aggregate: MetricAggregate;
     let lowerIsBetter: boolean;
     if (isCustomMetric(metric)) {
       // Custom categories are per user in SparkyFitness; challenges match them by name.
@@ -78,6 +84,12 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     const problem = validateRules({ scoring: body.scoring, aggregate, goal: body.goal });
     if (problem) throw badRequest(problem);
+
+    if (body.visibility === 'public') {
+      const me = await getUser(ctx, req.userId);
+      if (me.visibility !== 'public')
+        throw badRequest('Make your profile public to start a public challenge.', 'needs_public');
+    }
 
     const friends = new Set(await friendIds(ctx, req.userId));
     const invitees = [...new Set(body.inviteUserIds)].filter((id) => id !== req.userId);
@@ -101,6 +113,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           endDate: body.endDate,
           timezone: body.timezone,
           createdBy: req.userId,
+          visibility: body.visibility,
         })
         .returning({ id: challenges.id });
       await tx.insert(challengeParticipants).values([
@@ -124,6 +137,73 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     void syncUser(ctx, req.userId).catch(() => undefined);
     reply.code(201);
     return loadDetail(ctx, id, req.userId);
+  });
+
+  /** Public challenges anyone can join: featured first, then the busiest, then the newest. */
+  app.get('/api/challenges/discover', auth, async (req): Promise<DiscoverResponse> => {
+    const me = await getUser(ctx, req.userId);
+    const joinedCount = sql<number>`(select count(*) from ${challengeParticipants} p
+      where p.challenge_id = ${challenges.id} and p.state = 'joined')`;
+    const rows = await ctx.db
+      .select()
+      .from(challenges)
+      .where(
+        and(
+          eq(challenges.visibility, 'public'),
+          isNull(challenges.finalizedAt),
+          gte(challenges.endDate, addDays(todayIn('UTC', ctx.now()), -1)),
+        ),
+      )
+      .orderBy(desc(challenges.featured), desc(joinedCount), desc(challenges.createdAt))
+      .limit(DISCOVER_LIMIT);
+    const list = await summarize(ctx, rows, req.userId);
+    return {
+      challenges: list.filter((c) => c.status !== 'completed'),
+      canJoin: me.visibility === 'public',
+    };
+  });
+
+  /** Join a public challenge without an invite. */
+  app.post<{ Params: { id: string } }>('/api/challenges/:id/join', auth, async (req) => {
+    const ch = await getChallenge(ctx, uuid(req.params.id));
+    const parts = await getParticipants(ctx, ch.id);
+    const mine = parts.find((p) => p.userId === req.userId);
+    if (ch.visibility !== 'public' && !mine) throw notFound('Challenge not found');
+    if (challengeStatus(ctx, ch) === 'completed') throw badRequest('That challenge is over');
+    if (mine?.state === 'joined') return loadDetail(ctx, ch.id, req.userId);
+    if (!mine) {
+      const me = await getUser(ctx, req.userId);
+      if (me.visibility !== 'public')
+        throw badRequest(
+          'Make your profile public to join public challenges (Me → Profile).',
+          'needs_public',
+        );
+      if (parts.filter((p) => p.state === 'joined').length >= ch.maxParticipants)
+        throw badRequest('That challenge is full');
+    }
+    await ctx.db
+      .insert(challengeParticipants)
+      .values({ challengeId: ch.id, userId: req.userId, state: 'joined' })
+      .onConflictDoUpdate({
+        target: [challengeParticipants.challengeId, challengeParticipants.userId],
+        set: { state: 'joined' },
+      });
+    await ctx.db
+      .insert(feedEvents)
+      .values({ actorId: req.userId, challengeId: ch.id, kind: 'joined', payload: {} });
+    void syncUser(ctx, req.userId).catch(() => undefined);
+    return loadDetail(ctx, ch.id, req.userId);
+  });
+
+  /** Server admins pin public challenges to the top of Discover. */
+  app.patch<{ Params: { id: string } }>('/api/challenges/:id/featured', auth, async (req) => {
+    const { featured } = featureChallengeSchema.parse(req.body);
+    const me = await getUser(ctx, req.userId);
+    if (!isAdmin(ctx, me)) throw forbidden('Only server admins can feature challenges');
+    const ch = await getChallenge(ctx, uuid(req.params.id));
+    if (ch.visibility !== 'public') throw badRequest('Only public challenges can be featured');
+    await ctx.db.update(challenges).set({ featured }).where(eq(challenges.id, ch.id));
+    return loadDetail(ctx, ch.id, req.userId);
   });
 
   app.get<{ Params: { id: string } }>('/api/challenges/:id', auth, async (req) =>
@@ -238,6 +318,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           timezone: ch.timezone,
           createdBy: req.userId,
           rematchOf: ch.id,
+          visibility: ch.visibility,
         })
         .returning({ id: challenges.id });
       await tx.insert(challengeParticipants).values([

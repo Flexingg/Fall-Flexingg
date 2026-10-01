@@ -61,7 +61,7 @@ export function validateRules(
   rules: Pick<ScoringRules, 'scoring' | 'aggregate' | 'goal'>,
 ): string | null {
   if (rules.scoring === 'race_to_goal') {
-    if (rules.aggregate !== 'sum')
+    if (rules.aggregate === 'avg')
       return 'Race to target only works with metrics that add up (steps, distance…).';
     if (!rules.goal || rules.goal <= 0) return 'Race to target needs a goal.';
   }
@@ -123,7 +123,8 @@ export function computeStandings(
 
     switch (rules.scoring) {
       case 'total': {
-        const score = rules.aggregate === 'sum' ? sum : mean;
+        const score =
+          rules.aggregate === 'sum' ? sum : rules.aggregate === 'last' ? values.at(-1)! : mean;
         return { ...base, score, progress: progressOf(score, rules), reachedGoalOn: null };
       }
       case 'daily_avg': {
@@ -135,17 +136,21 @@ export function computeStandings(
         return { ...base, score, progress: progressOf(score, rules), reachedGoalOn: null };
       }
       case 'race_to_goal': {
+        // "last" metrics (e.g. % toward a weight target) race on the value itself.
+        const isLast = rules.aggregate === 'last';
         let cumulative = 0;
         let reachedGoalOn: string | null = null;
         for (const d of dates) {
-          cumulative += byDate.get(d) ?? 0;
+          const v = byDate.get(d);
+          cumulative = isLast ? (v ?? cumulative) : cumulative + (v ?? 0);
           if (reachedGoalOn == null && rules.goal != null && cumulative >= rules.goal)
             reachedGoalOn = d;
         }
+        const score = isLast ? values.at(-1)! : sum;
         return {
           ...base,
-          score: sum,
-          progress: rules.goal ? Math.min(sum / rules.goal, 1) : null,
+          score,
+          progress: rules.goal ? Math.min(Math.max(score, 0) / rules.goal, 1) : null,
           reachedGoalOn,
         };
       }

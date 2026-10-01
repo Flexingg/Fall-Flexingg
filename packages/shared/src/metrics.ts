@@ -17,8 +17,11 @@ export type BuiltinMetricKey = (typeof BUILTIN_METRICS)[number];
 export type CustomMetricKey = `custom:${string}`;
 export type MetricKey = BuiltinMetricKey | CustomMetricKey;
 
-/** How a metric's daily values combine over a period. */
-export type MetricAggregate = 'sum' | 'avg';
+/**
+ * How a metric's daily values combine over a period: added up, averaged, or the
+ * latest value (for running figures such as "% of my weight target").
+ */
+export type MetricAggregate = 'sum' | 'avg' | 'last';
 
 export interface MetricDef {
   key: MetricKey;

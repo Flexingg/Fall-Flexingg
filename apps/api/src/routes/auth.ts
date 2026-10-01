@@ -168,7 +168,7 @@ async function finishLogin(
   void syncUser(ctx, user.id).catch((err) => ctx.log.warn({ err }, 'initial sync failed'));
   const refreshToken = await issueRefreshToken(ctx, user.id);
   const tokens = await respondWithTokens(ctx, req, reply, user.id, refreshToken);
-  return { status: 'ok', ...tokens, user: toMe(user) } satisfies LoginResponse;
+  return { status: 'ok', ...tokens, user: toMe(user, ctx) } satisfies LoginResponse;
 }
 
 async function respondWithTokens(

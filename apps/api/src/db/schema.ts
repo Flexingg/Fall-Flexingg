@@ -30,6 +30,12 @@ export const users = pgTable('users', {
     .default('active'),
   shareWorkoutDetails: boolean('share_workout_details').notNull().default(true),
   healthConnectSync: boolean('health_connect_sync').notNull().default(false),
+  /** public: findable by name/handle and can join public challenges. */
+  visibility: text('visibility', { enum: ['private', 'public'] })
+    .notNull()
+    .default('private'),
+  /** Optional unique @handle (lowercase) for search and profile links. */
+  handle: text('handle').unique(),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   createdAt: createdAt(),
 });
@@ -80,29 +86,40 @@ export const friendships = pgTable(
   ],
 );
 
-export const challenges = pgTable('challenges', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  metric: text('metric').notNull(),
-  customLabel: text('custom_label'),
-  customUnit: text('custom_unit'),
-  aggregate: text('aggregate', { enum: ['sum', 'avg'] }).notNull(),
-  lowerIsBetter: boolean('lower_is_better').notNull().default(false),
-  scoring: text('scoring', {
-    enum: ['total', 'race_to_goal', 'daily_avg', 'best_day', 'streak'],
-  }).notNull(),
-  goal: doublePrecision('goal'),
-  startDate: date('start_date', { mode: 'string' }).notNull(),
-  endDate: date('end_date', { mode: 'string' }).notNull(),
-  timezone: text('timezone').notNull(),
-  createdBy: uuid('created_by')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  rematchOf: uuid('rematch_of'),
-  leaderId: uuid('leader_id'),
-  finalizedAt: timestamp('finalized_at', { withTimezone: true }),
-  createdAt: createdAt(),
-});
+export const challenges = pgTable(
+  'challenges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    metric: text('metric').notNull(),
+    customLabel: text('custom_label'),
+    customUnit: text('custom_unit'),
+    aggregate: text('aggregate', { enum: ['sum', 'avg', 'last'] }).notNull(),
+    lowerIsBetter: boolean('lower_is_better').notNull().default(false),
+    scoring: text('scoring', {
+      enum: ['total', 'race_to_goal', 'daily_avg', 'best_day', 'streak'],
+    }).notNull(),
+    goal: doublePrecision('goal'),
+    startDate: date('start_date', { mode: 'string' }).notNull(),
+    endDate: date('end_date', { mode: 'string' }).notNull(),
+    timezone: text('timezone').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    rematchOf: uuid('rematch_of'),
+    /** public: listed in Discover, and public users can join without an invite. */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('private'),
+    /** Pinned to the top of Discover by a server admin. */
+    featured: boolean('featured').notNull().default(false),
+    maxParticipants: integer('max_participants').notNull().default(500),
+    leaderId: uuid('leader_id'),
+    finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('challenges_visibility_idx').on(t.visibility, t.endDate)],
+);
 
 export const challengeParticipants = pgTable(
   'challenge_participants',
@@ -117,6 +134,8 @@ export const challengeParticipants = pgTable(
     invitedBy: uuid('invited_by'),
     finalRank: integer('final_rank'),
     finalScore: doublePrecision('final_score'),
+    /** Per-person settings, e.g. a weight challenge's direction and target. */
+    params: jsonb('params').$type<Record<string, unknown>>(),
     createdAt: createdAt(),
   },
   (t) => [

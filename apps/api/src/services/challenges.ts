@@ -67,13 +67,18 @@ export async function getParticipants(
     .where(eq(challengeParticipants.challengeId, challengeId));
 }
 
-/** Throws unless the viewer was invited to or joined the challenge. */
+/**
+ * Throws unless the viewer was invited to or joined the challenge, or (with
+ * `allowPublic`) the challenge is public.
+ */
 export async function assertCanView(
   ctx: AppContext,
   ch: ChallengeRow,
   userId: string,
+  opts: { allowPublic?: boolean } = {},
 ): Promise<ParticipantRow[]> {
   const parts = await getParticipants(ctx, ch.id);
+  if (opts.allowPublic && ch.visibility === 'public') return parts;
   if (!parts.some((p) => p.userId === userId))
     throw forbidden('You are not part of this challenge');
   return parts;
@@ -207,6 +212,8 @@ export function buildSummary({
         ? 0
         : Math.max(daysBetween(maxDate(today, ch.startDate), ch.endDate) + 1, 0),
     createdBy: ch.createdBy,
+    visibility: ch.visibility,
+    featured: ch.featured,
   };
 }
 
@@ -256,7 +263,7 @@ export async function loadDetail(
   viewerId: string,
 ): Promise<ChallengeDetail> {
   const ch = await getChallenge(ctx, challengeId);
-  const parts = await assertCanView(ctx, ch, viewerId);
+  const parts = await assertCanView(ctx, ch, viewerId, { allowPublic: true });
   const computed = await computeChallengeStandings(ctx, ch, parts);
   const usersById = await getUsers(
     ctx,
@@ -278,6 +285,25 @@ export async function listForUser(ctx: AppContext, userId: string): Promise<Chal
   if (!mine.length) return [];
   const ids = mine.map((m) => m.challengeId);
   const chs = await ctx.db.select().from(challenges).where(inArray(challenges.id, ids));
+  const out = await summarize(ctx, chs, userId);
+  const order: Record<ChallengeStatus, number> = { active: 0, upcoming: 1, completed: 2 };
+  return out.sort(
+    (a, b) =>
+      order[a.status] - order[b.status] ||
+      (a.status === 'completed'
+        ? b.endDate.localeCompare(a.endDate)
+        : a.endDate.localeCompare(b.endDate)),
+  );
+}
+
+/** Summaries of the given challenges as one viewer sees them. */
+export async function summarize(
+  ctx: AppContext,
+  chs: ChallengeRow[],
+  userId: string,
+): Promise<ChallengeSummary[]> {
+  if (!chs.length) return [];
+  const ids = chs.map((c) => c.id);
   const allParts = await ctx.db
     .select()
     .from(challengeParticipants)
@@ -292,14 +318,7 @@ export async function listForUser(ctx: AppContext, userId: string): Promise<Chal
     const computed = await computeChallengeStandings(ctx, ch, parts);
     out.push(buildSummary({ ctx, ch, parts, viewerId: userId, computed, usersById }));
   }
-  const order: Record<ChallengeStatus, number> = { active: 0, upcoming: 1, completed: 2 };
-  return out.sort(
-    (a, b) =>
-      order[a.status] - order[b.status] ||
-      (a.status === 'completed'
-        ? b.endDate.localeCompare(a.endDate)
-        : a.endDate.localeCompare(b.endDate)),
-  );
+  return out;
 }
 
 /** Challenges a user has joined that are still running (or about to). */
