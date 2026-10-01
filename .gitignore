@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+apps/web/dev-dist/
+apps/web/test-results/
+apps/web/playwright-report/
+# Android build outputs
+apps/web/android/.gradle/
+apps/web/android/build/
+apps/web/android/app/build/
+apps/web/android/local.properties
+apps/web/android/app/src/main/assets/public/
+apps/web/android/capacitor-cordova-android-plugins/
+*.keystore
+*.jks

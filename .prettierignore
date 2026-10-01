@@ -1,0 +1,4 @@
+design/
+pnpm-lock.yaml
+apps/web/android/
+**/drizzle/meta/
