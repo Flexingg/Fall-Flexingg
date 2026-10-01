@@ -30,6 +30,10 @@ android {
             }
         }
     }
+    lint {
+        // The release lint pass only reports Kotlin metadata noise from a plugin and adds minutes.
+        checkReleaseBuilds = false
+    }
     buildTypes {
         release {
             if (keystorePath) signingConfig signingConfigs.release

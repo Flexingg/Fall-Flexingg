@@ -69,16 +69,29 @@ else
   mode="$(stat -c %a "$ENV_FILE")"
   [[ "${mode: -1}" == "0" ]] && ok "not readable by other users (mode $mode)" \
     || warn "$ENV_FILE is readable by other users (mode $mode). Run: chmod 600 $ENV_FILE"
+  # Windows line endings (an editor that saves CRLF) leave an invisible \r on every value.
+  if grep -q $'\r' "$ENV_FILE"; then
+    bad "$ENV_FILE has Windows line endings (CRLF)" "Fix: sed -i 's/\\r\$//' $ENV_FILE"
+  fi
   # Read the values in a subshell so nothing leaks into this script's environment.
   vals="$(set -a; source "$ENV_FILE" >/dev/null 2>&1; set +a
-          printf 'POSTGRES_PASSWORD=%s\nJWT_LEN=%s\nPUBLIC_WEB_URL=%s\nSPARKY_URL=%s\nPORT=%s\nKEY_LEN=%s\n' \
+          printf 'POSTGRES_PASSWORD=%s\nJWT_LEN=%s\nPUBLIC_WEB_URL=%s\nSPARKY_URL=%s\nPORT=%s\nKEY_BYTES=%s\nKEY_CHARS=%s\nKEY_HEX=%s\n' \
             "${POSTGRES_PASSWORD:+set}" "${#JWT_SECRET}" "${PUBLIC_WEB_URL:-}" "${SPARKY_URL:-https://fit.randalls.cc}" \
-            "${GAUNTLET_PORT:-3333}" "$(printf '%s' "${ENCRYPTION_KEY:-}" | base64 -d 2>/dev/null | wc -c)")"
+            "${GAUNTLET_PORT:-3333}" "$(printf '%s' "${ENCRYPTION_KEY:-}" | base64 -d 2>/dev/null | wc -c)" \
+            "${#ENCRYPTION_KEY}" "$([[ "${ENCRYPTION_KEY:-}" =~ ^[0-9a-fA-F]+$ ]] && echo yes || echo no)")"
   get() { sed -n "s/^$1=//p" <<<"$vals"; }
   [[ "$(get POSTGRES_PASSWORD)" == "set" ]] && ok "POSTGRES_PASSWORD set" || bad "POSTGRES_PASSWORD is empty" "openssl rand -base64 24"
   (( $(get JWT_LEN) >= 32 )) && ok "JWT_SECRET is long enough" || bad "JWT_SECRET is missing or shorter than 32 characters" "openssl rand -base64 48"
-  [[ "$(get KEY_LEN)" == "32" ]] && ok "ENCRYPTION_KEY is a valid 32-byte key" \
-    || bad "ENCRYPTION_KEY is missing or not 32 bytes of base64" "openssl rand -base64 32" "(keep it stable: changing it signs everyone out)"
+  if [[ "$(get KEY_BYTES)" == "32" ]]; then ok "ENCRYPTION_KEY is a valid 32-byte key"
+  else
+    chars="$(get KEY_CHARS)"
+    if (( chars == 0 )); then why="it is empty or not set"
+    elif [[ "$(get KEY_HEX)" == "yes" ]]; then why="it is $chars hex characters; it must be base64 (hex from 'openssl rand -hex' will not work)"
+    else why="it is $chars characters and decodes to $(get KEY_BYTES) bytes (needs exactly 32; 'openssl rand -base64 32' gives 44 characters)"; fi
+    bad "ENCRYPTION_KEY is not valid: $why" \
+        "Generate one: openssl rand -base64 32" \
+        "On a fresh install, replace the line in $ENV_FILE. (Once people have signed in, keep the old key; changing it signs everyone out.)"
+  fi
   url="$(get PUBLIC_WEB_URL)"
   if [[ "$url" == https://* && "$url" != *example.com* ]]; then ok "PUBLIC_WEB_URL = $url"
   elif [[ -z "$url" || "$url" == *example.com* ]]; then bad "PUBLIC_WEB_URL is not set to your real address" "Set it to the https URL Cloudflare serves, e.g. https://gauntlet.yourdomain.com"

@@ -105,17 +105,19 @@ jobs:
           VITE_API_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
         run: pnpm --filter @gauntlet/web cap:sync
 
-      - name: Decode signing key
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/gauntlet.jks"
+      - name: Prepare signing key
+        env:
+          RAW_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          RAW_STORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RAW_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RAW_KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          TARGET: ${{ runner.temp }}/gauntlet.jks
+        run: scripts/prepare-signing.sh
 
       - name: Build release APK
         working-directory: apps/web/android
         env:
           GAUNTLET_VERSION_CODE: ${{ github.run_number }}
-          GAUNTLET_KEYSTORE_PATH: ${{ runner.temp }}/gauntlet.jks
-          GAUNTLET_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          GAUNTLET_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          GAUNTLET_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           export GAUNTLET_VERSION_NAME="${TAG#v}"
           ./gradlew assembleRelease --no-daemon

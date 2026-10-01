@@ -26,6 +26,7 @@ cat <<MSG
 Created $JKS  (keep a backup!)
 
 Add these in GitHub: repo → Settings → Secrets and variables → Actions → New repository secret
+(paste only the value; the workflow trims stray spaces, but don't include the name)
 
   ANDROID_KEYSTORE_BASE64    contents of $JKS.b64
   ANDROID_KEYSTORE_PASSWORD  $PASS
