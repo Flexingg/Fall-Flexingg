@@ -1,5 +1,11 @@
-import { createInviteSchema, type Invite, type InvitePreview } from '@gauntlet/shared';
-import { and, eq, gt } from 'drizzle-orm';
+import {
+  createInviteSchema,
+  needsWeightGoal,
+  type Invite,
+  type InvitePreview,
+  type MetricKey,
+} from '@gauntlet/shared';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { requireUser } from '../auth.js';
 import type { AppContext } from '../context.js';
@@ -94,15 +100,20 @@ export function inviteRoutes(app: FastifyInstance, ctx: AppContext) {
       const ch = await getChallenge(ctx, inv.challengeId);
       if (challengeStatus(ctx, ch) === 'completed')
         throw badRequest('That challenge is already over');
+      // Weight challenges need the person's own target first: they land on the challenge as
+      // invited and pick it there.
+      const state = needsWeightGoal(ch.metric as MetricKey) ? 'invited' : 'joined';
       const [inserted] = await ctx.db
         .insert(challengeParticipants)
-        .values({ challengeId: ch.id, userId: req.userId, state: 'joined', invitedBy: inv.ownerId })
+        .values({ challengeId: ch.id, userId: req.userId, state, invitedBy: inv.ownerId })
         .onConflictDoUpdate({
           target: [challengeParticipants.challengeId, challengeParticipants.userId],
-          set: { state: 'joined' },
+          set: { state },
+          // Never knock someone who already joined back to invited.
+          setWhere: sql`${challengeParticipants.state} <> 'joined'`,
         })
         .returning();
-      if (inserted) {
+      if (inserted && state === 'joined') {
         await ctx.db
           .insert(feedEvents)
           .values({ actorId: req.userId, challengeId: ch.id, kind: 'joined', payload: {} });

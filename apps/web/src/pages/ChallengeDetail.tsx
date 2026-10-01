@@ -1,4 +1,5 @@
-import { SCORING_LABELS } from '@gauntlet/shared';
+import { needsWeightGoal, scoringLabel, type WeightGoalParams } from '@gauntlet/shared';
+import { WeightGoalFields } from '../components/WeightGoal';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -20,8 +21,11 @@ export function ChallengeDetailPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [weightGoal, setWeightGoal] = useState<WeightGoalParams | null>(null);
   const [error, setError] = useState<unknown>(null);
   const c = q.data;
+  const needsTarget = !!c && needsWeightGoal(c.metric) && !c.myParams?.weightGoal;
+  const params = needsTarget && weightGoal ? { weightGoal } : undefined;
 
   async function act(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -54,7 +58,7 @@ export function ChallengeDetailPage() {
       {c && (
         <>
           <p className="muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
-            {c.metricLabel} · {SCORING_LABELS[c.scoring]}
+            {c.metricLabel} · {scoringLabel(c.scoring, c.aggregate)}
             {c.goal ? ` · ${fmt(c.goal, c)}${c.scoring === 'streak' ? '/day' : ''}` : ''} ·{' '}
             {dateRange(c.startDate, c.endDate)} · {daysLeftText(c)}
             {c.visibility === 'public' ? ' · Public' : ''}
@@ -87,11 +91,14 @@ export function ChallengeDetailPage() {
           {c.myState === 'invited' && (
             <div className="card stack" style={{ marginBottom: 14 }}>
               <b>You're invited</b>
+              {needsTarget && <WeightGoalFields value={weightGoal} onChange={setWeightGoal} />}
               <div className="row">
                 <button
                   className="btn"
-                  disabled={busy}
-                  onClick={() => act(() => post(`/api/challenges/${id}/respond`, { accept: true }))}
+                  disabled={busy || (needsTarget && !weightGoal)}
+                  onClick={() =>
+                    act(() => post(`/api/challenges/${id}/respond`, { accept: true, params }))
+                  }
                 >
                   Accept
                 </button>
@@ -123,6 +130,12 @@ export function ChallengeDetailPage() {
             </Link>
           )}
 
+          {c.myParams?.weightGoal && (
+            <p className="muted" style={{ fontSize: 13, marginTop: -6, marginBottom: 12 }}>
+              Your target: {c.myParams.weightGoal.direction} {c.myParams.weightGoal.target}
+              {c.myParams.weightGoal.targetType === 'percent' ? '%' : ' kg'}. Only your % is shown.
+            </p>
+          )}
           <Podium challenge={c} />
           {c.standings.length > 0 ? (
             <StandingsList challenge={c} showToday={c.status === 'active'} />

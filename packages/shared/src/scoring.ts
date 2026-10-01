@@ -20,6 +20,13 @@ export const SCORING_LABELS: Record<ScoringMode, string> = {
   streak: 'Longest streak',
 };
 
+/** The label for a way of winning, worded for the metric (running % figures read differently). */
+export function scoringLabel(mode: ScoringMode, aggregate: MetricAggregate): string {
+  if (aggregate === 'last' && mode === 'total') return 'Furthest along';
+  if (aggregate === 'last' && mode === 'race_to_goal') return 'First to reach';
+  return SCORING_LABELS[mode];
+}
+
 export interface DailyValue {
   date: string;
   value: number;

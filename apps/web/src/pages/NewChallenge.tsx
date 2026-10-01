@@ -1,8 +1,13 @@
 import {
   addDays,
   BUILTIN_METRICS,
+  METRIC_GROUPS,
+  metricDef,
   METRICS,
   SCORING_LABELS,
+  scoringLabel,
+  type MetricGroup,
+  type WeightGoalParams,
   todayIn,
   validateRules,
   weekday,
@@ -20,10 +25,20 @@ import { post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange } from '../lib/format';
 import { timezone } from '../lib/platform';
-import { useCustomMetrics, useFriends, useToday } from '../lib/queries';
+import { useCustomMetrics, useFriends, useLifts, useToday } from '../lib/queries';
+import { WeightGoalFields } from '../components/WeightGoal';
 
 type Duration = '3' | 'weekend' | '7' | '30';
 const CUSTOM = 'custom' as const;
+/** One exercise: the heaviest set, or estimated 1RM gain. */
+const LIFT = 'lift' as const;
+type Choice = MetricKey | typeof CUSTOM | typeof LIFT;
+
+function groupOf(choice: Choice): MetricGroup {
+  if (choice === CUSTOM) return 'custom';
+  if (choice === LIFT) return 'strength';
+  return metricDef(choice as MetricKey).group;
+}
 
 function window(duration: Duration, today: string): { start: string; end: string } {
   if (duration === 'weekend') {
@@ -45,6 +60,15 @@ const DEFAULT_GOALS: Partial<Record<MetricKey, number>> = {
   workouts: 5,
   sleep: 8,
   resting_hr: 55,
+  lift_volume: 50_000,
+  lift_sets: 100,
+  water: 20,
+  fast_hours: 100,
+  fasts_completed: 5,
+  weight_goal: 100,
+  calorie_adherence: 500,
+  macro_adherence: 500,
+  water_goal: 500,
 };
 
 const DAILY_TARGETS: Partial<Record<MetricKey, number>> = {
@@ -55,6 +79,14 @@ const DAILY_TARGETS: Partial<Record<MetricKey, number>> = {
   workouts: 1,
   sleep: 7,
   resting_hr: 60,
+  lift_sets: 12,
+  calorie_adherence: 80,
+  macro_adherence: 80,
+  water_goal: 100,
+  water: 2,
+  protein: 150,
+  fast_hours: 16,
+  fasts_completed: 1,
 };
 
 export function NewChallengePage() {
@@ -64,7 +96,10 @@ export function NewChallengePage() {
   const friends = useFriends();
   const todayQ = useToday();
   const [name, setName] = useState('');
-  const [metric, setMetric] = useState<MetricKey | typeof CUSTOM>('distance');
+  const [metric, setMetric] = useState<Choice>('distance');
+  const [lift, setLift] = useState('');
+  const [liftKind, setLiftKind] = useState<'lift_max:' | 'lift_e1rm:'>('lift_max:');
+  const [weightGoal, setWeightGoal] = useState<WeightGoalParams | null>(null);
   const [customId, setCustomId] = useState('');
   const [customAgg, setCustomAgg] = useState<'sum' | 'avg'>('sum');
   const [customLower, setCustomLower] = useState(false);
@@ -76,12 +111,26 @@ export function NewChallengePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const customMetrics = useCustomMetrics(metric === CUSTOM);
+  const lifts = useLifts(metric === LIFT);
 
   const today = todayIn(timezone);
   const { start, end } = window(duration, today);
   const isCustom = metric === CUSTOM;
-  const def = isCustom ? null : METRICS[metric as keyof typeof METRICS];
+  const isLift = metric === LIFT;
+  const metricKey: MetricKey | null = isCustom
+    ? null
+    : isLift
+      ? lift
+        ? (`${liftKind}${lift}` as MetricKey)
+        : null
+      : (metric as MetricKey);
+  const def = metricKey
+    ? metricDef(metricKey)
+    : isLift
+      ? metricDef(`${liftKind}x` as MetricKey)
+      : null;
   const aggregate = isCustom ? customAgg : (def?.aggregate ?? 'sum');
+  const needsTarget = def?.transform === 'weight_goal';
   const customChoice = customMetrics.data?.find((m) => m.categoryId === customId);
   const unit = isCustom ? (customChoice?.unit ?? '') : (def?.unit ?? '');
   const suggested =
@@ -94,14 +143,31 @@ export function NewChallengePage() {
   const ruleProblem = validateRules({ scoring, aggregate, goal: goalNum });
   const scoringOptions = useMemo(
     () =>
-      (Object.keys(SCORING_LABELS) as ScoringMode[]).filter(
-        (s) => aggregate === 'sum' || s !== 'race_to_goal',
+      (def?.scoring ?? (Object.keys(SCORING_LABELS) as ScoringMode[])).filter(
+        (s) => aggregate !== 'avg' || s !== 'race_to_goal',
       ),
-    [aggregate],
+    [def, aggregate],
   );
+  const scoringOk = scoringOptions.includes(scoring);
+  const liftLabel = lifts.data?.find((l) => l.key === lift)?.label;
   const placeholderName = isCustom
     ? (customChoice?.label ?? 'Custom')
-    : `${def?.label} ${duration === 'weekend' ? 'Weekend' : `${duration}-Day`}`;
+    : isLift
+      ? `${liftLabel ?? 'Lift'} ${liftKind === 'lift_max:' ? 'Max' : '1RM Gain'}`
+      : `${def?.label} ${duration === 'weekend' ? 'Weekend' : `${duration}-Day`}`;
+
+  function choose(next: Choice) {
+    setMetric(next);
+    const d =
+      next === CUSTOM
+        ? null
+        : next === LIFT
+          ? metricDef(`${liftKind}x` as MetricKey)
+          : metricDef(next as MetricKey);
+    // Keep the way to win if it still makes sense, otherwise the metric's default.
+    if (d && !d.scoring.includes(scoring)) setScoring(d.scoring[0]!);
+    setGoal('');
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -112,7 +178,7 @@ export function NewChallengePage() {
         name: name.trim() || placeholderName,
         metric: isCustom
           ? (`custom:${customChoice?.label.toLowerCase() ?? 'x'}` as MetricKey)
-          : (metric as MetricKey),
+          : metricKey!,
         custom:
           isCustom && customChoice
             ? {
@@ -130,6 +196,7 @@ export function NewChallengePage() {
         timezone,
         inviteUserIds: [...invited],
         visibility: isPublic ? 'public' : 'private',
+        params: needsTarget && weightGoal ? { weightGoal } : undefined,
       };
       const created = await post<ChallengeDetail>('/api/challenges', body);
       await qc.invalidateQueries();
@@ -141,14 +208,123 @@ export function NewChallengePage() {
     }
   }
 
-  const tiles: {
-    key: MetricKey | typeof CUSTOM;
-    label: string;
-    icon: Parameters<typeof Icon>[0]['name'];
-  }[] = [
-    ...BUILTIN_METRICS.map((k) => ({ key: k, label: METRICS[k].label, icon: METRICS[k].icon })),
-    { key: CUSTOM, label: 'Custom', icon: 'plus' },
+  const tilesFor = (group: MetricGroup) => [
+    ...BUILTIN_METRICS.filter((k) => METRICS[k].group === group).map((k) => ({
+      key: k as Choice,
+      label: METRICS[k].label,
+      icon: METRICS[k].icon,
+    })),
+    ...(group === 'strength'
+      ? [{ key: LIFT as Choice, label: 'One exercise', icon: 'dumbbell' as const }]
+      : []),
+    ...(group === 'custom'
+      ? [{ key: CUSTOM as Choice, label: 'Custom', icon: 'plus' as const }]
+      : []),
   ];
+
+  const details = () => (
+    <>
+      {def?.hint && !isCustom && (
+        <p className="muted" style={{ fontSize: 12, lineHeight: 1.45, marginTop: 10 }}>
+          {def.hint}
+        </p>
+      )}
+
+      {isLift && (
+        <div className="stack" style={{ marginTop: 10 }}>
+          <label className="input">
+            <select
+              value={lift}
+              onChange={(e) => setLift(e.target.value)}
+              aria-label="Exercise"
+              required
+            >
+              <option value="">
+                {lifts.isPending ? 'Loading your exercises…' : 'Choose an exercise'}
+              </option>
+              {lifts.data?.map((l) => (
+                <option key={l.key} value={l.key}>
+                  {l.label} · {l.sessions} {l.sessions === 1 ? 'session' : 'sessions'}
+                </option>
+              ))}
+            </select>
+          </label>
+          {lifts.data?.length === 0 && (
+            <div className="notice">
+              No weighted sets found yet. Connect Liftosaur or Hevy on Data sources, or log sets in
+              SparkyFitness.
+            </div>
+          )}
+          <Seg
+            label="Score on"
+            value={liftKind}
+            onChange={(v) => {
+              setLiftKind(v);
+              const d = metricDef(`${v}x` as MetricKey);
+              if (!d.scoring.includes(scoring)) setScoring(d.scoring[0]!);
+            }}
+            options={[
+              { value: 'lift_max:', label: 'Heaviest set' },
+              { value: 'lift_e1rm:', label: '1RM gain %' },
+            ]}
+          />
+        </div>
+      )}
+
+      {needsTarget && (
+        <>
+          <div className="lbl">Your target</div>
+          <WeightGoalFields value={weightGoal} onChange={setWeightGoal} />
+        </>
+      )}
+
+      {isCustom && (
+        <div className="stack" style={{ marginTop: 10 }}>
+          <label className="input">
+            <select
+              value={customId}
+              onChange={(e) => setCustomId(e.target.value)}
+              aria-label="Custom metric"
+              required
+            >
+              <option value="">
+                {customMetrics.isPending
+                  ? 'Loading your SparkyFitness metrics…'
+                  : 'Choose a SparkyFitness metric'}
+              </option>
+              {customMetrics.data?.map((m) => (
+                <option key={m.categoryId} value={m.categoryId}>
+                  {m.label}
+                  {m.unit ? ` (${m.unit})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {customMetrics.data?.length === 0 && (
+            <div className="notice">
+              No custom measurements found. Create one in SparkyFitness under Check-in → Custom
+              measurements.
+            </div>
+          )}
+          <Seg
+            label="Combine days by"
+            value={customAgg}
+            onChange={setCustomAgg}
+            options={[
+              { value: 'sum', label: 'Add up days' },
+              { value: 'avg', label: 'Average days' },
+            ]}
+          />
+          <div className="row card" style={{ padding: '10px 14px' }}>
+            <span className="grow" style={{ fontSize: 14, fontWeight: 600 }}>
+              Lower is better
+            </span>
+            <Toggle checked={customLower} onChange={setCustomLower} label="Lower is better" />
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <Screen>
@@ -166,75 +342,25 @@ export function NewChallengePage() {
           <span>Name</span>
         </label>
 
-        <div className="lbl">Metric</div>
-        <div className="metric-grid">
-          {tiles.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              aria-pressed={metric === t.key}
-              onClick={() => {
-                setMetric(t.key);
-                if (
-                  t.key !== CUSTOM &&
-                  METRICS[t.key as keyof typeof METRICS].aggregate === 'avg' &&
-                  scoring === 'race_to_goal'
-                )
-                  setScoring('total');
-              }}
-            >
-              <Icon name={t.icon} size={22} />
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {isCustom && (
-          <div className="stack" style={{ marginTop: 10 }}>
-            <label className="input">
-              <select
-                value={customId}
-                onChange={(e) => setCustomId(e.target.value)}
-                aria-label="Custom metric"
-                required
-              >
-                <option value="">
-                  {customMetrics.isPending
-                    ? 'Loading your SparkyFitness metrics…'
-                    : 'Choose a SparkyFitness metric'}
-                </option>
-                {customMetrics.data?.map((m) => (
-                  <option key={m.categoryId} value={m.categoryId}>
-                    {m.label}
-                    {m.unit ? ` (${m.unit})` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {customMetrics.data?.length === 0 && (
-              <div className="notice">
-                No custom measurements found. Create one in SparkyFitness under Check-in → Custom
-                measurements.
-              </div>
-            )}
-            <Seg
-              label="Combine days by"
-              value={customAgg}
-              onChange={setCustomAgg}
-              options={[
-                { value: 'sum', label: 'Add up days' },
-                { value: 'avg', label: 'Average days' },
-              ]}
-            />
-            <div className="row card" style={{ padding: '10px 14px' }}>
-              <span className="grow" style={{ fontSize: 14, fontWeight: 600 }}>
-                Lower is better
-              </span>
-              <Toggle checked={customLower} onChange={setCustomLower} label="Lower is better" />
+        {METRIC_GROUPS.map((g) => (
+          <div key={g.key}>
+            <div className="lbl">{g.label}</div>
+            <div className="metric-grid" role="group" aria-label={g.label}>
+              {tilesFor(g.key).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={metric === t.key}
+                  onClick={() => choose(t.key)}
+                >
+                  <Icon name={t.icon} size={22} />
+                  {t.label}
+                </button>
+              ))}
             </div>
+            {groupOf(metric) === g.key && details()}
           </div>
-        )}
-
+        ))}
         <div className="lbl">How to win</div>
         <label className="input">
           <select
@@ -244,7 +370,7 @@ export function NewChallengePage() {
           >
             {scoringOptions.map((s) => (
               <option key={s} value={s}>
-                {SCORING_LABELS[s]}
+                {scoringLabel(s, aggregate)}
               </option>
             ))}
           </select>
@@ -352,7 +478,17 @@ export function NewChallengePage() {
 
         <div className="dock stack">
           <ErrorBox error={error ?? (ruleProblem ? new Error(ruleProblem) : null)} />
-          <button className="btn" disabled={busy || !!ruleProblem || (isCustom && !customChoice)}>
+          <button
+            className="btn"
+            disabled={
+              busy ||
+              !!ruleProblem ||
+              !scoringOk ||
+              (isCustom && !customChoice) ||
+              (isLift && !lift) ||
+              (needsTarget && !weightGoal)
+            }
+          >
             {busy ? <span className="spinner" /> : 'Start challenge'}
           </button>
         </div>

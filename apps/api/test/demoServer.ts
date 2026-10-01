@@ -118,6 +118,62 @@ for (const [id, p] of Object.entries(profile)) {
 
 // Pretend Garmin accounts for trying the Connect Garmin screen.
 fake.garminAccounts.set('runner@garmin.demo', { password: 'demo' });
+// Food, water and goals: Alex is bulking, Maya is cutting. Alex lifts with Liftosaur.
+const diet: Record<string, { goal: number; eats: number[] }> = {
+  you: {
+    goal: 2900,
+    eats: [2950, 2700, 3100, 2880, 2600, 2920, 3050, 2890, 2810, 3300, 2900, 2860, 2940, 2100],
+  },
+  maya: {
+    goal: 1800,
+    eats: [1750, 1900, 1820, 2100, 1780, 1810, 1700, 1790, 1950, 1805, 1760, 1830, 1880, 1500],
+  },
+};
+for (const [id, p] of Object.entries(diet)) {
+  const u = users[id]!;
+  u.goals.push({
+    from: d(-60),
+    goals: {
+      calories: p.goal,
+      protein: Math.round(p.goal / 16),
+      carbs: Math.round(p.goal / 9),
+      fat: Math.round(p.goal / 36),
+      water_goal_ml: 2500,
+    },
+  });
+  p.eats.forEach((kcal, i) =>
+    u.nutrition.push({
+      date: d(i - 13),
+      calories: kcal,
+      protein: Math.round(kcal / 16),
+      carbs: Math.round(kcal / 9.5),
+      fat: Math.round(kcal / 35),
+    }),
+  );
+  for (let i = 0; i < 14; i++)
+    u.water.push({ entry_date: d(i - 13), water_ml: 1800 + ((i * 337) % 900) });
+}
+for (let i = 0; i < 14; i += 2) {
+  users.you!.exerciseEntries.push({
+    entry_date: d(i - 13),
+    exercise_name: 'Squat',
+    exercise_source: 'liftosaur',
+    duration_minutes: 0,
+    sets: [
+      { set_type: 'Warm-up', reps: 5, weight: 60 },
+      ...[0, 1, 2].map(() => ({ set_type: 'Working Set', reps: 5, weight: 100 + i * 2.5 })),
+    ],
+  });
+}
+users.you!.fasts.push({
+  id: 'demo-fast-1',
+  start_time: `${d(-2)}T03:00:00Z`,
+  end_time: `${d(-2)}T19:00:00Z`,
+  target_end_time: `${d(-2)}T19:00:00Z`,
+  duration_minutes: 960,
+  status: 'COMPLETED',
+});
+
 fake.garminAccounts.set('mfa@garmin.demo', { password: 'demo', mfaCode: '123456' });
 
 const { db, client } = createDb(DB_URL);
@@ -229,6 +285,28 @@ const cup = await call<{ id: string }>('dre', 'POST', '/api/challenges', {
   inviteUserIds: [ids.you, ids.maya],
 });
 await call('maya', 'POST', `/api/challenges/${cup.id}/respond`, { accept: true });
+
+// Bulking vs cutting on the same leaderboard, and a fasting challenge.
+const macro = await call<{ id: string }>('maya', 'POST', '/api/challenges', {
+  name: 'Dial It In',
+  metric: 'calorie_adherence',
+  scoring: 'daily_avg',
+  startDate: d(-6),
+  endDate: d(7),
+  timezone: TZ,
+  inviteUserIds: [ids.you],
+});
+await call('you', 'POST', `/api/challenges/${macro.id}/respond`, { accept: true });
+const fast = await call<{ id: string }>('you', 'POST', '/api/challenges', {
+  name: 'Fast Track',
+  metric: 'fast_hours',
+  scoring: 'total',
+  startDate: d(-3),
+  endDate: d(10),
+  timezone: TZ,
+  inviteUserIds: [ids.dre],
+});
+await call('dre', 'POST', `/api/challenges/${fast.id}/respond`, { accept: true });
 
 // A featured public challenge anyone public can join from Discover.
 await call('riley', 'PATCH', '/api/me', { visibility: 'public', handle: 'riley' });

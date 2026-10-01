@@ -4,6 +4,8 @@ import type {
   ChallengeResult,
   ChallengeSummary,
   CustomMetricOption,
+  FastStatus,
+  LiftOption,
   DiscoverResponse,
   FeedEvent,
   FriendsResponse,
@@ -31,6 +33,8 @@ export const keys = {
   garmin: ['garmin'] as const,
   connections: ['connections'] as const,
   customMetrics: ['custom-metrics'] as const,
+  lifts: ['lifts'] as const,
+  fast: ['fast'] as const,
   androidRelease: ['android-release'] as const,
 };
 
@@ -51,10 +55,11 @@ export const useFeed = () =>
     enabled: !session.direct,
     ...live,
   });
-export const useChallenges = () =>
+export const useChallenges = (enabled = true) =>
   useQuery({
     queryKey: keys.challenges,
     queryFn: () => get<ChallengeSummary[]>('/api/challenges'),
+    enabled,
     ...live,
   });
 export const useDiscover = (enabled = true) =>
@@ -133,3 +138,21 @@ export const useGarmin = () =>
 
 export const useConnections = () =>
   useQuery({ queryKey: keys.connections, queryFn: () => connections.list(), staleTime: 15_000 });
+
+/** Exercises with weighted sets, for per-exercise strength challenges (server mode). */
+export const useLifts = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.lifts,
+    queryFn: () => get<LiftOption[]>('/api/me/lifts'),
+    enabled: enabled && !session.direct,
+    staleTime: 300_000,
+  });
+
+/** SparkyFitness' fasting tracker. */
+export const useFast = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.fast,
+    queryFn: () => get<FastStatus>('/api/me/fast'),
+    enabled: enabled && !session.direct,
+    refetchInterval: 60_000,
+  });

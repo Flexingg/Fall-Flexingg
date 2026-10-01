@@ -1,4 +1,4 @@
-import { BUILTIN_METRICS, METRICS, type BuiltinMetricKey } from '@gauntlet/shared';
+import { BUILTIN_METRICS, METRIC_GROUPS, METRICS, type BuiltinMetricKey } from '@gauntlet/shared';
 import { useState } from 'react';
 import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
 import { useTrends } from '../lib/queries';
@@ -51,11 +51,21 @@ export function TrendsPage() {
                   fontWeight: 700,
                 }}
               >
-                {BUILTIN_METRICS.map((k) => (
-                  <option key={k} value={k} style={{ background: 'var(--card)' }}>
-                    {METRICS[k].label} {rangeName}
-                  </option>
-                ))}
+                {METRIC_GROUPS.map((g) => {
+                  // Scores worked out per challenge (e.g. weight goal) have no daily trend.
+                  const keys = BUILTIN_METRICS.filter(
+                    (k) => METRICS[k].group === g.key && !METRICS[k].transform,
+                  );
+                  return keys.length ? (
+                    <optgroup key={g.key} label={g.label} style={{ background: 'var(--card)' }}>
+                      {keys.map((k) => (
+                        <option key={k} value={k} style={{ background: 'var(--card)' }}>
+                          {METRICS[k].label} {rangeName}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null;
+                })}
               </select>
             </label>
             <div className="big num" style={{ marginTop: 6 }}>

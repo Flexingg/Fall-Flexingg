@@ -8,14 +8,23 @@ import { Avatar, Empty, ErrorBox, Screen, Skeleton } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { isNative } from '../lib/platform';
 import { fmtInt, timeAgo } from '../lib/format';
-import { useFeed, useToday } from '../lib/queries';
+import { useChallenges, useFeed, useToday } from '../lib/queries';
+import { FastCard } from '../components/FastCard';
 import { syncNow } from '../lib/session';
+
+const FASTING = new Set<string>(['fast_hours', 'fasts_completed']);
 
 export function TodayPage() {
   const { user, mode } = useAuth();
   const direct = mode === 'direct';
   const today = useToday();
   const feed = useFeed();
+  const challenges = useChallenges(!direct);
+  const inFastingChallenge =
+    !direct &&
+    !!challenges.data?.some(
+      (c) => c.status === 'active' && c.myState === 'joined' && FASTING.has(c.metric),
+    );
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
 
@@ -94,6 +103,8 @@ export function TodayPage() {
           </Link>
         ) : null}
       </div>
+
+      {inFastingChallenge && <FastCard />}
 
       <div className="lbl">
         <span>{direct ? 'Today' : 'Recent from your crew'}</span>

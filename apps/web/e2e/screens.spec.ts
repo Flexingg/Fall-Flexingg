@@ -265,3 +265,55 @@ test('goes public, joins a public challenge from Discover, and finds people by n
     'false',
   );
 });
+
+test('new metrics: bulk vs cut leaderboard, weight target, one-lift challenge, fasting timer', async ({
+  page,
+}) => {
+  await signIn(page);
+
+  // Bulking (Alex) and cutting (Maya) on one calorie-goal leaderboard.
+  await page.goto('/challenges');
+  await page.getByText('Dial It In').click();
+  await expect(page.getByText('Calorie goal ·')).toBeVisible();
+  await expect(page.getByText('Maya R.')).toBeVisible();
+  await snap(page, '16-calorie-goal');
+
+  // The fasting challenge puts a timer on Today.
+  await page.getByRole('link', { name: 'Today' }).click();
+  const fasting = page.getByLabel('Fasting');
+  await expect(fasting.getByRole('button', { name: 'Start 16h' })).toBeVisible();
+  await fasting.getByRole('button', { name: 'Start 16h' }).click();
+  await expect(fasting.getByText(/Fasting · 0h 0\dm/)).toBeVisible();
+  await snap(page, '17-fasting');
+  await fasting.getByRole('button', { name: 'End fast' }).click();
+  await expect(fasting.getByRole('button', { name: 'Start 18h' })).toBeVisible();
+
+  // A weight challenge needs your own target before it can start.
+  await page.goto('/c/new');
+  await page
+    .getByRole('group', { name: 'Body' })
+    .getByRole('button', { name: 'Weight goal' })
+    .click();
+  await expect(page.getByText('Weights stay private')).toBeVisible();
+  const start = page.getByRole('button', { name: 'Start challenge' });
+  await expect(start).toBeDisabled();
+  await page.getByRole('button', { name: 'Gain weight' }).click();
+  await page.getByLabel('My target').fill('3');
+  await page.getByRole('button', { name: 'kg', exact: true }).click();
+  await snap(page, '18-weight-goal');
+  await start.click();
+  await expect(page.getByText('Your target: gain 3 kg')).toBeVisible();
+
+  // One exercise from Liftosaur: pick Squat and race on the heaviest set.
+  await page.goto('/c/new');
+  await page
+    .getByRole('group', { name: 'Strength' })
+    .getByRole('button', { name: 'One exercise' })
+    .click();
+  await page.getByLabel('Exercise').selectOption('squat');
+  await expect(page.getByPlaceholder('Squat Max')).toBeVisible();
+  await snap(page, '19-one-lift');
+  await page.getByRole('button', { name: 'Start challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Squat Max' })).toBeVisible();
+  await expect(page.getByText('Squat max · Best single day')).toBeVisible();
+});
