@@ -1,8 +1,64 @@
-# Gauntlet next to your SparkyFitness server.
-#   cp deploy/.env.example deploy/.env   # fill in the secrets
+# The whole Gauntlet backend on one machine: Postgres, SparkyFitness (API + web UI) and Gauntlet.
+# Fly.io is the main deploy (deploy/fly); this file is for self-hosting, local testing and CI.
+#
+#   cp deploy/.env.example deploy/.env      # fill in the secrets
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
-# Then point your reverse proxy (the one serving fit.randalls.cc) at port 8080.
+#
+# Gauntlet: http://localhost:${GAUNTLET_PORT:-8080}   SparkyFitness: http://localhost:${SPARKY_PORT:-3004}
 services:
+  db:
+    build: ./postgres
+    image: gauntlet-postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      GAUNTLET_DB_PASSWORD: ${GAUNTLET_DB_PASSWORD:?set GAUNTLET_DB_PASSWORD}
+      SPARKY_DB_PASSWORD: ${SPARKY_DB_PASSWORD:?set SPARKY_DB_PASSWORD}
+    volumes:
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  sparky-api:
+    image: codewithcj/sparkyfitness_server:${SPARKY_VERSION:-v1.7.3}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-America/New_York}
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_PUBLIC_URL:-http://localhost:3004}
+      SPARKY_FITNESS_DB_HOST: db
+      SPARKY_FITNESS_DB_NAME: sparkyfitness_db
+      SPARKY_FITNESS_DB_USER: sparky
+      SPARKY_FITNESS_DB_PASSWORD: ${SPARKY_DB_PASSWORD}
+      SPARKY_FITNESS_APP_DB_USER: sparky_app
+      SPARKY_FITNESS_APP_DB_PASSWORD: ${SPARKY_APP_DB_PASSWORD:?set SPARKY_APP_DB_PASSWORD}
+      SPARKY_FITNESS_API_ENCRYPTION_KEY: ${SPARKY_API_ENCRYPTION_KEY:?set SPARKY_API_ENCRYPTION_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      SPARKY_FITNESS_ADMIN_EMAIL: ${SPARKY_ADMIN_EMAIL:-}
+      # Gauntlet signs everyone in from one address, so the per-IP limit has to be higher.
+      SPARKY_FITNESS_SIGN_IN_RATELIMIT_MAX: ${SPARKY_SIGN_IN_RATELIMIT_MAX:-60}
+      SPARKY_FITNESS_LOG_LEVEL: ${SPARKY_LOG_LEVEL:-INFO}
+    volumes:
+      - sparky-uploads:/app/SparkyFitnessServer/uploads
+      - sparky-backup:/app/SparkyFitnessServer/backup
+
+  sparky-web:
+    image: codewithcj/sparkyfitness:${SPARKY_VERSION:-v1.7.3}
+    restart: unless-stopped
+    depends_on: [sparky-api]
+    environment:
+      SPARKY_FITNESS_SERVER_HOST: sparky-api
+      SPARKY_FITNESS_SERVER_PORT: 3010
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_PUBLIC_URL:-http://localhost:3004}
+    ports:
+      - '${SPARKY_PORT:-3004}:80'
+
   gauntlet:
     build:
       context: ..
@@ -12,9 +68,11 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://gauntlet:${POSTGRES_PASSWORD}@db:5432/gauntlet
-      SPARKY_URL: ${SPARKY_URL:-https://fit.randalls.cc}
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://gauntlet.randalls.cc}
+      DATABASE_URL: postgres://gauntlet:${GAUNTLET_DB_PASSWORD}@db:5432/gauntlet
+      # Server-to-server over the internal network; links shown to people use the public URL.
+      SPARKY_URL: http://sparky-api:3010
+      SPARKY_PUBLIC_URL: ${SPARKY_PUBLIC_URL:-http://localhost:3004}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
       EXTRA_ORIGINS: ${EXTRA_ORIGINS:-https://localhost,capacitor://localhost}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
@@ -22,20 +80,7 @@ services:
     ports:
       - '${GAUNTLET_PORT:-8080}:8080'
 
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: gauntlet
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: gauntlet
-    volumes:
-      - gauntlet-db:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U gauntlet']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
 volumes:
-  gauntlet-db:
+  db:
+  sparky-uploads:
+  sparky-backup:

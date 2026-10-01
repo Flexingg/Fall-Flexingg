@@ -15,6 +15,7 @@ import { LoginPage } from './pages/Login';
 import { MePage } from './pages/Me';
 import { NewChallengePage } from './pages/NewChallenge';
 import { ResultPage } from './pages/Result';
+import { SignupPage } from './pages/Signup';
 import { SourcesPage } from './pages/Sources';
 import { TodayPage } from './pages/Today';
 import { TrendsPage } from './pages/Trends';
@@ -104,6 +105,30 @@ export function App() {
                 <Splash />
               ) : (
                 <LoginPage />
+              )
+            }
+          />
+          <Route
+            path="/login/advanced"
+            element={
+              status === 'signedIn' ? (
+                <Navigate to="/" replace />
+              ) : status === 'loading' ? (
+                <Splash />
+              ) : (
+                <LoginPage advanced />
+              )
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              status === 'signedIn' ? (
+                <Navigate to="/" replace />
+              ) : status === 'loading' ? (
+                <Splash />
+              ) : (
+                <SignupPage />
               )
             }
           />

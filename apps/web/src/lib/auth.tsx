@@ -1,4 +1,4 @@
-import type { LoginRequest, LoginResponse, MeUser } from '@gauntlet/shared';
+import type { LoginRequest, LoginResponse, MeUser, SignupRequest } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
@@ -51,6 +51,8 @@ interface AuthValue {
   notice: string | null;
   login: (req: LoginRequest) => Promise<LoginResponse>;
   verify: (ticket: string, code: string) => Promise<LoginResponse>;
+  /** Create a SparkyFitness account through the Gauntlet server and sign in. */
+  signup: (req: SignupRequest) => Promise<LoginResponse>;
   loginDirect: (input: DirectLogin) => Promise<void>;
   /** Direct mode only: sign in at a Gauntlet server with the key already on the phone. */
   connectServer: (serverUrl: string) => Promise<void>;
@@ -146,6 +148,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       notice,
       login: async (req) => {
         const res = await apiLogin('/api/auth/login', req);
+        if (res.status === 'ok' && DIRECT_AVAILABLE)
+          await saveStored({ mode: 'server', serverUrl: getApiBase() });
+        return finish(res);
+      },
+      signup: async (req) => {
+        const res = await apiLogin('/api/auth/signup', req);
         if (res.status === 'ok' && DIRECT_AVAILABLE)
           await saveStored({ mode: 'server', serverUrl: getApiBase() });
         return finish(res);

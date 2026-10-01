@@ -1,4 +1,4 @@
-import { loginSchema, twoFactorSchema, type LoginResponse } from '@gauntlet/shared';
+import { loginSchema, signupSchema, twoFactorSchema, type LoginResponse } from '@gauntlet/shared';
 import { eq, lt } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
@@ -37,7 +37,7 @@ export function authRoutes(app: FastifyInstance, ctx: AppContext) {
 
     let result;
     try {
-      result = await ctx.sparky.signIn(body.email, body.password);
+      result = await ctx.sparky.signIn(body.email, body.password, clientIp(req));
     } catch (err) {
       throw toAuthError(err, 'Email or password is incorrect.');
     }
@@ -54,6 +54,22 @@ export function authRoutes(app: FastifyInstance, ctx: AppContext) {
     return mintAndFinish(ctx, req, reply, result.token, result.user, tz);
   });
 
+  /** Create a SparkyFitness account and sign in to Gauntlet with it, in one step. */
+  app.post(
+    '/api/auth/signup',
+    { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } },
+    async (req, reply) => {
+      const body = signupSchema.parse(req.body);
+      let created;
+      try {
+        created = await ctx.sparky.signUp(body, clientIp(req));
+      } catch (err) {
+        throw toSignupError(err);
+      }
+      return mintAndFinish(ctx, req, reply, created.token, created.user, timezoneHeader(req));
+    },
+  );
+
   app.post('/api/auth/login/2fa', loginLimit, async (req, reply) => {
     const body = twoFactorSchema.parse(req.body);
     const [pending] = await ctx.db
@@ -68,6 +84,7 @@ export function authRoutes(app: FastifyInstance, ctx: AppContext) {
         decrypt(pending.cookieEnc, ctx.cfg.encryptionKey),
         body.code,
         body.method,
+        clientIp(req),
       );
     } catch (err) {
       throw toAuthError(err, 'That code did not work.');
@@ -184,6 +201,35 @@ function clearRefreshCookie(reply: FastifyReply) {
 function timezoneHeader(req: FastifyRequest): string | undefined {
   const tz = req.headers['x-timezone'];
   return typeof tz === 'string' ? tz : undefined;
+}
+
+/**
+ * The person's own address, passed to SparkyFitness so its sign-in limits count per person.
+ * Fly's proxy sets Fly-Client-IP; elsewhere Fastify's req.ip (trustProxy) is used.
+ */
+function clientIp(req: FastifyRequest): string | undefined {
+  const fly = req.headers['fly-client-ip'];
+  if (typeof fly === 'string' && fly) return fly;
+  return req.ip || undefined;
+}
+
+function toSignupError(err: unknown): HttpError {
+  if (err instanceof SparkyError) {
+    const code = (err.body as { code?: string } | null)?.code ?? '';
+    if (code.startsWith('USER_ALREADY_EXISTS') || err.status === 422)
+      return new HttpError(
+        409,
+        'There is already an account with that email. Sign in instead.',
+        'email_taken',
+      );
+    if (code === 'PASSWORD_TOO_SHORT')
+      return new HttpError(400, 'Use at least 8 characters for your password.', 'weak_password');
+    if (code === 'PASSWORD_TOO_LONG')
+      return new HttpError(400, 'That password is too long.', 'weak_password');
+    if (/signups? (are|is) (currently )?disabled/i.test(err.message))
+      return new HttpError(403, 'New accounts are switched off on this server.', 'signup_disabled');
+  }
+  return toAuthError(err, 'Could not create the account.');
 }
 
 function toAuthError(err: unknown, fallback: string): HttpError {

@@ -36,6 +36,9 @@ export class FakeSparky {
   tokens = new Map<string, { userId: string; kind: 'session' | 'key'; keyId?: string }>();
   pendingTwoFactor = new Map<string, string>();
   calls: string[] = [];
+  /** X-Forwarded-For seen on auth calls (Gauntlet passes the end user's address). */
+  forwardedFor: string[] = [];
+  signupDisabled = false;
   /** Artificial response delay per user id (ms), to force sync interleavings in tests. */
   latencyMs: Record<string, number> = {};
   private seq = 0;
@@ -82,7 +85,39 @@ export class FakeSparky {
       });
 
     if (method === 'GET' && path === '/api/auth/settings')
-      return json(200, { trusted_origin: this.trustedOrigin });
+      return json(200, {
+        trusted_origin: this.trustedOrigin,
+        signup_disabled: this.signupDisabled,
+      });
+
+    if (path.startsWith('/api/auth/') && headers.get('x-forwarded-for'))
+      this.forwardedFor.push(headers.get('x-forwarded-for')!);
+
+    // Mirrors SparkyFitness 1.7 (Better Auth) responses.
+    if (method === 'POST' && path === '/api/auth/sign-up/email') {
+      if (headers.get('origin') !== this.trustedOrigin)
+        return json(403, { message: 'Invalid origin' });
+      if (this.signupDisabled)
+        return json(400, { message: 'Signups are currently disabled by the administrator.' });
+      if (String(body.password ?? '').length < 8)
+        return json(400, { message: 'Password too short', code: 'PASSWORD_TOO_SHORT' });
+      const email = String(body.email).toLowerCase();
+      if ([...this.users.values()].some((u) => u.email === email))
+        return json(422, {
+          message: 'User already exists. Use another email.',
+          code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
+        });
+      const user = this.addUser({
+        id: `sparky-${++this.seq}`,
+        email,
+        password: String(body.password),
+        name: String(body.name),
+      });
+      return json(200, {
+        token: this.session(user.id),
+        user: { id: user.id, email: user.email, name: user.name },
+      });
+    }
 
     if (method === 'POST' && path === '/api/auth/sign-in/email') {
       if (headers.get('origin') !== this.trustedOrigin)

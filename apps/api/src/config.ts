@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  SPARKY_URL: z.string().url().default('https://fit.randalls.cc'),
+  /** How this server reaches SparkyFitness (on Fly: the private address of its API). */
+  SPARKY_URL: z.string().url().default('http://localhost:3004'),
+  /** The SparkyFitness address people and phones use. Defaults to SPARKY_URL. */
+  SPARKY_PUBLIC_URL: z.string().url().optional(),
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:5173'),
   EXTRA_ORIGINS: z.string().default(''),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
@@ -21,7 +24,8 @@ const envSchema = z.object({
   ASSETLINKS_SHA256: z.string().default(''),
 });
 
-export type Config = z.infer<typeof envSchema> & {
+export type Config = Omit<z.infer<typeof envSchema>, 'SPARKY_PUBLIC_URL'> & {
+  SPARKY_PUBLIC_URL: string;
   allowedOrigins: string[];
   encryptionKey: Buffer;
 };
@@ -42,5 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .map((o) => o.trim())
       .filter(Boolean),
   ];
-  return { ...cfg, SPARKY_URL: cfg.SPARKY_URL.replace(/\/+$/, ''), allowedOrigins, encryptionKey };
+  const SPARKY_URL = cfg.SPARKY_URL.replace(/\/+$/, '');
+  const SPARKY_PUBLIC_URL = (cfg.SPARKY_PUBLIC_URL ?? SPARKY_URL).replace(/\/+$/, '');
+  return { ...cfg, SPARKY_URL, SPARKY_PUBLIC_URL, allowedOrigins, encryptionKey };
 }

@@ -114,7 +114,7 @@ export const patch = <T>(path: string, json: unknown) => api<T>(path, { method: 
 export const del = <T>(path: string) => api<T>(path, { method: 'DELETE' });
 
 export async function login(
-  path: '/api/auth/login' | '/api/auth/login/2fa',
+  path: '/api/auth/login' | '/api/auth/login/2fa' | '/api/auth/signup',
   body: unknown,
 ): Promise<LoginResponse> {
   const res = await raw(path, { method: 'POST', json: body });

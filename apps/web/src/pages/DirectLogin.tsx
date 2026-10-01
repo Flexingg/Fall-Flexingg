@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ErrorBox } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { DEFAULT_SERVER_URL, DEFAULT_SPARKY_URL } from '../lib/platform';
@@ -123,6 +123,11 @@ export function DirectLoginPage() {
             'Connect'
           )}
         </button>
+        {DEFAULT_SERVER_URL && (
+          <Link to="/login" className="btn ghost">
+            Sign in with email instead
+          </Link>
+        )}
       </form>
     </main>
   );

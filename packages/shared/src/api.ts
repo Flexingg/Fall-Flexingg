@@ -25,6 +25,13 @@ export const loginApiKeySchema = z.object({
 export const loginSchema = z.discriminatedUnion('method', [loginPasswordSchema, loginApiKeySchema]);
 export type LoginRequest = z.infer<typeof loginSchema>;
 
+export const signupSchema = z.object({
+  name: z.string().trim().min(1, 'Enter your name').max(60),
+  email: z.string().trim().toLowerCase().email('Enter a valid email'),
+  password: z.string().min(8, 'Use at least 8 characters').max(128),
+});
+export type SignupRequest = z.infer<typeof signupSchema>;
+
 export const twoFactorSchema = z.object({
   ticket: z.string().min(1),
   code: z.string().trim().min(4).max(12),

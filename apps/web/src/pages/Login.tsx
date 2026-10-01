@@ -1,13 +1,17 @@
 import { useState, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { ErrorBox, Seg } from '../components/ui';
 import { useAuth } from '../lib/auth';
-import { DIRECT_AVAILABLE } from '../lib/platform';
+import { DEFAULT_SERVER_URL, DIRECT_AVAILABLE } from '../lib/platform';
 import { DirectLoginPage } from './DirectLogin';
 
-/** Android (and the opt-in test build) can talk to SparkyFitness directly; the web app always uses a Gauntlet server. */
-export function LoginPage() {
-  return DIRECT_AVAILABLE ? <DirectLoginPage /> : <ServerLoginPage />;
+/**
+ * Signing in normally goes through the Gauntlet server (which ships with its own SparkyFitness).
+ * Android can also use an API key straight against any SparkyFitness, under "Advanced".
+ */
+export function LoginPage({ advanced = false }: { advanced?: boolean }) {
+  if (DIRECT_AVAILABLE && (advanced || !DEFAULT_SERVER_URL)) return <DirectLoginPage />;
+  return <ServerLoginPage />;
 }
 
 function ServerLoginPage() {
@@ -52,7 +56,7 @@ function ServerLoginPage() {
           Gauntlet
         </h1>
         <p className="muted" style={{ marginTop: 6, fontSize: 15, lineHeight: 1.45 }}>
-          Throw down challenges with friends. Sign in with your SparkyFitness account.
+          Throw down challenges with friends. Sign in, or create an account in a few seconds.
         </p>
       </div>
 
@@ -132,10 +136,19 @@ function ServerLoginPage() {
         <button className="btn" disabled={busy}>
           {busy ? <span className="spinner" /> : ticket ? 'Verify' : 'Sign in'}
         </button>
-        {ticket && (
+        {ticket ? (
           <button type="button" className="btn ghost" onClick={() => setTicket(null)}>
             Start over
           </button>
+        ) : (
+          <Link to="/signup" state={location.state} className="btn secondary">
+            Create an account
+          </Link>
+        )}
+        {DIRECT_AVAILABLE && !ticket && (
+          <Link to="/login/advanced" className="muted center" style={{ fontSize: 13, padding: 6 }}>
+            Advanced: API key or another server
+          </Link>
         )}
       </form>
       <p

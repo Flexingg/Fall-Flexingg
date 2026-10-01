@@ -121,6 +121,7 @@ export class SparkyClient {
     trusted_origin?: string;
     email?: { enabled?: boolean };
     oidc?: { enabled?: boolean };
+    signup_disabled?: boolean;
   }> {
     return this.request('GET', '/api/auth/settings');
   }
@@ -134,10 +135,21 @@ export class SparkyClient {
     return this.trustedOrigin;
   }
 
-  async signIn(email: string, password: string): Promise<SignInResult> {
+  /**
+   * Headers for SparkyFitness's auth endpoints: the Origin it trusts, and the end user's address so
+   * its per-IP sign-in limits apply per person rather than to Gauntlet's server as a whole. Only
+   * honoured when Gauntlet talks to the SparkyFitness API directly (not through a public proxy).
+   */
+  private async authHeaders(clientIp?: string): Promise<Record<string, string>> {
+    const headers: Record<string, string> = { Origin: await this.origin() };
+    if (clientIp) headers['X-Forwarded-For'] = clientIp;
+    return headers;
+  }
+
+  async signIn(email: string, password: string, clientIp?: string): Promise<SignInResult> {
     const res = await this.raw('POST', '/api/auth/sign-in/email', {
       body: { email, password },
-      headers: { Origin: await this.origin() },
+      headers: await this.authHeaders(clientIp),
     });
     const body = (await readJson(res)) as Record<string, unknown> | null;
     if (!res.ok) throw new SparkyError(errorMessage(body) ?? 'Sign-in failed', res.status, body);
@@ -150,14 +162,32 @@ export class SparkyClient {
     return { kind: 'ok', token, user: toUser(user) };
   }
 
+  /** Create a SparkyFitness account (email + password). Returns a session like sign-in does. */
+  async signUp(
+    input: { name: string; email: string; password: string },
+    clientIp?: string,
+  ): Promise<{ token: string; user: SparkyUser }> {
+    const res = await this.raw('POST', '/api/auth/sign-up/email', {
+      body: input,
+      headers: await this.authHeaders(clientIp),
+    });
+    const body = (await readJson(res)) as Record<string, unknown> | null;
+    if (!res.ok) throw new SparkyError(errorMessage(body) ?? 'Sign-up failed', res.status, body);
+    const token = typeof body?.token === 'string' ? body.token : null;
+    const user = body?.user as Record<string, unknown> | undefined;
+    if (!token || !user?.id) throw new SparkyError('Unexpected sign-up response', 502, body);
+    return { token, user: toUser(user) };
+  }
+
   async verifyTwoFactor(
     cookie: string,
     code: string,
     method: 'totp' | 'otp',
+    clientIp?: string,
   ): Promise<{ token: string; user: SparkyUser }> {
     const res = await this.raw('POST', `/api/auth/two-factor/verify-${method}`, {
       body: { code },
-      headers: { Origin: await this.origin(), Cookie: cookie },
+      headers: { ...(await this.authHeaders(clientIp)), Cookie: cookie },
     });
     const body = (await readJson(res)) as Record<string, unknown> | null;
     if (!res.ok) throw new SparkyError(errorMessage(body) ?? 'Invalid code', res.status, body);

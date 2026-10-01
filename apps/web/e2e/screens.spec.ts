@@ -80,3 +80,17 @@ test('offers the Android APK on the web', async ({ page }) => {
   expect(res.headers()['content-type']).toBe('application/vnd.android.package-archive');
   await snap(page, '09-profile-android');
 });
+
+test('creates an account from the sign-in screen', async ({ page }) => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+  await page.getByLabel('Name').fill('Riley Park');
+  await page.getByLabel('Email').fill(`riley-${Date.now()}@example.com`);
+  await page.getByLabel('Password').fill('short');
+  await snap(page, '00b-signup');
+  await page.getByLabel('Password').fill('riley-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+});
