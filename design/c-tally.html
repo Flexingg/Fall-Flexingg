@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Tally</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#2a2d31;display:flex;gap:48px;padding:48px;width:max-content;font-family:'IBM Plex Sans','Liberation Sans',sans-serif}
+.phone{width:390px;height:844px;background:#15171a;color:#e8e9ea;border-radius:44px;overflow:hidden;position:relative;border:10px solid #000}
+.sb{height:44px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:14px;font-weight:600}
+.mono{font-family:'IBM Plex Mono','DejaVu Sans Mono',monospace}
+.top{display:flex;justify-content:space-between;padding:6px 16px 12px;border-bottom:1px solid #2a2e33;align-items:center}
+.top b{font-size:20px}.top span{color:#e4572e;font-weight:600;font-size:15px}
+.week{display:flex;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #2a2e33}
+.day{text-align:center;font-size:11px;color:#7d848c;font-weight:600}.day i{display:block;width:30px;height:30px;border-radius:6px;margin-top:6px;background:#22262b;line-height:30px;font-style:normal;color:#e8e9ea;font-size:13px}
+.day.on i{background:#e4572e;color:#fff}.day.cur i{outline:2px solid #e4572e;outline-offset:1px}
+.row{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid #2a2e33;gap:12px}
+.row .nm{flex:1;font-size:16px;font-weight:600}.row .nm small{display:block;color:#7d848c;font-size:12.5px;font-weight:400;margin-top:2px}
+.pill{font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;background:#22262b;color:#9aa1a9}.pill.o{background:#e4572e;color:#fff}
+.h{padding:16px 16px 8px;font-size:13px;color:#7d848c;font-weight:600;text-transform:uppercase;letter-spacing:.08em;display:flex;justify-content:space-between}
+.tab{position:absolute;bottom:0;left:0;right:0;height:84px;background:#101215;border-top:1px solid #2a2e33;display:flex;justify-content:space-around;padding-top:10px}
+.tab span{font-size:11px;font-weight:600;color:#6c737b;text-align:center}.tab span.on{color:#e4572e}
+.tab svg{display:block;margin:0 auto 3px;width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tbl{width:100%;border-collapse:collapse}.tbl th{font-size:11px;color:#7d848c;font-weight:600;text-align:right;padding:8px 8px;border-bottom:1px solid #2a2e33;text-transform:uppercase}
+.tbl th:nth-child(2){text-align:left}.tbl td{padding:12px 8px;text-align:right;border-bottom:1px solid #22262b;font-size:15px}.tbl td:first-child{color:#7d848c;text-align:center;width:30px}.tbl td:nth-child(2){text-align:left;font-weight:600;font-family:'IBM Plex Sans','Liberation Sans'}
+.tbl tr.me td{background:#201815}.tbl tr.me td:first-child{color:#e4572e;font-weight:700}
+.delta{color:#4fb477}.neg{color:#e4572e}
+.tabs{display:flex;border-bottom:1px solid #2a2e33;padding:0 16px;gap:22px}.tabs span{padding:12px 0;font-size:14px;font-weight:600;color:#7d848c}.tabs .on{color:#fff;border-bottom:2px solid #e4572e}
+.btn{margin:16px;background:#e4572e;color:#fff;text-align:center;padding:14px;font-weight:700;border-radius:8px;font-size:16px}
+.big{padding:16px;display:flex;justify-content:space-between;align-items:flex-end}.big .v{font-size:48px;font-weight:600;line-height:1}.big .u{color:#7d848c;font-size:14px}
+</style></head><body>
+
+<div class="phone"><div class="sb"><span>9:41</span><span>●●●</span></div>
+<div class="top"><b>Tally</b><span>+ New</span></div>
+<div class="week"><div class="day on"><b>M</b><i>✓</i></div><div class="day on">T<i>✓</i></div><div class="day on">W<i>✓</i></div><div class="day cur">T<i>9.4k</i></div><div class="day">F<i>–</i></div><div class="day">S<i>–</i></div><div class="day">S<i>–</i></div></div>
+<div class="h"><span>Active challenges</span><span>3</span></div>
+<div class="row"><div class="nm">Weekend 100K<small>Distance · 6 people · 3d left</small></div><div style="text-align:right"><div class="mono" style="font-size:18px;font-weight:600">62.4 km</div></div><span class="pill o">2nd</span></div>
+<div class="row"><div class="nm">Step Wars<small>Steps · 4 people · 12d left</small></div><div class="mono" style="font-size:18px;font-weight:600">71,204</div><span class="pill o">1st</span></div>
+<div class="row"><div class="nm">Active Minutes Cup<small>Active min · 8 people · 5d left</small></div><div class="mono" style="font-size:18px;font-weight:600">214</div><span class="pill">5th</span></div>
+<div class="h"><span>Today · synced 2 min ago</span></div>
+<div class="row"><div class="nm">Steps</div><div class="mono">9,412</div></div>
+<div class="row"><div class="nm">Active calories</div><div class="mono">612 kcal</div></div>
+<div class="row"><div class="nm">Active minutes</div><div class="mono">47 min</div></div>
+<div class="row"><div class="nm">Resting HR</div><div class="mono">54 bpm</div></div>
+<div class="tab"><span class="on"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Log</span><span><svg viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 01-10 0zM9 20h6M12 14v6"/></svg>Compete</span><span><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8"/></svg>Data</span><span><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-5 16-5 16 0"/></svg>Profile</span></div></div>
+
+<div class="phone"><div class="sb"><span>9:41</span><span>●●●</span></div>
+<div class="top"><b>‹ Weekend 100K</b><span>Edit</span></div>
+<div class="tabs"><span class="on">Standings</span><span>Activity</span><span>Rules</span></div>
+<div class="big"><div><div class="u">Your total</div><div class="v mono">62.4<span class="u"> km</span></div></div><div style="text-align:right"><div class="u">Behind 1st</div><div class="mono neg" style="font-size:22px">−3.1 km</div></div></div>
+<table class="tbl mono"><tr><th>#</th><th>Name</th><th>Total</th><th>Today</th></tr>
+<tr><td>1</td><td>Maya R.</td><td>65.5</td><td class="delta">+10.2</td></tr>
+<tr class="me"><td>2</td><td>You</td><td>62.4</td><td class="delta">+6.1</td></tr>
+<tr><td>3</td><td>Dre T.</td><td>48.9</td><td class="delta">+8.8</td></tr>
+<tr><td>4</td><td>Sam K.</td><td>41.0</td><td>0.0</td></tr>
+<tr><td>5</td><td>Jordan L.</td><td>33.7</td><td class="delta">+3.2</td></tr>
+<tr><td>6</td><td>Alex P.</td><td>20.1</td><td>0.0</td></tr></table>
+<div class="h"><span>Sources</span></div>
+<div class="row"><div class="nm">Apple Health<small>Connected · synced 2 min ago</small></div><span class="pill">ON</span></div>
+<div class="row"><div class="nm">Strava<small>Connected · synced 1 h ago</small></div><span class="pill">ON</span></div>
+<div class="btn">Invite friends</div>
+<div class="tab"><span><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Log</span><span class="on"><svg viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 01-10 0zM9 20h6M12 14v6"/></svg>Compete</span><span><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8"/></svg>Data</span><span><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-5 16-5 16 0"/></svg>Profile</span></div></div>
+</body></html>
