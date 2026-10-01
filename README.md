@@ -38,13 +38,14 @@ PWA / Android app ──HTTPS──▶ Gauntlet API (Node + Postgres) ──per-
 
 ## Repository
 
-| Path | What |
-| --- | --- |
+| Path              | What                                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
 | `packages/shared` | Metric catalog, scoring engine (total, race to target, daily average, best day, streak), API types |
-| `apps/api` | Fastify API, SparkyFitness client and merge, friends, invites, challenges, feed, scheduler |
-| `apps/web` | React PWA; `apps/web/android` is the Capacitor Android project |
-| `deploy/` | Docker Compose, env template, reverse-proxy and App Links examples |
-| `design/` | Mockups, icon, and screenshots of the real app (`design/app/`) |
+| `apps/api`        | Fastify API, SparkyFitness client and merge, friends, invites, challenges, feed, scheduler         |
+| `apps/web`        | React PWA; `apps/web/android` is the Capacitor Android project                                     |
+| `deploy/`         | `hermes/`: release deploy on hermes-pc (port 3333); plus a generic Docker Compose setup            |
+| `scripts/`        | `make-keystore.sh`: creates the Android release signing key                                        |
+| `design/`         | Mockups, icon, and screenshots of the real app (`design/app/`)                                     |
 
 ## Develop
 
@@ -76,15 +77,15 @@ TEST_DATABASE_URL=postgres://localhost/gauntlet_test pnpm test   # unit + API in
 pnpm --filter @gauntlet/web build && pnpm --filter @gauntlet/web e2e   # needs the demo API running
 ```
 
-## Deploy
+## Release and deploy
 
-```bash
-cp deploy/.env.example deploy/.env       # fill in POSTGRES_PASSWORD, JWT_SECRET, ENCRYPTION_KEY
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
-```
+Publishing a GitHub release builds a signed Android APK, attaches it to the release, and deploys the
+web app and API on hermes-pc (port 3333, published by Cloudflare), with the APK downloadable from the
+app's Profile page. Setup and operation: [`deploy/hermes/README.md`](deploy/hermes/README.md).
 
-One container serves the API (`/api`) and the PWA on port 8080. Put it behind the same reverse proxy
-as SparkyFitness, e.g. `gauntlet.randalls.cc` (see `deploy/Caddyfile.example`). Keep
+For any other host, `deploy/docker-compose.yml` runs the same image (API + PWA on port 8080) with
+Postgres; copy `deploy/.env.example` to `deploy/.env` and run
+`docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build`. Keep
 `ENCRYPTION_KEY` stable: changing it makes every stored SparkyFitness key unreadable, and everyone has
 to sign in again.
 
@@ -101,13 +102,9 @@ pnpm --filter @gauntlet/web cap:sync      # builds with apps/web/.env.native (VI
 cd apps/web/android && ./gradlew assembleDebug
 ```
 
-- `apps/web/.env.native` points the app at `https://gauntlet.randalls.cc`. Change it if you host
-  Gauntlet elsewhere, and update the App Links host in `AndroidManifest.xml`.
-- CI builds a debug APK on every push (artifact `gauntlet-android`). For a signed release APK, add
-  repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
-  `ANDROID_KEY_PASSWORD`.
-- So invite links open the app directly, serve `deploy/assetlinks.json` (with your release key's
-  SHA-256) at `/.well-known/assetlinks.json`.
+- Releases are built by CI with `GAUNTLET_PUBLIC_URL` as the API address. `.env.native` is only for
+  local builds.
+- Pushes and pull requests build a debug APK (artifact `gauntlet-android`).
 - Health Connect: the app asks for read access only (steps, distance, active calories, resting heart
   rate, sleep, exercise, history) and syncs when opened or resumed. Records use the same format and
   source name as the SparkyFitness app, so if you already run that, you only need one of them syncing.

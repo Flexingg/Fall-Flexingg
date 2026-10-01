@@ -288,3 +288,14 @@ export interface ApiError {
   error: string;
   code?: string;
 }
+
+/** Latest published Android build, served by the API when hosting is enabled. */
+export interface AndroidRelease {
+  version: string;
+  builtAt: string;
+  sha256: string;
+  file: string;
+  sizeBytes: number;
+  url: string;
+  latestUrl: string;
+}

@@ -20,3 +20,5 @@ apps/web/android/app/src/main/assets/public/
 apps/web/android/capacitor-cordova-android-plugins/
 *.keystore
 *.jks
+
+*.jks.b64

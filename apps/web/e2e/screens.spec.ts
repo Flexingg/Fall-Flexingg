@@ -67,3 +67,16 @@ test('creates a challenge end to end', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Step Sprint' })).toBeVisible();
   await expect(page.getByText('Waiting on Maya')).toBeVisible();
 });
+
+// Needs the API started with DOWNLOADS_DIR pointing at a latest.json (CI does this).
+test('offers the Android APK on the web', async ({ page }) => {
+  test.skip(!process.env.E2E_APK, 'API is not hosting an APK');
+  await signIn(page);
+  await page.goto('/me');
+  await expect(page.getByText('Gauntlet for Android')).toBeVisible();
+  const link = page.getByRole('link', { name: 'Download APK' });
+  await expect(link).toHaveAttribute('href', '/downloads/gauntlet-latest.apk');
+  const res = await page.request.get('/downloads/gauntlet-latest.apk');
+  expect(res.headers()['content-type']).toBe('application/vnd.android.package-archive');
+  await snap(page, '09-profile-android');
+});

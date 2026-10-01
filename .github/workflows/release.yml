@@ -1,0 +1,133 @@
+# On every GitHub release: build + sign the Android APK, attach it to the release,
+# then deploy the web app (and publish the APK) on hermes-pc, port 3333.
+#
+# One-time setup: see deploy/hermes/README.md.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re)build and deploy, e.g. v0.2.0
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-hermes
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  apk:
+    name: Build signed APK
+    runs-on: ubuntu-latest
+    outputs:
+      file: ${{ steps.name.outputs.file }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check configuration
+        env:
+          PUBLIC_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          case "$TAG" in
+            [A-Za-z0-9]*) ;;
+            *) echo "::error::Release tag '$TAG' must start with a letter or digit"; exit 1;;
+          esac
+          if ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+            echo "::error::Release tag '$TAG' can only contain letters, digits, '.', '_' and '-' (it becomes a file name)"; exit 1
+          fi
+          missing=()
+          [ -n "$PUBLIC_URL" ] || missing+=("variable GAUNTLET_PUBLIC_URL")
+          [ -n "$KEYSTORE" ]   || missing+=("secret ANDROID_KEYSTORE_BASE64")
+          [ -n "$STORE_PW" ]   || missing+=("secret ANDROID_KEYSTORE_PASSWORD")
+          [ -n "$KEY_ALIAS" ]  || missing+=("secret ANDROID_KEY_ALIAS")
+          [ -n "$KEY_PW" ]     || missing+=("secret ANDROID_KEY_PASSWORD")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing: ${missing[*]}. A release APK must be signed with the same key every time, or phones can't update it in place. Run scripts/make-keystore.sh and see deploy/hermes/README.md."
+            exit 1
+          fi
+          case "$PUBLIC_URL" in https://*) ;; *) echo "::error::GAUNTLET_PUBLIC_URL must start with https://"; exit 1;; esac
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build web assets for Android
+        env:
+          VITE_API_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
+        run: pnpm --filter @gauntlet/web cap:sync
+
+      - name: Decode signing key
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/gauntlet.jks"
+
+      - name: Build release APK
+        working-directory: apps/web/android
+        env:
+          GAUNTLET_VERSION_CODE: ${{ github.run_number }}
+          GAUNTLET_KEYSTORE_PATH: ${{ runner.temp }}/gauntlet.jks
+          GAUNTLET_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GAUNTLET_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          GAUNTLET_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export GAUNTLET_VERSION_NAME="${TAG#v}"
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Verify signature and version
+        id: name
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          SRC=apps/web/android/app/build/outputs/apk/release/app-release.apk
+          "$BT/apksigner" verify --print-certs "$SRC" | head -3
+          "$BT/aapt" dump badging "$SRC" | grep -E "^package:"
+          FILE="gauntlet-${TAG}.apk"
+          mkdir -p dist && cp "$SRC" "dist/$FILE"
+          (cd dist && sha256sum "$FILE" > "$FILE.sha256")
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "dist/${{ steps.name.outputs.file }}" "dist/${{ steps.name.outputs.file }}.sha256" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gauntlet-apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to hermes-pc (port 3333)
+    needs: apk
+    runs-on: [self-hosted, hermes-pc]
+    environment: hermes-pc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: gauntlet-apk
+          path: apk
+      - name: Deploy
+        run: deploy/hermes/deploy.sh "$TAG" "apk/${{ needs.apk.outputs.file }}"

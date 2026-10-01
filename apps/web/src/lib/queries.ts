@@ -1,4 +1,5 @@
 import type {
+  AndroidRelease,
   ChallengeDetail,
   ChallengeResult,
   ChallengeSummary,
@@ -11,7 +12,7 @@ import type {
   TrendsResponse,
 } from '@gauntlet/shared';
 import { useQuery } from '@tanstack/react-query';
-import { get } from './api';
+import { ApiError, get } from './api';
 
 export const keys = {
   today: ['today'] as const,
@@ -23,6 +24,7 @@ export const keys = {
   trends: (range: string, metric: string) => ['trends', range, metric] as const,
   sources: ['sources'] as const,
   customMetrics: ['custom-metrics'] as const,
+  androidRelease: ['android-release'] as const,
 };
 
 const live = { refetchInterval: 60_000, refetchOnWindowFocus: true };
@@ -68,4 +70,21 @@ export const useCustomMetrics = (enabled: boolean) =>
     queryFn: () => get<CustomMetricOption[]>('/api/me/custom-metrics'),
     enabled,
     staleTime: 300_000,
+  });
+
+/** Null when this server doesn't host an APK. */
+export const useAndroidRelease = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.androidRelease,
+    enabled,
+    staleTime: 300_000,
+    retry: false,
+    queryFn: async () => {
+      try {
+        return await get<AndroidRelease>('/api/app/android');
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
   });

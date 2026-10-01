@@ -2,6 +2,10 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// The API also serves the hosted APK under /downloads.
+const target = process.env.API_PROXY ?? 'http://localhost:8080';
+const proxy = { '/api': { target }, '/downloads': { target } };
+
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
@@ -43,15 +47,11 @@ export default defineConfig(({ mode }) => ({
   ],
   server: {
     port: 5173,
-    proxy: {
-      '/api': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: false },
-    },
+    proxy,
   },
   preview: {
     port: 4173,
-    proxy: {
-      '/api': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: false },
-    },
+    proxy,
   },
   build: { target: 'es2022', sourcemap: true },
 }));

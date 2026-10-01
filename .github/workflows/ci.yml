@@ -43,10 +43,15 @@ jobs:
       - name: End-to-end (demo API + built PWA)
         run: |
           pnpm --filter @gauntlet/web exec playwright install --with-deps chromium
-          DATABASE_URL=postgres://postgres@localhost:5432/gauntlet_e2e PORT=8080 pnpm --filter @gauntlet/api demo &
+          # A stub release so the web app's "Download APK" card is exercised too.
+          mkdir -p "$RUNNER_TEMP/downloads"
+          head -c 4096 /dev/urandom > "$RUNNER_TEMP/downloads/gauntlet-latest.apk"
+          cp "$RUNNER_TEMP/downloads/gauntlet-latest.apk" "$RUNNER_TEMP/downloads/gauntlet-v0.0.0.apk"
+          echo '{"version":"v0.0.0","builtAt":"2026-01-01T00:00:00Z","sha256":"","file":"gauntlet-v0.0.0.apk","sizeBytes":4096}' > "$RUNNER_TEMP/downloads/latest.json"
+          DOWNLOADS_DIR="$RUNNER_TEMP/downloads" DATABASE_URL=postgres://postgres@localhost:5432/gauntlet_e2e PORT=8080 pnpm --filter @gauntlet/api demo &
           for i in $(seq 1 60); do curl -sf localhost:8080/api/health && break; sleep 1; done
           mkdir -p screens
-          SCREENSHOT_DIR=$PWD/screens pnpm --filter @gauntlet/web e2e
+          E2E_APK=1 SCREENSHOT_DIR=$PWD/screens pnpm --filter @gauntlet/web e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:

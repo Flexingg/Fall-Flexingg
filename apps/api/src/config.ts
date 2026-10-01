@@ -15,6 +15,10 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
   /** Directory of the built PWA to serve alongside the API (the Docker image sets this). */
   WEB_DIST: z.string().optional(),
+  /** Directory holding the released APK and latest.json, served under /downloads. */
+  DOWNLOADS_DIR: z.string().optional(),
+  /** Release key SHA-256 fingerprint(s), comma separated, for Android App Links (invite links open the app). */
+  ASSETLINKS_SHA256: z.string().default(''),
 });
 
 export type Config = z.infer<typeof envSchema> & {

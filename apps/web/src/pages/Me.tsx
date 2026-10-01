@@ -5,12 +5,15 @@ import { Icon } from '../components/Icon';
 import { Avatar, ErrorBox, Header, Screen, toast } from '../components/ui';
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { isNative } from '../lib/platform';
+import { useAndroidRelease } from '../lib/queries';
 
 export function MePage() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState(user?.displayName ?? '');
   const [error, setError] = useState<unknown>(null);
+  const android = useAndroidRelease(!isNative);
   if (!user) return null;
 
   async function saveName() {
@@ -79,6 +82,41 @@ export function MePage() {
           </div>
         </div>
       </div>
+
+      {android.data && !isNative && (
+        <>
+          <div className="lbl">Android app</div>
+          <div className="card stack" style={{ gap: 10 }}>
+            <div className="row">
+              <img
+                src="/icons/favicon.svg"
+                width={44}
+                height={44}
+                alt=""
+                style={{ borderRadius: 11 }}
+              />
+              <div className="grow">
+                <div className="t" style={{ fontWeight: 700 }}>
+                  Gauntlet for Android
+                </div>
+                <small className="muted">
+                  {android.data.version} · {(android.data.sizeBytes / 1048576).toFixed(1)} MB
+                  {android.data.builtAt
+                    ? ` · ${new Date(android.data.builtAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                    : ''}
+                </small>
+              </div>
+            </div>
+            <a className="btn" href={android.data.latestUrl} download>
+              Download APK
+            </a>
+            <p className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              Open the file on your phone and allow installs from your browser when asked. Updates
+              install over the top and keep your data.
+            </p>
+          </div>
+        </>
+      )}
 
       <div className="stack" style={{ marginTop: 24 }}>
         <button

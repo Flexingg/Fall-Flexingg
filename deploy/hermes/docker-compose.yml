@@ -1,0 +1,44 @@
+# Gauntlet on hermes-pc: API + PWA on port 3333, with Postgres.
+# Normally run by deploy.sh (via the release workflow); see README.md in this folder.
+name: gauntlet
+
+services:
+  gauntlet:
+    # deploy.sh builds gauntlet:<version> and tags it gauntlet:deployed.
+    image: gauntlet:deployed
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://gauntlet:${POSTGRES_PASSWORD}@db:5432/gauntlet
+      SPARKY_URL: ${SPARKY_URL:-https://fit.randalls.cc}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?set PUBLIC_WEB_URL to your Cloudflare URL}
+      EXTRA_ORIGINS: ${EXTRA_ORIGINS:-https://localhost,capacitor://localhost}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-15}
+      DOWNLOADS_DIR: /app/downloads
+      ASSETLINKS_SHA256: ${ASSETLINKS_SHA256:-}
+    volumes:
+      - ${GAUNTLET_DOWNLOADS_DIR:-/opt/gauntlet/downloads}:/app/downloads:ro
+    ports:
+      - '${GAUNTLET_BIND:-0.0.0.0}:${GAUNTLET_PORT:-3333}:8080'
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gauntlet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: gauntlet
+    volumes:
+      - gauntlet-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gauntlet']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  gauntlet-db:
