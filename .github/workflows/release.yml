@@ -1,6 +1,10 @@
 # On every GitHub release: build + sign the Android APK, attach it to the release, then deploy
 # the backend to Fly.io (Postgres, SparkyFitness, Gauntlet) with the APK inside the Gauntlet image.
 #
+# New release without the GitHub UI: Actions -> Release -> Run workflow with a tag that doesn't exist
+# yet (e.g. v0.2.0). It builds the selected branch, then creates the tag and release and attaches the
+# APK. With an existing release/tag it rebuilds that one.
+#
 # Dry run: Actions -> Release -> Run workflow with the tag left empty builds a signed APK from the
 # selected branch and deploys it as "dev-<sha>", without touching any GitHub release.
 #
@@ -13,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag to rebuild, e.g. v0.2.0. Leave empty for a dry run from the selected branch (no release is touched).'
+        description: 'Release tag, e.g. v0.2.0. A new tag creates the release from the selected branch after a successful build; an existing one is rebuilt. Leave empty for a dry run (no release is touched).'
         required: false
         default: ''
       deploy:
@@ -36,24 +40,36 @@ jobs:
       version: ${{ steps.m.outputs.version }}
       ref: ${{ steps.m.outputs.ref }}
       publish: ${{ steps.m.outputs.publish }}
+      create: ${{ steps.m.outputs.create }}
+      sha: ${{ steps.m.outputs.sha }}
     steps:
       - id: m
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_TAG: ${{ inputs.tag }}
           SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           tag="${RELEASE_TAG:-$INPUT_TAG}"
+          create=false
           if [ -n "$tag" ]; then
-            version="$tag"; ref="$tag"; publish=true
+            version="$tag"; publish=true
+            if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1 \
+               || gh api "repos/$REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+              ref="$tag"                # rebuild what the tag/release already points at
+              if ! gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then create=true; fi
+            else
+              ref="$SHA"; create=true   # new tag: build the selected branch, create the release after
+            fi
           else
             version="dev-${SHA::7}"; ref="$SHA"; publish=false
           fi
           if ! printf '%s' "$version" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
             echo "::error::Version '$version' can only contain letters, digits, '.', '_' and '-' (it becomes a file name). Rename the tag."; exit 1
           fi
-          { echo "version=$version"; echo "ref=$ref"; echo "publish=$publish"; } >> "$GITHUB_OUTPUT"
-          echo "Building $version (publish to release: $publish)"
+          { echo "version=$version"; echo "ref=$ref"; echo "publish=$publish"; echo "create=$create"; echo "sha=$SHA"; } >> "$GITHUB_OUTPUT"
+          echo "Building $version from $ref (publish: $publish, create release: $create)"
 
   apk:
     name: Build signed APK
@@ -154,6 +170,14 @@ jobs:
           FP="$("$BT/apksigner" verify --print-certs "$SRC" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1 \
             | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')"
           echo "fingerprint=$FP" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        if: needs.meta.outputs.publish == 'true' && needs.meta.outputs.create == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ needs.meta.outputs.sha }}
+        # Only after the build and signature checks passed, so a failed build leaves no release behind.
+        run: gh release create "$TAG" --target "$TARGET" --title "$TAG" --generate-notes
 
       - name: Attach to the release
         if: needs.meta.outputs.publish == 'true'
