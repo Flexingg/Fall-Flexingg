@@ -3,7 +3,16 @@
  * Gauntlet server ("server", the web app and the full Android app). One place decides, so screens
  * just call these helpers.
  */
-import type { GarminLoginResult, GarminStatus, MeUser, UserSettings } from '@gauntlet/shared';
+import type {
+  ConnectionInfo,
+  ConnectionsResponse,
+  ConnectResult,
+  GarminLoginResult,
+  GarminStatus,
+  MeUser,
+  ProviderId,
+  UserSettings,
+} from '@gauntlet/shared';
 import { DirectBackend } from './direct/DirectBackend';
 import { secret } from './direct/secret';
 import { get, post, patch } from './api';
@@ -95,4 +104,27 @@ export const garmin = {
     session.direct
       ? session.direct.garminDisconnect()
       : post<{ ok: true }>('/api/garmin/disconnect', {}),
+};
+
+/** Every other app and device (and Garmin's sync/disconnect), the same way in both modes. */
+export const connections = {
+  list: async (): Promise<ConnectionInfo[]> =>
+    session.direct
+      ? session.direct.connections()
+      : (await get<ConnectionsResponse>('/api/connections')).connections,
+  connect: (id: ProviderId, apiKey?: string): Promise<ConnectResult> =>
+    session.direct
+      ? session.direct.connect(id, { apiKey })
+      : post<ConnectResult>(`/api/connections/${id}/connect`, apiKey ? { apiKey } : {}),
+  /** The provider sent the person back with a code (server mode only). */
+  finishOAuth: (id: ProviderId, code: string, state?: string): Promise<ConnectResult> =>
+    post<ConnectResult>(`/api/connections/${id}/oauth`, { code, ...(state ? { state } : {}) }),
+  sync: (id: ProviderId): Promise<{ ok: true }> =>
+    session.direct
+      ? session.direct.syncApp(id)
+      : post<{ ok: true }>(`/api/connections/${id}/sync`, {}),
+  disconnect: (id: ProviderId): Promise<{ ok: true }> =>
+    session.direct
+      ? session.direct.disconnect(id)
+      : post<{ ok: true }>(`/api/connections/${id}/disconnect`, {}),
 };

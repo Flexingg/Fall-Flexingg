@@ -121,6 +121,12 @@ jobs:
         run: |
           docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/stack.env" exec -T sparky-api \
             sh -c 'test "$GARMIN_MICROSERVICE_URL" = http://sparky-garmin:8000 && wget -qO- -T 10 "$GARMIN_MICROSERVICE_URL/openapi.json" | grep -q "\"openapi\""'
+      - name: App sign-in returns are handed to Gauntlet
+        run: |
+          loc="$(curl -s -o /dev/null -w '%{redirect_url}' 'http://localhost:3004/strava/callback?code=x&state=y')"
+          test "$loc" = 'http://localhost:8080/oauth/strava?code=x&state=y' || { echo "got: $loc"; exit 1; }
+      - name: Linking apps against the real SparkyFitness (Hevy key, wger switch, provider records)
+        run: deploy/connections-smoke.sh http://localhost:8080
       - name: Smoke test (sign up, push steps, sync, read back)
         run: deploy/smoke.sh http://localhost:8080 http://localhost:3004
       - name: Logs

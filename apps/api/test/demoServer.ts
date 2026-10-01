@@ -5,6 +5,7 @@
  *   DATABASE_URL=postgres://... pnpm --filter @gauntlet/api demo
  *
  * Sign in as you@example.com / demo (or maya@, dre@, sam@, jordan@ / demo).
+ * Connect screens: Hevy key good-hevy-key; Strava/Fitbit sign-in code good-code.
  * Garmin screen: runner@garmin.demo / demo, or mfa@garmin.demo / demo with code 123456.
  */
 import { addDays, todayIn } from '@gauntlet/shared';
@@ -118,10 +119,17 @@ const cfg = loadConfig({
   DATABASE_URL: DB_URL,
   SPARKY_URL: fake.baseUrl,
   PUBLIC_WEB_URL: process.env.PUBLIC_WEB_URL ?? 'http://localhost:5173',
+  // Pretend OAuth app keys, so Strava and Fitbit can be tried (Oura and Polar show as not set up).
+  OAUTH_STRAVA_CLIENT_ID: 'demo-strava',
+  OAUTH_STRAVA_CLIENT_SECRET: 'demo-secret',
+  OAUTH_FITBIT_CLIENT_ID: 'demo-fitbit',
+  OAUTH_FITBIT_CLIENT_SECRET: 'demo-secret',
   EXTRA_ORIGINS: 'http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173',
   JWT_SECRET: process.env.JWT_SECRET ?? 'demo-secret-demo-secret-demo-secret-0000',
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY ?? Buffer.alloc(32, 3).toString('base64'),
   SYNC_INTERVAL_MINUTES: '0',
+  // The browser tests sign in many times a minute.
+  LOGIN_RATE_LIMIT_MAX: '1000',
 });
 const { app, ctx } = await buildApp(
   {

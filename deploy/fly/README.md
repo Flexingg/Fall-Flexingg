@@ -40,6 +40,41 @@ SparkyFitness website costs next to nothing while it sleeps). Check [fly.io/pric
 6. **Create your account first** in the app: it becomes the SparkyFitness admin unless you set
    `SPARKY_ADMIN_EMAIL`.
 
+## Linking apps (Garmin, COROS, Hevy, Liftosaur, wger work out of the box)
+
+People connect apps from **Data sources** in the app; SparkyFitness does the signing in and stores
+the data, and syncs each connection about once an hour.
+
+- **Garmin** (email + password, with a code if Garmin asks), **COROS** (its own sign-in page, no keys
+  needed), **Hevy** and **Liftosaur** (each person pastes their own API key) and **wger** (an exercise
+  library, switched on with one tap) need nothing from you.
+- **Strava, Fitbit, Oura and Polar** sign in on the provider's own site, which needs an app you
+  register once with each provider. Until you add its keys, that app shows as "Not set up on this
+  server" and everything else keeps working.
+
+Register an app with each provider you want, using this **redirect URL** (the SparkyFitness address,
+which hands the person on to Gauntlet):
+
+| App    | Register at                                    | Redirect URL                          | GitHub secrets                                         |
+| ------ | ---------------------------------------------- | ------------------------------------- | ------------------------------------------------------ |
+| Strava | strava.com/settings/api (callback domain only) | `<SPARKY_PUBLIC_URL>/strava/callback` | `OAUTH_STRAVA_CLIENT_ID`, `OAUTH_STRAVA_CLIENT_SECRET` |
+| Fitbit | dev.fitbit.com/apps/new                        | `<SPARKY_PUBLIC_URL>/fitbit/callback` | `OAUTH_FITBIT_CLIENT_ID`, `OAUTH_FITBIT_CLIENT_SECRET` |
+| Oura   | cloud.ouraring.com/oauth/applications          | `<SPARKY_PUBLIC_URL>/oura/callback`   | `OAUTH_OURA_CLIENT_ID`, `OAUTH_OURA_CLIENT_SECRET`     |
+| Polar  | admin.polaraccesslink.com                      | `<SPARKY_PUBLIC_URL>/polar/callback`  | `OAUTH_POLAR_CLIENT_ID`, `OAUTH_POLAR_CLIENT_SECRET`   |
+
+For example `https://sparky.randalls.cc/strava/callback`. Add the keys as repository **secrets**
+(Settings → Secrets and variables → Actions), then publish a release or run **Fly setup**; both stage
+them on the Gauntlet app and redeploy. Notes:
+
+- Providers limit new apps: a new Strava API app starts out able to connect only its owner until
+  Strava approves more athletes, and Fitbit's "Personal" app type is owner-only (choose "Server" to
+  allow friends). Check each provider's current rules.
+- The SparkyFitness site's `/<app>/callback` addresses redirect to Gauntlet (`deploy/sparky-web`). If
+  someone connects an app from SparkyFitness's own website instead, they also land in Gauntlet to
+  finish it, which works for the same account.
+- Android: the return link is a verified app link on your Gauntlet address (`/oauth/...`), so the app
+  opens to finish. If it opens in the browser instead, the web app finishes the connection there.
+
 ## Day to day
 
 - Every published release deploys all five apps in order (database, Garmin service, SparkyFitness
@@ -73,6 +108,7 @@ via `fly ssh console -a <prefix>-db`).
 
 - `common.sh`, `setup.sh`, `deploy.sh`: what the workflows run; you can run them locally with
   `flyctl` logged in.
+- `../sparky-web/`: the SparkyFitness website image (adds the app sign-in hand-over to Gauntlet).
 - `*.toml`: one Fly config per app. `../postgres/` builds the database image (creates both
   databases on first start).
 - `downloads/`: the release workflow drops the APK here so it ships inside the Gauntlet image.

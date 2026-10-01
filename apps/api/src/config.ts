@@ -12,6 +12,8 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z.string().min(1, 'ENCRYPTION_KEY is required (openssl rand -base64 32)'),
   PORT: z.coerce.number().int().default(8080),
   HOST: z.string().default('0.0.0.0'),
+  /** Password sign-ins allowed per minute per address. */
+  LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
   SYNC_INTERVAL_MINUTES: z.coerce.number().min(0).default(15),
   /** Name of the API key Gauntlet creates in each user's SparkyFitness account. */
   SPARKY_KEY_NAME: z.string().default('Gauntlet'),

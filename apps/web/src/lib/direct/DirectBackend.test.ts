@@ -215,4 +215,31 @@ describe('DirectBackend', () => {
     });
     await expect(backend.garminSync()).rejects.toBeInstanceOf(DirectError);
   });
+
+  it('links apps from the phone with a key or a switch; sign-in apps point to SparkyFitness', async () => {
+    const { backend, user } = setup();
+    const all = await backend.connections();
+    expect(all).toHaveLength(9);
+    expect(all.find((c) => c.id === 'strava')).toMatchObject({
+      state: 'unavailable',
+      settingsUrl: 'https://sparky.test/settings?section=integrations',
+    });
+    await expect(backend.connect('strava')).rejects.toMatchObject({ code: 'oauth_unavailable' });
+    await expect(backend.connect('hevy', { apiKey: 'wrong-key-123' })).rejects.toMatchObject({
+      code: 'provider_key',
+    });
+
+    expect(await backend.connect('hevy', { apiKey: 'good-hevy-key' })).toEqual({
+      status: 'connected',
+    });
+    await expect
+      .poll(() => user.providers.find((p) => p.provider_type === 'hevy')?.syncs ?? 0)
+      .toBeGreaterThan(0);
+    expect((await backend.connections()).find((c) => c.id === 'hevy')!.state).toBe('connected');
+
+    expect(await backend.syncApp('hevy')).toEqual({ ok: true });
+    await backend.disconnect('hevy');
+    expect((await backend.connections()).find((c) => c.id === 'hevy')!.state).toBe('disconnected');
+    await expect(backend.syncApp('hevy')).rejects.toMatchObject({ code: 'not_connected' });
+  });
 });

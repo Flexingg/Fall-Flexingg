@@ -100,7 +100,7 @@ test('connects Garmin from the data sources screen', async ({ page }) => {
   await signIn(page);
   await page.goto('/sources');
   await expect(page.getByRole('heading', { name: 'Data sources' })).toBeVisible();
-  await page.getByRole('button', { name: /Connect Garmin/ }).click();
+  await page.getByRole('button', { name: /Garmin Connect.*Steps, workouts/ }).click();
   await page.getByLabel('Garmin email').fill('mfa@garmin.demo');
   await page.getByLabel('Garmin password').fill('wrong');
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
@@ -116,7 +116,79 @@ test('connects Garmin from the data sources screen', async ({ page }) => {
   await expect(page.getByText(/^Connected/)).toBeVisible();
   await snap(page, '11-garmin-connected');
 
+  await page.getByRole('button', { name: /Garmin Connect.*Connected/ }).click();
   page.once('dialog', (d) => d.accept());
-  await page.getByRole('button', { name: /Disconnect Garmin/ }).click();
-  await expect(page.getByRole('button', { name: /Connect Garmin/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Garmin Connect.*Steps, workouts/ })).toBeVisible();
+});
+
+test('connects Hevy with a key, and shows apps this server has no keys for', async ({ page }) => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+  await signIn(page);
+  await page.goto('/sources');
+  await expect(page.getByRole('button', { name: /Oura Ring.*Not available/ })).toBeVisible();
+  await page.getByRole('button', { name: /Hevy.*Gym workouts/ }).click();
+  await page.getByLabel('Hevy API key').fill('wrong-key-123');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(
+    page.getByText("Hevy didn't accept that API key. Check it and try again."),
+  ).toBeVisible();
+  await page.getByLabel('Hevy API key').fill('good-hevy-key');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Hevy.*Connected/ })).toBeVisible();
+  await snap(page, '12-apps-connected');
+
+  await page.getByRole('button', { name: /Hevy.*Connected/ }).click();
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Hevy.*Gym workouts/ })).toBeVisible();
+});
+
+test('connects Strava: sign in on its page, come back with a code', async ({ page }) => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+  // The provider's own site, which the test stands in for.
+  await page.route('https://auth.strava.test/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<h1>Strava sign-in</h1>' }),
+  );
+  await signIn(page);
+  await page.goto('/sources');
+  await page.getByRole('button', { name: /Strava.*Runs, rides/ }).click();
+  await page.getByRole('button', { name: /Continue to Strava/ }).click();
+  await page.waitForURL('https://auth.strava.test/**');
+
+  // SparkyFitness sends the person back to the app with a code; the same browser started it.
+  await page.goto('/oauth/strava?code=good-code&state=abc');
+  await expect(page.getByRole('heading', { name: 'Data sources' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Strava.*Connected/ })).toBeVisible();
+
+  await page.getByRole('button', { name: /Strava.*Connected/ }).click();
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Strava.*Runs, rides/ })).toBeVisible();
+});
+
+test('asks before finishing a connection this browser did not start', async ({ page }) => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+  await page.route('https://auth.fitbit.test/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<h1>Fitbit sign-in</h1>' }),
+  );
+  await signIn(page);
+  await page.goto('/sources');
+  await page.getByRole('button', { name: /Fitbit.*Steps, activity/ }).click();
+  await page.getByRole('button', { name: /Continue to Fitbit/ }).click();
+  await page.waitForURL('https://auth.fitbit.test/**');
+
+  // A link that arrives in a browser that never started the connection must ask first.
+  await page.goto('/sources');
+  await page.evaluate(() => localStorage.removeItem('gauntlet.oauth.pending'));
+  await page.goto('/oauth/fitbit?code=good-code');
+  await expect(page.getByText('Finish connecting Fitbit?')).toBeVisible();
+  await snap(page, '13-oauth-confirm');
+  await page.getByRole('button', { name: 'Connect Fitbit' }).click();
+  await expect(page.getByRole('button', { name: /Fitbit.*Connected/ })).toBeVisible();
+
+  await page.getByRole('button', { name: /Fitbit.*Connected/ }).click();
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Fitbit.*Steps, activity/ })).toBeVisible();
 });

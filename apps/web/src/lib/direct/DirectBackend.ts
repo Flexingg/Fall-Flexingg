@@ -12,8 +12,11 @@ import {
   personalBests,
   addDays,
   todayIn,
+  type ConnectionInfo,
+  type ConnectResult,
   type GarminLoginResult,
   type GarminStatus,
+  type ProviderId,
   type MeUser,
   type MetricKey,
   type MetricRow,
@@ -24,10 +27,15 @@ import {
   type UserSettings,
 } from '@gauntlet/shared';
 import {
+  connectProvider,
+  ConnectionError,
   describeGarminError,
+  disconnectProvider,
+  keepSynced,
+  listConnections,
+  syncProvider,
   describeSources,
   fetchMerged,
-  type GarminErrorCode,
   SparkyClient,
   SparkyError,
   type SparkyUser,
@@ -47,8 +55,8 @@ export interface DirectOptions {
   now?: () => Date;
 }
 
-export type DirectErrorCode =
-  'sparky_key_invalid' | 'sparky_unreachable' | 'sparky_error' | GarminErrorCode;
+/** 'sparky_key_invalid' | 'sparky_unreachable' | 'sparky_error', or a Garmin / linked-app problem code. */
+export type DirectErrorCode = string;
 
 export class DirectError extends Error {
   constructor(
@@ -90,6 +98,7 @@ export function explain(err: unknown, sparkyUrl: string): DirectError {
 
 /** Like explain(), but a Garmin sign-in problem gets its own plain-words message. */
 function explainGarmin(err: unknown, sparkyUrl: string): DirectError {
+  if (err instanceof ConnectionError) return new DirectError(err.message, err.code, err.status);
   const problem = describeGarminError(err);
   if (problem) return new DirectError(problem.message, problem.code, problem.status);
   return explain(err, sparkyUrl);
@@ -257,7 +266,10 @@ export class DirectBackend {
   async garminLogin(email: string, password: string): Promise<GarminLoginResult> {
     try {
       const result = await this.client.garminLogin(this.o.apiKey, email, password);
-      if (result.status === 'connected') this.garminSyncInBackground(30);
+      if (result.status === 'connected') {
+        void keepSynced(this.client, this.o.apiKey, 'garmin');
+        this.garminSyncInBackground(30);
+      }
       return result;
     } catch (err) {
       throw explainGarmin(err, this.o.sparkyUrl);
@@ -267,7 +279,10 @@ export class DirectBackend {
   async garminMfa(clientState: string, code: string): Promise<GarminLoginResult> {
     try {
       const result = await this.client.garminResumeLogin(this.o.apiKey, clientState, code);
-      if (result.status === 'connected') this.garminSyncInBackground(30);
+      if (result.status === 'connected') {
+        void keepSynced(this.client, this.o.apiKey, 'garmin');
+        this.garminSyncInBackground(30);
+      }
       return result;
     } catch (err) {
       throw explainGarmin(err, this.o.sparkyUrl);
@@ -295,6 +310,66 @@ export class DirectBackend {
     const today = this.today_();
     void this.client
       .garminSync(this.o.apiKey, addDays(today, -days), today)
+      .catch(() => undefined)
+      .then(() => this.o.kv.set(ROWS_KEY, null));
+  }
+
+  // ---------------------------------------------------------------- other apps and devices
+  // From the phone alone, apps that sign in on their own website (Strava, Fitbit, ...) can't finish:
+  // they need an address the provider can send the person back to. Keys and switches work as usual.
+
+  private connectionsEnv() {
+    return {
+      sparkyUrl: this.o.sparkyUrl,
+      oauthAvailable: false,
+      oauth: {},
+      now: this.o.now,
+    };
+  }
+
+  async connections(): Promise<ConnectionInfo[]> {
+    try {
+      return await listConnections(this.client, this.o.apiKey, this.connectionsEnv());
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+  }
+
+  async connect(id: ProviderId, input: { apiKey?: string } = {}): Promise<ConnectResult> {
+    try {
+      const result = await connectProvider(
+        this.client,
+        this.o.apiKey,
+        id,
+        this.connectionsEnv(),
+        input,
+      );
+      if (result.status === 'connected') this.syncInBackground(id, 30);
+      return result;
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+  }
+
+  async syncApp(id: ProviderId): Promise<{ ok: true }> {
+    const all = await this.connections();
+    if (all.find((c) => c.id === id)?.state !== 'connected')
+      throw new DirectError('That app is not connected.', 'not_connected', 400);
+    this.syncInBackground(id, 7);
+    return { ok: true };
+  }
+
+  async disconnect(id: ProviderId): Promise<{ ok: true }> {
+    try {
+      await disconnectProvider(this.client, this.o.apiKey, id);
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+    return { ok: true };
+  }
+
+  private syncInBackground(id: ProviderId, days: number) {
+    void syncProvider(this.client, this.o.apiKey, id, days, this.now())
       .catch(() => undefined)
       .then(() => this.o.kv.set(ROWS_KEY, null));
   }

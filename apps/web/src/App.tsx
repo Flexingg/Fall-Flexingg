@@ -13,6 +13,7 @@ import { FriendsPage } from './pages/Friends';
 import { JoinPage } from './pages/Join';
 import { LoginPage } from './pages/Login';
 import { MePage } from './pages/Me';
+import { OAuthReturnPage } from './pages/OAuthReturn';
 import { NewChallengePage } from './pages/NewChallenge';
 import { ResultPage } from './pages/Result';
 import { SignupPage } from './pages/Signup';
@@ -25,7 +26,7 @@ function Private({ children }: { children: ReactNode }) {
   const location = useLocation();
   if (status === 'loading') return <Splash />;
   if (status === 'signedOut')
-    return <Navigate to="/login" replace state={{ next: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ next: location.pathname + location.search }} />;
   return children;
 }
 
@@ -67,6 +68,9 @@ function NativeBridge() {
       CapApp.addListener('appUrlOpen', ({ url }) => {
         const m = /\/j\/([\w-]+)/.exec(url);
         if (m) navigate(`/j/${m[1]}`);
+        // An app's sign-in page sent the person back: finish connecting it.
+        const o = /\/oauth\/(\w+)(\?[^#]*)?/.exec(url);
+        if (o) navigate(`/oauth/${o[1]}${o[2] ?? ''}`);
       }),
       CapApp.addListener('backButton', ({ canGoBack }) =>
         canGoBack ? window.history.back() : CapApp.minimizeApp(),
@@ -203,6 +207,16 @@ export function App() {
             element={
               <Private>
                 <TrendsPage />
+              </Private>
+            }
+          />
+          <Route
+            path="/oauth/:provider"
+            element={
+              <Private>
+                <NeedsServer what="Connect app">
+                  <OAuthReturnPage />
+                </NeedsServer>
               </Private>
             }
           />

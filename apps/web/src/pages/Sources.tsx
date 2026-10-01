@@ -1,6 +1,6 @@
 import type { MeUser } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
-import { GarminCard } from '../components/GarminCard';
+import { Connections } from '../components/Connections';
 import { Icon } from '../components/Icon';
 import { ErrorBox, Header, Screen, Skeleton, toast, Toggle } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -63,7 +63,7 @@ export function SourcesPage() {
       </p>
       <ErrorBox error={q.error ?? error} />
 
-      <GarminCard />
+      <Connections />
 
       <div className="lbl">Synced into SparkyFitness</div>
       {q.isPending ? (
@@ -102,8 +102,8 @@ export function SourcesPage() {
                 <Icon name="plus" size={20} />
               </div>
               <div className="grow">
-                <div className="t">Connect Strava, Fitbit and more</div>
-                <small>Opens SparkyFitness settings</small>
+                <div className="t">More in SparkyFitness</div>
+                <small>Other integrations, in SparkyFitness settings</small>
               </div>
               <Icon name="chevron" size={18} />
             </a>

@@ -108,6 +108,9 @@ cd apps/web/android && ./gradlew assembleDebug
 - The app signs in (or creates an account) through your Gauntlet server. Release builds point at
   `GAUNTLET_PUBLIC_URL` and `SPARKY_PUBLIC_URL` (repository variables; `.env.native` for local
   builds).
+- **Apps and devices** are connected from Data sources: Garmin, Strava, Fitbit, Oura, Polar, COROS,
+  Hevy, Liftosaur and wger. SparkyFitness does the connecting and keeps the data synced; the app is a
+  friendlier front for it (setup in `deploy/fly/README.md`).
 - **Advanced: SparkyFitness only.** With an API key (SparkyFitness → Settings → API keys) and no
   Gauntlet server, the phone talks straight to SparkyFitness (Today, Trends, Data sources, Health
   Connect sync). Friends and challenges need a server; connect one later under Me. The key is kept in

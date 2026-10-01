@@ -20,7 +20,9 @@ import { toMe, upsertFromSparky } from '../services/users.js';
 const TWO_FACTOR_TTL_MS = 5 * 60_000;
 
 export function authRoutes(app: FastifyInstance, ctx: AppContext) {
-  const loginLimit = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
+  const loginLimit = {
+    config: { rateLimit: { max: ctx.cfg.LOGIN_RATE_LIMIT_MAX, timeWindow: '1 minute' } },
+  };
 
   app.post('/api/auth/login', loginLimit, async (req, reply) => {
     const body = loginSchema.parse(req.body);

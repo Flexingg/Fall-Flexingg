@@ -2,9 +2,6 @@
 # SparkyFitness server. This is the public SparkyFitness address phones and browsers use.
 primary_region = 'iad'
 
-[build]
-  image = 'codewithcj/sparkyfitness:v1.7.3'
-
 [env]
   SPARKY_FITNESS_SERVER_PORT = '3010'
   NGINX_LISTEN_PORT = '80'

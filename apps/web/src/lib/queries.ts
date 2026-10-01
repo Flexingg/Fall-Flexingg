@@ -13,7 +13,7 @@ import type {
 } from '@gauntlet/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, get } from './api';
-import { garmin, session } from './session';
+import { connections, garmin, session } from './session';
 
 export const keys = {
   today: ['today'] as const,
@@ -25,6 +25,7 @@ export const keys = {
   trends: (range: string, metric: string) => ['trends', range, metric] as const,
   sources: ['sources'] as const,
   garmin: ['garmin'] as const,
+  connections: ['connections'] as const,
   customMetrics: ['custom-metrics'] as const,
   androidRelease: ['android-release'] as const,
 };
@@ -110,3 +111,6 @@ export const useAndroidRelease = (enabled: boolean) =>
 
 export const useGarmin = () =>
   useQuery({ queryKey: keys.garmin, queryFn: () => garmin.status(), staleTime: 30_000 });
+
+export const useConnections = () =>
+  useQuery({ queryKey: keys.connections, queryFn: () => connections.list(), staleTime: 15_000 });

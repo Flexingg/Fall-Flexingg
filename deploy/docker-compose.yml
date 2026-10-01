@@ -63,7 +63,13 @@ services:
       GARMIN_SERVICE_IS_CN: ${GARMIN_SERVICE_IS_CN:-false}
 
   sparky-web:
-    image: codewithcj/sparkyfitness:${SPARKY_VERSION:-v1.7.3}
+    build:
+      context: ./sparky-web
+      args:
+        SPARKY_VERSION: ${SPARKY_VERSION:-v1.7.3}
+        # App sign-in returns (Strava, Fitbit, ...) are handed on to Gauntlet.
+        GAUNTLET_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
+    image: gauntlet-sparky-web:${SPARKY_VERSION:-v1.7.3}
     restart: unless-stopped
     depends_on: [sparky-api]
     environment:

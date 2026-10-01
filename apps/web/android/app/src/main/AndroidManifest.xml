@@ -31,6 +31,14 @@
                 <data android:scheme="https" android:host="${appLinkHost}" android:pathPrefix="/j/" />
             </intent-filter>
 
+            <!-- Where an app's sign-in page (Strava, Fitbit, ...) sends the person back to finish connecting. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${appLinkHost}" android:pathPrefix="/oauth/" />
+            </intent-filter>
+
             <!-- Health Connect (Android 13 and lower) opens this to show why we need access. -->
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />

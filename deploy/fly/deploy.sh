@@ -32,13 +32,26 @@ fi
 
 if want sparky-web; then
   log "SparkyFitness site ($APP_SPARKY_WEB)"
-  "$FLY" deploy --config "$ROOT/deploy/fly/sparky-web.toml" --app "$APP_SPARKY_WEB" "${common[@]}" \
+  # Built from our small wrapper so app sign-in returns (Strava, Fitbit, ...) are handed to Gauntlet.
+  "$FLY" deploy "$ROOT/deploy/sparky-web" --config "$ROOT/deploy/fly/sparky-web.toml" --app "$APP_SPARKY_WEB" \
+    --dockerfile "$ROOT/deploy/sparky-web/Dockerfile" --build-arg GAUNTLET_URL="$GAUNTLET_PUBLIC_URL" \
+    "${common[@]}" \
     -e SPARKY_FITNESS_SERVER_HOST="$APP_SPARKY_API.internal" \
     -e SPARKY_FITNESS_FRONTEND_URL="$SPARKY_PUBLIC_URL"
 fi
 
 if want gauntlet; then
   log "Gauntlet ($APP_GAUNTLET)"
+  # OAuth app keys for Strava, Fitbit, Oura and Polar (optional; apps without keys show as "not set up").
+  oauth=()
+  for p in STRAVA FITBIT OURA POLAR; do
+    id="OAUTH_${p}_CLIENT_ID"; secret="OAUTH_${p}_CLIENT_SECRET"
+    if [ -n "${!id:-}" ] && [ -n "${!secret:-}" ]; then oauth+=("$id=${!id}" "$secret=${!secret}"); fi
+  done
+  if [ ${#oauth[@]} -gt 0 ]; then
+    "$FLY" secrets set --app "$APP_GAUNTLET" --stage "${oauth[@]}" >/dev/null
+    echo "  staged OAuth app keys for $(( ${#oauth[@]} / 2 )) app(s)"
+  fi
   # Release APK (if the workflow put one in deploy/fly/downloads) ships inside the image.
   "$FLY" deploy "$ROOT" --config "$ROOT/deploy/fly/gauntlet.toml" --app "$APP_GAUNTLET" \
     --dockerfile "$ROOT/Dockerfile" "${common[@]}" \
@@ -60,6 +73,15 @@ check() { # name url [jq filter expected]
 }
 check "Gauntlet health" "https://$APP_GAUNTLET.fly.dev/api/health"
 check "SparkyFitness health" "https://$APP_SPARKY_WEB.fly.dev/api/health"
+# App sign-in returns land on the SparkyFitness site and must be handed on to Gauntlet.
+want_loc="$GAUNTLET_PUBLIC_URL/oauth/strava?code=x"
+got_loc="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 30 --retry 5 --retry-delay 3 --retry-all-errors \
+  "https://$APP_SPARKY_WEB.fly.dev/strava/callback?code=x" || true)"
+if [ "$got_loc" = "$want_loc" ]; then
+  echo "  ok   SparkyFitness hands app sign-ins to Gauntlet"
+else
+  echo "  FAIL SparkyFitness hands app sign-ins to Gauntlet: got '$got_loc', expected '$want_loc'"; ok=false
+fi
 check "SparkyFitness trusts $SPARKY_PUBLIC_URL" "https://$APP_SPARKY_WEB.fly.dev/api/auth/settings" \
   '.trusted_origin' "$SPARKY_PUBLIC_URL"
 # The SparkyFitness server must reach the Garmin service over Fly's private network (best effort:
