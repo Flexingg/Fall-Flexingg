@@ -78,7 +78,6 @@ jobs:
     env:
       TAG: ${{ needs.meta.outputs.version }}
     outputs:
-      file: ${{ steps.name.outputs.file }}
       fingerprint: ${{ steps.name.outputs.fingerprint }}
     steps:
       - uses: actions/checkout@v4
@@ -221,9 +220,10 @@ jobs:
           name: gauntlet-apk
           path: apk
       - name: Put the APK into the Gauntlet image
-        env:
-          FILE: ${{ needs.apk.outputs.file }}
         run: |
+          # Built here rather than passed as a job output: GitHub drops outputs that contain the
+          # text of a secret, and the signing key alias ("gauntlet") is part of this name.
+          FILE="gauntlet-${TAG}.apk"
           D=deploy/fly/downloads
           cp "apk/$FILE" "$D/$FILE"
           cp "apk/$FILE" "$D/gauntlet-latest.apk"
