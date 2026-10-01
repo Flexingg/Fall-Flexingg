@@ -44,9 +44,23 @@ services:
       # Gauntlet signs everyone in from one address, so the per-IP limit has to be higher.
       SPARKY_FITNESS_SIGN_IN_RATELIMIT_MAX: ${SPARKY_SIGN_IN_RATELIMIT_MAX:-60}
       SPARKY_FITNESS_LOG_LEVEL: ${SPARKY_LOG_LEVEL:-INFO}
+      # Garmin Connect sync runs in a small companion service.
+      GARMIN_MICROSERVICE_URL: http://sparky-garmin:8000
     volumes:
       - sparky-uploads:/app/SparkyFitnessServer/uploads
       - sparky-backup:/app/SparkyFitnessServer/backup
+
+  sparky-garmin:
+    build:
+      context: ./garmin
+      args:
+        SPARKY_VERSION: ${SPARKY_VERSION:-v1.7.3}
+    image: gauntlet-sparky-garmin:${SPARKY_VERSION:-v1.7.3}
+    restart: unless-stopped
+    environment:
+      GARMIN_SERVICE_PORT: 8000
+      # Only for Garmin's China region.
+      GARMIN_SERVICE_IS_CN: ${GARMIN_SERVICE_IS_CN:-false}
 
   sparky-web:
     image: codewithcj/sparkyfitness:${SPARKY_VERSION:-v1.7.3}

@@ -5,7 +5,7 @@
 #   FLY_APP_PREFIX=gauntlet deploy/fly/deploy.sh [--only gauntlet]
 source "$(dirname "$0")/common.sh"
 only=""
-if [ "${1:-}" = "--only" ]; then only="${2:?--only needs db, sparky-api, sparky-web or gauntlet}"; fi
+if [ "${1:-}" = "--only" ]; then only="${2:?--only needs db, sparky-garmin, sparky-api, sparky-web or gauntlet}"; fi
 want() { [ -z "$only" ] || [ "$only" = "$1" ]; }
 common=(--remote-only --ha=false --primary-region "$REGION" --yes)
 
@@ -15,10 +15,17 @@ if want db; then
     --dockerfile "$ROOT/deploy/postgres/Dockerfile" "${common[@]}"
 fi
 
+if want sparky-garmin; then
+  log "Garmin Connect service ($APP_SPARKY_GARMIN)"
+  "$FLY" deploy "$ROOT/deploy/garmin" --config "$ROOT/deploy/fly/sparky-garmin.toml" --app "$APP_SPARKY_GARMIN" \
+    --dockerfile "$ROOT/deploy/garmin/Dockerfile" "${common[@]}"
+fi
+
 if want sparky-api; then
   log "SparkyFitness server ($APP_SPARKY_API)"
   "$FLY" deploy --config "$ROOT/deploy/fly/sparky-api.toml" --app "$APP_SPARKY_API" "${common[@]}" \
     -e SPARKY_FITNESS_DB_HOST="$APP_DB.internal" \
+    -e GARMIN_MICROSERVICE_URL="http://$APP_SPARKY_GARMIN.internal:8000" \
     -e SPARKY_FITNESS_FRONTEND_URL="$SPARKY_PUBLIC_URL" \
     -e SPARKY_FITNESS_ADMIN_EMAIL="${SPARKY_ADMIN_EMAIL:-}"
 fi
@@ -55,6 +62,15 @@ check "Gauntlet health" "https://$APP_GAUNTLET.fly.dev/api/health"
 check "SparkyFitness health" "https://$APP_SPARKY_WEB.fly.dev/api/health"
 check "SparkyFitness trusts $SPARKY_PUBLIC_URL" "https://$APP_SPARKY_WEB.fly.dev/api/auth/settings" \
   '.trusted_origin' "$SPARKY_PUBLIC_URL"
+# The SparkyFitness server must reach the Garmin service over Fly's private network (best effort:
+# needs `fly ssh`, so a failure here is a warning rather than a failed deploy).
+if "$FLY" ssh console --app "$APP_SPARKY_API" \
+     -C "wget -qO- -T 10 http://$APP_SPARKY_GARMIN.internal:8000/openapi.json" 2>/dev/null | grep -q '"openapi"'; then
+  echo "  ok   SparkyFitness server reaches the Garmin service"
+else
+  echo "  WARN could not confirm the SparkyFitness server reaches $APP_SPARKY_GARMIN.internal:8000;" \
+       "check: fly logs -a $APP_SPARKY_GARMIN"
+fi
 if [ -n "${EXPECT_APK_VERSION:-}" ]; then
   check "APK $EXPECT_APK_VERSION offered" "https://$APP_GAUNTLET.fly.dev/api/app/android" \
     '.version' "$EXPECT_APK_VERSION"

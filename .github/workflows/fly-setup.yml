@@ -43,7 +43,7 @@ jobs:
         run: deploy/fly/setup.sh
       - name: Validate the Fly configs
         run: |
-          for c in db sparky-api sparky-web gauntlet; do
+          for c in db sparky-garmin sparky-api sparky-web gauntlet; do
             app="$FLY_APP_PREFIX"; [ "$c" = gauntlet ] || app="$FLY_APP_PREFIX-$c"
             [ "$c" = sparky-web ] && app="$FLY_APP_PREFIX-sparky"
             flyctl config validate --strict --config "deploy/fly/$c.toml" --app "$app"

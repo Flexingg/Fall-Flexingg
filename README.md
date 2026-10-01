@@ -84,11 +84,11 @@ pnpm --filter @gauntlet/web build && pnpm --filter @gauntlet/web e2e   # needs t
 
 ## Release and deploy
 
-Everything runs on [Fly.io](https://fly.io) as four small apps: Gauntlet (API + PWA), the
+Everything runs on [Fly.io](https://fly.io) as five small apps: Gauntlet (API + PWA), the
 SparkyFitness server, the SparkyFitness website, and one Postgres holding both databases.
 Publishing a GitHub release builds the signed APK, attaches it to the release and deploys all of it,
 with the APK downloadable from the app's Profile page. One-time setup, custom domains through
-Cloudflare, backups and costs (about $9–11 a month): [`deploy/fly/README.md`](deploy/fly/README.md).
+Cloudflare, backups and costs (about $11–13 a month): [`deploy/fly/README.md`](deploy/fly/README.md).
 
 To run the same backend on any machine with Docker: copy `deploy/.env.example` to `deploy/.env`,
 fill in the secrets, and run `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build`.

@@ -1,17 +1,18 @@
 # Gauntlet on Fly.io
 
-Four small apps in one Fly organisation, US East (`iad`). Names come from the `FLY_APP_PREFIX`
+Five small apps in one Fly organisation, US East (`iad`). Names come from the `FLY_APP_PREFIX`
 repository variable; with `gauntlet`:
 
-| App                   | What                                                   | Public?              | Size                       |
-| --------------------- | ------------------------------------------------------ | -------------------- | -------------------------- |
-| `gauntlet`            | Gauntlet API + web app (the address people use)        | yes                  | 512 MB, always on          |
-| `gauntlet-sparky`     | SparkyFitness website; proxies `/api` to the server    | yes                  | 256 MB, sleeps when idle   |
-| `gauntlet-sparky-api` | SparkyFitness server (pinned `v1.7.3`)                 | no (private network) | 512 MB + swap, 1 GB volume |
-| `gauntlet-db`         | Postgres 18: databases `gauntlet` + `sparkyfitness_db` | no (private network) | 512 MB, 3 GB volume        |
+| App                      | What                                                       | Public?              | Size                       |
+| ------------------------ | ---------------------------------------------------------- | -------------------- | -------------------------- |
+| `gauntlet`               | Gauntlet API + web app (the address people use)            | yes                  | 512 MB, always on          |
+| `gauntlet-sparky`        | SparkyFitness website; proxies `/api` to the server        | yes                  | 256 MB, sleeps when idle   |
+| `gauntlet-sparky-garmin` | Garmin Connect service for SparkyFitness (see `../garmin`) | no (private network) | 256 MB                     |
+| `gauntlet-sparky-api`    | SparkyFitness server (pinned `v1.7.3`)                     | no (private network) | 512 MB + swap, 1 GB volume |
+| `gauntlet-db`            | Postgres 18: databases `gauntlet` + `sparkyfitness_db`     | no (private network) | 512 MB, 3 GB volume        |
 
 Gauntlet talks to SparkyFitness over Fly's private network. Phones and browsers use the public
-addresses. **Cost:** roughly $9–11 a month (three always-on small machines plus volumes; the
+addresses. **Cost:** roughly $11–13 a month (four always-on small machines plus volumes; the
 SparkyFitness website costs next to nothing while it sleeps). Check [fly.io/pricing](https://fly.io/docs/about/pricing/).
 
 ## One-time setup
@@ -41,8 +42,8 @@ SparkyFitness website costs next to nothing while it sleeps). Check [fly.io/pric
 
 ## Day to day
 
-- Every published release deploys all four apps in order (database, SparkyFitness server, website,
-  Gauntlet) and then checks them. Gauntlet deploys blue-green: a build that fails its health check
+- Every published release deploys all five apps in order (database, Garmin service, SparkyFitness
+  server, website, Gauntlet) and then checks them. Gauntlet deploys blue-green: a build that fails its health check
   never replaces the running one. _Release → Run workflow_ with an empty tag deploys the selected
   branch as a dev build.
 - Upgrading SparkyFitness: change the image tag in `sparky-api.toml` and `sparky-web.toml` (same

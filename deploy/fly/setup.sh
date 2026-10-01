@@ -35,7 +35,7 @@ grep -qx "$ORG" <<<"$slugs" || { echo "setup: the token can't see organisation '
 
 log "Apps (org: $ORG, region: $REGION)"
 existing="$("$FLY" apps list --org "$ORG" --json | jq -r '.[] | (.Name // .name // empty)')"
-for app in "$APP_DB" "$APP_SPARKY_API" "$APP_SPARKY_WEB" "$APP_GAUNTLET"; do
+for app in "$APP_DB" "$APP_SPARKY_API" "$APP_SPARKY_GARMIN" "$APP_SPARKY_WEB" "$APP_GAUNTLET"; do
   if grep -qx "$app" <<<"$existing"; then
     echo "  exists  $app"
   else

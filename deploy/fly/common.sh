@@ -1,5 +1,6 @@
 # Shared settings for setup.sh and deploy.sh. Source it; don't run it.
-#   FLY_APP_PREFIX       e.g. "gauntlet" -> apps gauntlet, gauntlet-db, gauntlet-sparky-api, gauntlet-sparky
+#   FLY_APP_PREFIX       e.g. "gauntlet" -> apps gauntlet, gauntlet-db, gauntlet-sparky-api,
+#                        gauntlet-sparky-garmin, gauntlet-sparky
 #   GAUNTLET_PUBLIC_URL  e.g. https://gauntlet.randalls.cc (defaults to https://<prefix>.fly.dev)
 #   SPARKY_PUBLIC_URL    e.g. https://sparky.randalls.cc  (defaults to https://<prefix>-sparky.fly.dev)
 set -euo pipefail
@@ -12,6 +13,7 @@ APP_GAUNTLET="$P"
 APP_DB="$P-db"
 APP_SPARKY_API="$P-sparky-api"
 APP_SPARKY_WEB="$P-sparky"
+APP_SPARKY_GARMIN="$P-sparky-garmin"
 REGION="${FLY_REGION:-iad}"
 GAUNTLET_PUBLIC_URL="${GAUNTLET_PUBLIC_URL:-https://$APP_GAUNTLET.fly.dev}"
 SPARKY_PUBLIC_URL="${SPARKY_PUBLIC_URL:-https://$APP_SPARKY_WEB.fly.dev}"

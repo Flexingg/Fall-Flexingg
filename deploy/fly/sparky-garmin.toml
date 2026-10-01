@@ -1,0 +1,24 @@
+# SparkyFitness's Garmin Connect service (see ../garmin/Dockerfile). Private: only the
+# SparkyFitness server calls it, at <prefix>-sparky-garmin.internal:8000.
+primary_region = 'iad'
+
+[build]
+  dockerfile = '../garmin/Dockerfile'
+
+[env]
+  GARMIN_SERVICE_PORT = '8000'
+  # Fly's private network is IPv6.
+  GARMIN_SERVICE_HOST = '::'
+  GARMIN_SERVICE_IS_CN = 'false'
+
+[checks]
+  [checks.port]
+    type = 'tcp'
+    port = 8000
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '20s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
