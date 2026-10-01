@@ -23,7 +23,8 @@ setup: Fly rejected FLY_API_TOKEN ("${orgs_json:0:120}").
 MSG
   exit 1
 fi
-slugs="$(jq -r '.[] | (.Slug // .slug)' <<<"$orgs_json")"
+# `fly orgs list --json` is a {slug: name} map; accept a list of objects too.
+slugs="$(jq -r 'if type == "object" then keys[] else .[] | (.Slug // .slug) end' <<<"$orgs_json")"
 echo "  token can see organisations: $(tr '\n' ' ' <<<"$slugs")"
 if [ -z "$ORG" ]; then
   if [ "$(wc -l <<<"$slugs")" -eq 1 ]; then ORG="$slugs"
@@ -33,7 +34,7 @@ fi
 grep -qx "$ORG" <<<"$slugs" || { echo "setup: the token can't see organisation '$ORG' (set FLY_ORG to one listed above)." >&2; exit 1; }
 
 log "Apps (org: $ORG, region: $REGION)"
-existing="$("$FLY" apps list --org "$ORG" --json | jq -r '.[] | (.Name // .name)')"
+existing="$("$FLY" apps list --org "$ORG" --json | jq -r '.[] | (.Name // .name // empty)')"
 for app in "$APP_DB" "$APP_SPARKY_API" "$APP_SPARKY_WEB" "$APP_GAUNTLET"; do
   if grep -qx "$app" <<<"$existing"; then
     echo "  exists  $app"
