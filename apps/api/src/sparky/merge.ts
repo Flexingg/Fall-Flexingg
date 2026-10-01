@@ -57,7 +57,8 @@ export function wantedCategoryNames(customMetrics: Record<string, MetricAggregat
   return [...DISTANCE_CATEGORIES, ...RESTING_HR_CATEGORIES, ...Object.keys(customMetrics)];
 }
 
-type Candidate = { value: number; source: string | null };
+/** Lower rank wins first; within a rank the highest value wins. */
+type Candidate = { value: number; source: string | null; rank: number };
 
 class DayTable {
   private readonly map = new Map<string, Map<string, Candidate[]>>();
@@ -67,14 +68,20 @@ class DayTable {
     private readonly end: string,
   ) {}
 
-  add(date: string | null | undefined, metric: string, value: unknown, source: string | null) {
+  add(
+    date: string | null | undefined,
+    metric: string,
+    value: unknown,
+    source: string | null,
+    rank = 0,
+  ) {
     const d = normDate(date);
     const v = num(value);
     if (!d || d < this.start || d > this.end || v == null) return;
     let byMetric = this.map.get(d);
     if (!byMetric) this.map.set(d, (byMetric = new Map()));
     const list = byMetric.get(metric) ?? [];
-    list.push({ value: v, source });
+    list.push({ value: v, source, rank });
     byMetric.set(metric, list);
   }
 
@@ -142,12 +149,17 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
     }
   }
 
-  // Workouts.
+  // Workouts: counted from individual entries, with duplicates and stuck sessions removed.
+  for (const [d, list] of cleanWorkouts(input.exerciseEntries)) {
+    t.add(d, 'workouts', list.length, 'workouts');
+    const minutes = list.reduce((a, w) => a + w.minutes, 0);
+    if (minutes > 0) t.add(d, 'active_minutes', Math.min(minutes, 1440), 'workouts', 2);
+    const kcal = list.reduce((a, w) => a + w.kcal, 0);
+    if (kcal > 0) t.add(d, 'active_calories', kcal, 'workouts', 2);
+  }
+  // Workout distance comes from SparkyFitness' per-day exercise stats.
   for (const b of input.exerciseDays) {
-    if (pos(b.workoutCount)) t.add(b.startDate, 'workouts', b.workoutCount, 'workouts');
-    if (pos(b.durationMinutes)) t.add(b.startDate, 'active_minutes', b.durationMinutes, 'workouts');
     if (pos(b.distanceMeters)) t.add(b.startDate, 'distance', b.distanceMeters / 1000, 'workouts');
-    if (pos(b.caloriesBurned)) t.add(b.startDate, 'active_calories', b.caloriesBurned, 'workouts');
   }
 
   // Phone-synced whole-day active calories arrive as "Active Calories" exercise entries.
@@ -158,13 +170,16 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
     const v = num(e.calories_burned);
     if (d && v != null) activeCal.set(d, (activeCal.get(d) ?? 0) + v);
   }
-  for (const [d, v] of activeCal) if (v > 0) t.add(d, 'active_calories', v, 'Health Connect');
+  for (const [d, v] of activeCal) if (v > 0) t.add(d, 'active_calories', v, 'Health Connect', 1);
 
   // Sleep: total per source per night, then the biggest source.
   const sleepBySource = new Map<string, number>();
   for (const s of input.sleep) {
     const d = normDate(s.entry_date);
-    const secs = num(s.time_asleep_in_seconds) || num(s.duration_in_seconds);
+    const asleep = num(s.time_asleep_in_seconds);
+    const inBed = num(s.duration_in_seconds);
+    // Some synced sessions report more time asleep than the session lasted.
+    const secs = asleep && inBed ? Math.min(asleep, inBed) : asleep || inBed;
     if (!d || !secs) continue;
     const key = `${d}|${s.source ?? 'sleep'}`;
     sleepBySource.set(key, (sleepBySource.get(key) ?? 0) + secs);
@@ -177,7 +192,9 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
   const merged = t.collect((metric, cands) => {
     if (metric === 'resting_hr_daily' || metric === 'resting_hr_measured') return cands[0] ?? null;
     if (metric.startsWith('custom:')) return cands[0] ?? null;
-    return cands.reduce((best, c) => (c.value > best.value ? c : best));
+    return cands.reduce((best, c) =>
+      c.rank < best.rank || (c.rank === best.rank && c.value > best.value) ? c : best,
+    );
   });
 
   // Resting HR: wearable daily summary first, otherwise the measured category.
@@ -192,6 +209,39 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
     } else out.push(m);
   }
   return out;
+}
+
+/** A workout longer than this is a session someone forgot to stop. */
+const MAX_WORKOUT_MINUTES = 6 * 60;
+const MIN_WORKOUT_MINUTES = 3;
+
+/**
+ * Real workouts per day: drops SparkyFitness' "Active Calories" entries,
+ * sessions too short or too long to be real, and duplicates: the same session
+ * written by two apps, sometimes under different activity names, so it is
+ * matched on near-identical duration and calories.
+ */
+export function cleanWorkouts(
+  entries: ExerciseEntryRow[],
+): Map<string, { name: string; minutes: number; kcal: number }[]> {
+  const byDay = new Map<string, { name: string; minutes: number; kcal: number }[]>();
+  for (const e of entries) {
+    const name = (e.exercise_name ?? '').trim().toLowerCase();
+    if (name === ACTIVE_CALORIES_ENTRY) continue;
+    const d = normDate(e.entry_date);
+    const minutes = num(e.duration_minutes) ?? 0;
+    const kcal = num(e.calories_burned) ?? 0;
+    if (!d || minutes < MIN_WORKOUT_MINUTES || minutes > MAX_WORKOUT_MINUTES) continue;
+    const list = byDay.get(d) ?? [];
+    const dup = list.some(
+      (w) =>
+        Math.abs(w.minutes - minutes) <= 2 && Math.abs(w.kcal - kcal) <= Math.max(5, kcal * 0.05),
+    );
+    if (!dup) list.push({ name, minutes, kcal });
+    byDay.set(d, list);
+  }
+  for (const [d, list] of byDay) if (!list.length) byDay.delete(d);
+  return byDay;
 }
 
 /** Reduce custom measurement rows to one value per day. */

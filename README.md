@@ -61,6 +61,12 @@ pnpm --filter @gauntlet/web dev
 # Sign in as you@example.com / demo
 ```
 
+To check a real SparkyFitness account (read-only; prints what Gauntlet would score for the last week):
+
+```bash
+SPARKY_TEST_KEY=<api key> pnpm --filter @gauntlet/api live-check
+```
+
 To develop against your real server instead, copy `apps/api/.env.example` to `apps/api/.env`, fill it
 in, and run `pnpm --filter @gauntlet/api dev`.
 
@@ -113,6 +119,9 @@ Built and tested: API flows (password, 2FA and API-key login; friends; invite li
 every scoring mode; multi-source sync; feed; finalization; rematch; revoked keys), the PWA (Playwright
 walkthrough of every screen), the production layout, and an Android debug build.
 
-Not yet verified against a live account: sign-in and data sync with a real fit.randalls.cc user, and
-Health Connect on a physical device. Push notifications and background Health Connect sync
+Verified against fit.randalls.cc with a real account: API-key sign-in, sync, Today, a steps
+challenge, Trends and Data sources. That data led to the workout clean-up rules in
+`apps/api/src/sparky/merge.ts`, which drop stuck sessions over 6 hours and duplicates written by two
+apps, and cap sleep at time in bed. Not yet verified: password and 2FA sign-in against the real server,
+and Health Connect on a physical device. Push notifications and background Health Connect sync
 (WorkManager) are planned follow-ups.

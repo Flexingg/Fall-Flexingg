@@ -395,14 +395,12 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
     }
     const winners = standings.filter((s) => s.rank === 1 && s.score != null);
     for (const w of winners) {
-      await tx
-        .insert(feedEvents)
-        .values({
-          actorId: w.userId,
-          challengeId: ch.id,
-          kind: 'challenge_won',
-          payload: { score: w.score },
-        });
+      await tx.insert(feedEvents).values({
+        actorId: w.userId,
+        challengeId: ch.id,
+        kind: 'challenge_won',
+        payload: { score: w.score },
+      });
     }
   });
   return true;

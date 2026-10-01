@@ -281,6 +281,20 @@ describe('Gauntlet end to end', () => {
       caloriesBurned: 800,
       workoutCount: 2,
     });
+    sam.exerciseEntries.push(
+      {
+        entry_date: '2026-10-02',
+        exercise_name: 'Running',
+        duration_minutes: 40,
+        calories_burned: 450,
+      },
+      {
+        entry_date: '2026-10-02',
+        exercise_name: 'Cycling',
+        duration_minutes: 30,
+        calories_burned: 350,
+      },
+    );
 
     const cycle = await runSyncCycle(ctx);
     expect(cycle.synced).toBe(3);

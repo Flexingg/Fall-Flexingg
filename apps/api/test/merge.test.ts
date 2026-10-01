@@ -50,12 +50,130 @@ describe('mergeDaily', () => {
           workoutCount: 1,
         },
       ],
+      exerciseEntries: [
+        {
+          entry_date: '2026-10-03',
+          exercise_name: 'Running',
+          duration_minutes: 55,
+          calories_burned: 640,
+        },
+      ],
     });
     expect(pick(rows, '2026-10-01', 'distance')!.value).toBe(6.2);
     expect(pick(rows, '2026-10-02', 'distance')!.value).toBe(5.1);
     expect(pick(rows, '2026-10-03', 'distance')!.value).toBe(10.2);
     expect(pick(rows, '2026-10-03', 'workouts')!.value).toBe(1);
     expect(pick(rows, '2026-10-03', 'active_minutes')!.value).toBe(55);
+  });
+
+  // Shapes below are taken from a real SparkyFitness account synced from Health Connect.
+  it('drops stuck sessions and duplicate workouts', () => {
+    const rows = mergeDaily({
+      ...empty,
+      exerciseEntries: [
+        {
+          entry_date: '2026-10-01',
+          exercise_name: 'Strength Training',
+          duration_minutes: 51.2,
+          calories_burned: 149.43,
+        },
+        {
+          entry_date: '2026-10-01',
+          exercise_name: 'Strength Training',
+          duration_minutes: 1438,
+          calories_burned: 1745.62,
+        },
+        {
+          entry_date: '2026-10-01',
+          exercise_name: 'Strength Training',
+          duration_minutes: 51,
+          calories_burned: 149.58,
+        },
+        {
+          entry_date: '2026-10-01',
+          exercise_name: 'Active Calories',
+          duration_minutes: 0,
+          calories_burned: 420,
+        },
+        {
+          entry_date: '2026-10-02',
+          exercise_name: 'Strength Training',
+          duration_minutes: 0.4,
+          calories_burned: 1,
+        },
+        {
+          entry_date: '2026-10-02',
+          exercise_name: 'Walking',
+          duration_minutes: 16,
+          calories_burned: 78.55,
+        },
+        {
+          entry_date: '2026-10-02',
+          exercise_name: 'Weightlifting',
+          duration_minutes: 35,
+          calories_burned: 210,
+        },
+        {
+          entry_date: '2026-10-02',
+          exercise_name: 'Strength Training',
+          duration_minutes: 36,
+          calories_burned: 210,
+        },
+      ],
+    });
+    expect(pick(rows, '2026-10-01', 'workouts')!.value).toBe(1);
+    expect(pick(rows, '2026-10-01', 'active_minutes')!.value).toBe(51.2);
+    // Walking + Weightlifting; "Strength Training 36 min / 210 kcal" is the same session as Weightlifting.
+    expect(pick(rows, '2026-10-02', 'workouts')!.value).toBe(2);
+  });
+
+  it('prefers the whole-day active calories over adding up workouts', () => {
+    const rows = mergeDaily({
+      ...empty,
+      exerciseEntries: [
+        { entry_date: '2026-10-01', exercise_name: 'Active Calories', calories_burned: 420 },
+        {
+          entry_date: '2026-10-01',
+          exercise_name: 'Strength Training',
+          duration_minutes: 75,
+          calories_burned: 500,
+        },
+        {
+          entry_date: '2026-10-02',
+          exercise_name: 'Running',
+          duration_minutes: 30,
+          calories_burned: 300,
+        },
+      ],
+      daily: [{ entry_date: '2026-10-03', source_provider: 'garmin', active_calories: 610 }],
+    });
+    expect(pick(rows, '2026-10-01', 'active_calories')).toMatchObject({
+      value: 420,
+      source: 'Health Connect',
+    });
+    expect(pick(rows, '2026-10-02', 'active_calories')).toMatchObject({
+      value: 300,
+      source: 'workouts',
+    });
+    expect(pick(rows, '2026-10-03', 'active_calories')).toMatchObject({
+      value: 610,
+      source: 'garmin',
+    });
+  });
+
+  it('never counts more sleep than time in bed', () => {
+    const rows = mergeDaily({
+      ...empty,
+      sleep: [
+        {
+          entry_date: '2026-10-01',
+          duration_in_seconds: 22980,
+          time_asleep_in_seconds: 40965,
+          source: 'Health Connect',
+        },
+      ],
+    });
+    expect(pick(rows, '2026-10-01', 'sleep')!.value).toBeCloseTo(6.383, 2);
   });
 
   it('uses phone "Active Calories" entries and ignores other entries for that metric', () => {

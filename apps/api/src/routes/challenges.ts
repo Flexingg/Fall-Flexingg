@@ -103,25 +103,21 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           createdBy: req.userId,
         })
         .returning({ id: challenges.id });
-      await tx
-        .insert(challengeParticipants)
-        .values([
-          { challengeId: ch!.id, userId: req.userId, state: 'joined' as const },
-          ...invitees.map((userId) => ({
-            challengeId: ch!.id,
-            userId,
-            state: 'invited' as const,
-            invitedBy: req.userId,
-          })),
-        ]);
-      await tx
-        .insert(feedEvents)
-        .values({
-          actorId: req.userId,
+      await tx.insert(challengeParticipants).values([
+        { challengeId: ch!.id, userId: req.userId, state: 'joined' as const },
+        ...invitees.map((userId) => ({
           challengeId: ch!.id,
-          kind: 'challenge_created',
-          payload: {},
-        });
+          userId,
+          state: 'invited' as const,
+          invitedBy: req.userId,
+        })),
+      ]);
+      await tx.insert(feedEvents).values({
+        actorId: req.userId,
+        challengeId: ch!.id,
+        kind: 'challenge_created',
+        payload: {},
+      });
       return ch!.id;
     });
     // Pull the data the new challenge needs (custom metrics, older start dates).
@@ -244,25 +240,21 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           rematchOf: ch.id,
         })
         .returning({ id: challenges.id });
-      await tx
-        .insert(challengeParticipants)
-        .values([
-          { challengeId: copy!.id, userId: req.userId, state: 'joined' as const },
-          ...others.map((userId) => ({
-            challengeId: copy!.id,
-            userId,
-            state: 'invited' as const,
-            invitedBy: req.userId,
-          })),
-        ]);
-      await tx
-        .insert(feedEvents)
-        .values({
-          actorId: req.userId,
+      await tx.insert(challengeParticipants).values([
+        { challengeId: copy!.id, userId: req.userId, state: 'joined' as const },
+        ...others.map((userId) => ({
           challengeId: copy!.id,
-          kind: 'challenge_created',
-          payload: { rematchOf: ch.id },
-        });
+          userId,
+          state: 'invited' as const,
+          invitedBy: req.userId,
+        })),
+      ]);
+      await tx.insert(feedEvents).values({
+        actorId: req.userId,
+        challengeId: copy!.id,
+        kind: 'challenge_created',
+        payload: { rematchOf: ch.id },
+      });
       return copy!.id;
     });
     reply.code(201);

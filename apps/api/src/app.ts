@@ -38,24 +38,20 @@ export async function buildApp(
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ZodError) {
       const first = err.issues[0];
-      return reply
-        .code(400)
-        .send({
-          error: first ? `${first.path.join('.') || 'body'}: ${first.message}` : 'Invalid request',
-          code: 'validation',
-        });
+      return reply.code(400).send({
+        error: first ? `${first.path.join('.') || 'body'}: ${first.message}` : 'Invalid request',
+        code: 'validation',
+      });
     }
     if (err instanceof HttpError)
       return reply.code(err.status).send({ error: err.message, code: err.code });
     if (err instanceof SparkyError) {
       if (err.status === 401 && req.userId) {
         void markKeyInvalid(full, req.userId);
-        return reply
-          .code(409)
-          .send({
-            error: 'Your SparkyFitness connection expired. Sign in again.',
-            code: 'sparky_key_invalid',
-          });
+        return reply.code(409).send({
+          error: 'Your SparkyFitness connection expired. Sign in again.',
+          code: 'sparky_key_invalid',
+        });
       }
       req.log.warn({ err }, 'sparky error');
       return reply

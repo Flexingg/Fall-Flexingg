@@ -80,7 +80,7 @@ for (const [id, p] of Object.entries(profile)) {
       exercise_minutes: Math.round(km * 6.5),
       resting_heart_rate: 50 + (id.length % 7),
     });
-    if (km > 7)
+    if (km > 7) {
       u.exerciseDays.push({
         startDate: date,
         distanceMeters: km * 1000,
@@ -88,6 +88,13 @@ for (const [id, p] of Object.entries(profile)) {
         caloriesBurned: Math.round(km * 60),
         workoutCount: 1,
       });
+      u.exerciseEntries.push({
+        entry_date: date,
+        exercise_name: 'Running',
+        duration_minutes: Math.round(km * 6),
+        calories_burned: Math.round(km * 60),
+      });
+    }
     u.sleep.push({
       entry_date: date,
       time_asleep_in_seconds: (6.5 + ((i + id.length) % 4) * 0.4) * 3600,
