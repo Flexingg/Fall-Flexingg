@@ -17,7 +17,13 @@ import {
 import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { forbidden, notFound } from '../context.js';
-import { challengeParticipants, challenges, dailyMetrics, feedEvents, rankSnapshots } from '../db/schema.js';
+import {
+  challengeParticipants,
+  challenges,
+  dailyMetrics,
+  feedEvents,
+  rankSnapshots,
+} from '../db/schema.js';
 import { getUsers, toPublicUser, type UserRow } from './users.js';
 
 export type ChallengeRow = typeof challenges.$inferSelect;
@@ -51,14 +57,25 @@ export async function getChallenge(ctx: AppContext, id: string): Promise<Challen
   return ch;
 }
 
-export async function getParticipants(ctx: AppContext, challengeId: string): Promise<ParticipantRow[]> {
-  return ctx.db.select().from(challengeParticipants).where(eq(challengeParticipants.challengeId, challengeId));
+export async function getParticipants(
+  ctx: AppContext,
+  challengeId: string,
+): Promise<ParticipantRow[]> {
+  return ctx.db
+    .select()
+    .from(challengeParticipants)
+    .where(eq(challengeParticipants.challengeId, challengeId));
 }
 
 /** Throws unless the viewer was invited to or joined the challenge. */
-export async function assertCanView(ctx: AppContext, ch: ChallengeRow, userId: string): Promise<ParticipantRow[]> {
+export async function assertCanView(
+  ctx: AppContext,
+  ch: ChallengeRow,
+  userId: string,
+): Promise<ParticipantRow[]> {
   const parts = await getParticipants(ctx, ch.id);
-  if (!parts.some((p) => p.userId === userId)) throw forbidden('You are not part of this challenge');
+  if (!parts.some((p) => p.userId === userId))
+    throw forbidden('You are not part of this challenge');
   return parts;
 }
 
@@ -68,7 +85,11 @@ export interface ComputedStandings {
   bestDays: Map<string, number>;
 }
 
-export async function computeChallengeStandings(ctx: AppContext, ch: ChallengeRow, parts: ParticipantRow[]): Promise<ComputedStandings> {
+export async function computeChallengeStandings(
+  ctx: AppContext,
+  ch: ChallengeRow,
+  parts: ParticipantRow[],
+): Promise<ComputedStandings> {
   const joined = parts.filter((p) => p.state === 'joined').map((p) => p.userId);
   const asOf = minDate(maxDate(challengeToday(ctx, ch), ch.startDate), ch.endDate);
   const rows = joined.length
@@ -90,7 +111,9 @@ export async function computeChallengeStandings(ctx: AppContext, ch: ChallengeRo
     byUser.get(r.userId)?.push({ date: r.date, value: r.value });
     if (r.date <= asOf) {
       const prev = bestDays.get(r.userId);
-      const better = ch.lowerIsBetter ? prev == null || r.value < prev : prev == null || r.value > prev;
+      const better = ch.lowerIsBetter
+        ? prev == null || r.value < prev
+        : prev == null || r.value > prev;
       if (better) bestDays.set(r.userId, r.value);
     }
   }
@@ -118,7 +141,14 @@ interface BuildArgs {
   usersById: Map<string, UserRow>;
 }
 
-export function buildSummary({ ctx, ch, parts, viewerId, computed, usersById }: BuildArgs): ChallengeSummary {
+export function buildSummary({
+  ctx,
+  ch,
+  parts,
+  viewerId,
+  computed,
+  usersById,
+}: BuildArgs): ChallengeSummary {
   const def = challengeMetricDef(ch);
   const status = challengeStatus(ctx, ch);
   const me = parts.find((p) => p.userId === viewerId);
@@ -133,12 +163,19 @@ export function buildSummary({ ctx, ch, parts, viewerId, computed, usersById }: 
   let gap: ChallengeSummary['gap'] = null;
   if (mine && mine.score != null) {
     const idx = computed.standings.indexOf(mine);
-    const ahead = computed.standings.slice(0, idx).reverse().find((s) => s.score != null && s.rank < mine.rank);
+    const ahead = computed.standings
+      .slice(0, idx)
+      .reverse()
+      .find((s) => s.score != null && s.rank < mine.rank);
     const behind = computed.standings[idx + 1];
     const other = ahead ?? (behind && behind.score != null ? behind : undefined);
     const otherUser = other ? usersById.get(other.userId) : undefined;
     if (other && otherUser && other.score != null) {
-      gap = { user: toPublicUser(otherUser), amount: Math.abs(other.score - mine.score), ahead: !!ahead };
+      gap = {
+        user: toPublicUser(otherUser),
+        amount: Math.abs(other.score - mine.score),
+        ahead: !!ahead,
+      };
     }
   }
 
@@ -160,9 +197,15 @@ export function buildSummary({ ctx, ch, parts, viewerId, computed, usersById }: 
     myState: (me?.state as ParticipantState | undefined) ?? null,
     myRank,
     myScore,
-    leader: leaderUser && leaderStanding?.score != null ? { user: toPublicUser(leaderUser), score: leaderStanding.score } : null,
+    leader:
+      leaderUser && leaderStanding?.score != null
+        ? { user: toPublicUser(leaderUser), score: leaderStanding.score }
+        : null,
     gap,
-    daysLeft: status === 'completed' ? 0 : Math.max(daysBetween(maxDate(today, ch.startDate), ch.endDate) + 1, 0),
+    daysLeft:
+      status === 'completed'
+        ? 0
+        : Math.max(daysBetween(maxDate(today, ch.startDate), ch.endDate) + 1, 0),
     createdBy: ch.createdBy,
   };
 }
@@ -207,11 +250,18 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
 }
 
 /** Load everything needed to render one challenge for a viewer. */
-export async function loadDetail(ctx: AppContext, challengeId: string, viewerId: string): Promise<ChallengeDetail> {
+export async function loadDetail(
+  ctx: AppContext,
+  challengeId: string,
+  viewerId: string,
+): Promise<ChallengeDetail> {
   const ch = await getChallenge(ctx, challengeId);
   const parts = await assertCanView(ctx, ch, viewerId);
   const computed = await computeChallengeStandings(ctx, ch, parts);
-  const usersById = await getUsers(ctx, parts.map((p) => p.userId));
+  const usersById = await getUsers(
+    ctx,
+    parts.map((p) => p.userId),
+  );
   return buildDetail({ ctx, ch, parts, viewerId, computed, usersById });
 }
 
@@ -219,12 +269,23 @@ export async function listForUser(ctx: AppContext, userId: string): Promise<Chal
   const mine = await ctx.db
     .select({ challengeId: challengeParticipants.challengeId })
     .from(challengeParticipants)
-    .where(and(eq(challengeParticipants.userId, userId), inArray(challengeParticipants.state, ['invited', 'joined'])));
+    .where(
+      and(
+        eq(challengeParticipants.userId, userId),
+        inArray(challengeParticipants.state, ['invited', 'joined']),
+      ),
+    );
   if (!mine.length) return [];
   const ids = mine.map((m) => m.challengeId);
   const chs = await ctx.db.select().from(challenges).where(inArray(challenges.id, ids));
-  const allParts = await ctx.db.select().from(challengeParticipants).where(inArray(challengeParticipants.challengeId, ids));
-  const usersById = await getUsers(ctx, allParts.map((p) => p.userId));
+  const allParts = await ctx.db
+    .select()
+    .from(challengeParticipants)
+    .where(inArray(challengeParticipants.challengeId, ids));
+  const usersById = await getUsers(
+    ctx,
+    allParts.map((p) => p.userId),
+  );
   const out: ChallengeSummary[] = [];
   for (const ch of chs) {
     const parts = allParts.filter((p) => p.challengeId === ch.id);
@@ -232,16 +293,31 @@ export async function listForUser(ctx: AppContext, userId: string): Promise<Chal
     out.push(buildSummary({ ctx, ch, parts, viewerId: userId, computed, usersById }));
   }
   const order: Record<ChallengeStatus, number> = { active: 0, upcoming: 1, completed: 2 };
-  return out.sort((a, b) => order[a.status] - order[b.status] || (a.status === 'completed' ? b.endDate.localeCompare(a.endDate) : a.endDate.localeCompare(b.endDate)));
+  return out.sort(
+    (a, b) =>
+      order[a.status] - order[b.status] ||
+      (a.status === 'completed'
+        ? b.endDate.localeCompare(a.endDate)
+        : a.endDate.localeCompare(b.endDate)),
+  );
 }
 
 /** Challenges a user has joined that are still running (or about to). */
-export async function openChallengesForUser(ctx: AppContext, userId: string): Promise<ChallengeRow[]> {
+export async function openChallengesForUser(
+  ctx: AppContext,
+  userId: string,
+): Promise<ChallengeRow[]> {
   const rows = await ctx.db
     .select({ ch: challenges })
     .from(challengeParticipants)
     .innerJoin(challenges, eq(challenges.id, challengeParticipants.challengeId))
-    .where(and(eq(challengeParticipants.userId, userId), eq(challengeParticipants.state, 'joined'), isNull(challenges.finalizedAt)));
+    .where(
+      and(
+        eq(challengeParticipants.userId, userId),
+        eq(challengeParticipants.state, 'joined'),
+        isNull(challenges.finalizedAt),
+      ),
+    );
   return rows.map((r) => r.ch);
 }
 
@@ -257,20 +333,31 @@ export async function refreshChallenge(ctx: AppContext, ch: ChallengeRow): Promi
   if (ranked.length) {
     await ctx.db
       .insert(rankSnapshots)
-      .values(ranked.map((s) => ({ challengeId: ch.id, userId: s.userId, date: asOf, rank: s.rank })))
+      .values(
+        ranked.map((s) => ({ challengeId: ch.id, userId: s.userId, date: asOf, rank: s.rank })),
+      )
       .onConflictDoUpdate({
         target: [rankSnapshots.challengeId, rankSnapshots.userId, rankSnapshots.date],
         set: { rank: sqlExcluded('rank') },
       });
   }
   const top = ranked[0];
-  const soleLeader = top && top.rank === 1 && ranked.filter((s) => s.rank === 1).length === 1 && (top.score ?? 0) > 0;
+  const soleLeader =
+    top &&
+    top.rank === 1 &&
+    ranked.filter((s) => s.rank === 1).length === 1 &&
+    (top.score ?? 0) > 0;
   if (soleLeader && top.userId !== ch.leaderId) {
     // Compare-and-set, so two syncs finishing together announce the change once.
     const [changed] = await ctx.db
       .update(challenges)
       .set({ leaderId: top.userId })
-      .where(and(eq(challenges.id, ch.id), ch.leaderId ? eq(challenges.leaderId, ch.leaderId) : isNull(challenges.leaderId)))
+      .where(
+        and(
+          eq(challenges.id, ch.id),
+          ch.leaderId ? eq(challenges.leaderId, ch.leaderId) : isNull(challenges.leaderId),
+        ),
+      )
       .returning({ id: challenges.id });
     if (changed && ch.leaderId && ranked.length > 1) {
       await ctx.db.insert(feedEvents).values({
@@ -299,11 +386,23 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
       await tx
         .update(challengeParticipants)
         .set({ finalRank: s.rank, finalScore: s.score })
-        .where(and(eq(challengeParticipants.challengeId, ch.id), eq(challengeParticipants.userId, s.userId)));
+        .where(
+          and(
+            eq(challengeParticipants.challengeId, ch.id),
+            eq(challengeParticipants.userId, s.userId),
+          ),
+        );
     }
     const winners = standings.filter((s) => s.rank === 1 && s.score != null);
     for (const w of winners) {
-      await tx.insert(feedEvents).values({ actorId: w.userId, challengeId: ch.id, kind: 'challenge_won', payload: { score: w.score } });
+      await tx
+        .insert(feedEvents)
+        .values({
+          actorId: w.userId,
+          challengeId: ch.id,
+          kind: 'challenge_won',
+          payload: { score: w.score },
+        });
     }
   });
   return true;

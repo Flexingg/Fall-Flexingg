@@ -41,12 +41,19 @@ export async function issueRefreshToken(ctx: AppContext, userId: string): Promis
 }
 
 /** Exchange a refresh token for a new pair. The old token is revoked (rotation). */
-export async function rotateRefreshToken(ctx: AppContext, token: string): Promise<{ userId: string; refreshToken: string } | null> {
+export async function rotateRefreshToken(
+  ctx: AppContext,
+  token: string,
+): Promise<{ userId: string; refreshToken: string } | null> {
   const [row] = await ctx.db
     .update(refreshTokens)
     .set({ revokedAt: ctx.now() })
     .where(
-      and(eq(refreshTokens.tokenHash, sha256(token)), isNull(refreshTokens.revokedAt), gt(refreshTokens.expiresAt, ctx.now())),
+      and(
+        eq(refreshTokens.tokenHash, sha256(token)),
+        isNull(refreshTokens.revokedAt),
+        gt(refreshTokens.expiresAt, ctx.now()),
+      ),
     )
     .returning({ userId: refreshTokens.userId });
   if (!row) return null;
@@ -54,7 +61,10 @@ export async function rotateRefreshToken(ctx: AppContext, token: string): Promis
 }
 
 export async function revokeRefreshToken(ctx: AppContext, token: string) {
-  await ctx.db.update(refreshTokens).set({ revokedAt: ctx.now() }).where(eq(refreshTokens.tokenHash, sha256(token)));
+  await ctx.db
+    .update(refreshTokens)
+    .set({ revokedAt: ctx.now() })
+    .where(eq(refreshTokens.tokenHash, sha256(token)));
 }
 
 export async function revokeAllRefreshTokens(ctx: AppContext, userId: string) {
@@ -70,7 +80,10 @@ export function requireUser(ctx: AppContext) {
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) throw new HttpError(401, 'Sign in required', 'unauthenticated');
     try {
-      const { payload } = await jwtVerify(token, key(ctx), { audience: 'gauntlet', currentDate: ctx.now() });
+      const { payload } = await jwtVerify(token, key(ctx), {
+        audience: 'gauntlet',
+        currentDate: ctx.now(),
+      });
       if (!payload.sub) throw new Error('no subject');
       req.userId = payload.sub;
     } catch {

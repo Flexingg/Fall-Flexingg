@@ -65,7 +65,10 @@ export const updateMeSchema = z.object({
   displayName: z.string().trim().min(1).max(40).optional(),
   timezone: z.string().min(1).max(64).optional(),
   settings: z
-    .object({ shareWorkoutDetails: z.boolean().optional(), healthConnectSync: z.boolean().optional() })
+    .object({
+      shareWorkoutDetails: z.boolean().optional(),
+      healthConnectSync: z.boolean().optional(),
+    })
     .optional(),
 });
 
@@ -117,7 +120,9 @@ export interface InvitePreview {
 
 // ---------- Challenges ----------
 
-const metricKey = z.string().refine(isMetricKey, 'Unknown metric') as unknown as z.ZodType<MetricKey>;
+const metricKey = z
+  .string()
+  .refine(isMetricKey, 'Unknown metric') as unknown as z.ZodType<MetricKey>;
 
 export const createChallengeSchema = z
   .object({
@@ -139,8 +144,14 @@ export const createChallengeSchema = z
     timezone: z.string().min(1).max(64),
     inviteUserIds: z.array(z.string().uuid()).max(50).default([]),
   })
-  .refine((v) => v.endDate >= v.startDate, { message: 'End date must be on or after start date', path: ['endDate'] })
-  .refine((v) => !v.metric.startsWith('custom:') || v.custom, { message: 'Custom metrics need options', path: ['custom'] });
+  .refine((v) => v.endDate >= v.startDate, {
+    message: 'End date must be on or after start date',
+    path: ['endDate'],
+  })
+  .refine((v) => !v.metric.startsWith('custom:') || v.custom, {
+    message: 'Custom metrics need options',
+    path: ['custom'],
+  });
 export type CreateChallengeRequest = z.input<typeof createChallengeSchema>;
 
 export type ChallengeStatus = 'upcoming' | 'active' | 'completed';
@@ -192,7 +203,12 @@ export interface ChallengeDetail extends ChallengeSummary {
 
 export interface ChallengeResult {
   challenge: ChallengeDetail;
-  me: { rank: number | null; score: number | null; bestDay: number | null; daysWithData: number } | null;
+  me: {
+    rank: number | null;
+    score: number | null;
+    bestDay: number | null;
+    daysWithData: number;
+  } | null;
   winner: PublicUser | null;
 }
 
@@ -200,7 +216,8 @@ export const respondChallengeSchema = z.object({ accept: z.boolean() });
 
 // ---------- Feed ----------
 
-export type FeedEventKind = 'progress' | 'took_lead' | 'goal_reached' | 'challenge_won' | 'joined' | 'challenge_created';
+export type FeedEventKind =
+  'progress' | 'took_lead' | 'goal_reached' | 'challenge_won' | 'joined' | 'challenge_created';
 
 export interface FeedEvent {
   id: string;
@@ -219,7 +236,13 @@ export interface FeedEvent {
 export interface TodayResponse {
   date: string;
   lastSyncedAt: string | null;
-  metrics: { key: MetricKey; label: string; value: number | null; unit: string; goal: number | null }[];
+  metrics: {
+    key: MetricKey;
+    label: string;
+    value: number | null;
+    unit: string;
+    goal: number | null;
+  }[];
   featured: ChallengeSummary | null;
 }
 
@@ -235,7 +258,11 @@ export interface TrendsResponse {
   previousTotal: number;
   changePct: number | null;
   bars: { date: string; label: string; value: number; isToday: boolean }[];
-  rankHistory: { challengeId: string; name: string; points: { date: string; rank: number }[] } | null;
+  rankHistory: {
+    challengeId: string;
+    name: string;
+    points: { date: string; rank: number }[];
+  } | null;
   personalBests: { label: string; value: string }[];
 }
 

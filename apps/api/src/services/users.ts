@@ -9,8 +9,14 @@ import type { SparkyUser } from '../sparky/client.js';
 export type UserRow = typeof users.$inferSelect;
 
 export function initials(name: string): string {
-  const parts = name.trim().split(/[\s._-]+/).filter(Boolean);
-  const letters = parts.length >= 2 ? `${parts[0]![0]}${parts[parts.length - 1]![0]}` : (parts[0] ?? '?').slice(0, 2);
+  const parts = name
+    .trim()
+    .split(/[\s._-]+/)
+    .filter(Boolean);
+  const letters =
+    parts.length >= 2
+      ? `${parts[0]![0]}${parts[parts.length - 1]![0]}`
+      : (parts[0] ?? '?').slice(0, 2);
   return letters.toUpperCase();
 }
 
@@ -30,7 +36,10 @@ export function toMe(u: UserRow): MeUser {
     ...toPublicUser(u),
     email: u.email,
     timezone: u.timezone,
-    settings: { shareWorkoutDetails: u.shareWorkoutDetails, healthConnectSync: u.healthConnectSync },
+    settings: {
+      shareWorkoutDetails: u.shareWorkoutDetails,
+      healthConnectSync: u.healthConnectSync,
+    },
     sparkyKeyStatus: u.keyStatus,
   };
 }
@@ -43,14 +52,21 @@ export async function getUser(ctx: AppContext, id: string): Promise<UserRow> {
 
 export async function getUsers(ctx: AppContext, ids: string[]): Promise<Map<string, UserRow>> {
   if (!ids.length) return new Map();
-  const rows = await ctx.db.select().from(users).where(inArray(users.id, [...new Set(ids)]));
+  const rows = await ctx.db
+    .select()
+    .from(users)
+    .where(inArray(users.id, [...new Set(ids)]));
   return new Map(rows.map((r) => [r.id, r]));
 }
 
 /** The user's SparkyFitness API key, decrypted. */
 export function sparkyToken(ctx: AppContext, u: UserRow): string {
   if (!u.sparkyKeyEnc || u.keyStatus !== 'active') {
-    throw new HttpError(409, 'Your SparkyFitness connection expired. Sign in again.', 'sparky_key_invalid');
+    throw new HttpError(
+      409,
+      'Your SparkyFitness connection expired. Sign in again.',
+      'sparky_key_invalid',
+    );
   }
   return decrypt(u.sparkyKeyEnc, ctx.cfg.encryptionKey);
 }
@@ -78,7 +94,12 @@ export async function upsertFromSparky(
   if (existing) {
     const [user] = await ctx.db
       .update(users)
-      .set({ email: s.email || existing.email, sparkyKeyEnc, sparkyKeyId: keyId, keyStatus: 'active' })
+      .set({
+        email: s.email || existing.email,
+        sparkyKeyEnc,
+        sparkyKeyId: keyId,
+        keyStatus: 'active',
+      })
       .where(eq(users.id, existing.id))
       .returning();
     return { user: user!, previousKeyId: existing.sparkyKeyId };

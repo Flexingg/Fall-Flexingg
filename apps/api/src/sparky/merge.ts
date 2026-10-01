@@ -46,7 +46,11 @@ export interface MergeInput {
 
 /** Custom categories SparkyFitness' own phone sync and integrations create for built-in metrics. */
 export const DISTANCE_CATEGORIES = ['distance'];
-export const RESTING_HR_CATEGORIES = ['resting_heart_rate', 'resting heart rate', 'restingheartrate'];
+export const RESTING_HR_CATEGORIES = [
+  'resting_heart_rate',
+  'resting heart rate',
+  'restingheartrate',
+];
 export const ACTIVE_CALORIES_ENTRY = 'active calories';
 
 export function wantedCategoryNames(customMetrics: Record<string, MetricAggregate>): string[] {
@@ -82,7 +86,9 @@ class DayTable {
         if (chosen) out.push({ date, metric, value: round(chosen.value), source: chosen.source });
       }
     }
-    return out.sort((a, b) => (a.date === b.date ? a.metric.localeCompare(b.metric) : a.date.localeCompare(b.date)));
+    return out.sort((a, b) =>
+      a.date === b.date ? a.metric.localeCompare(b.metric) : a.date.localeCompare(b.date),
+    );
   }
 }
 
@@ -93,15 +99,18 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
   for (const row of input.daily) {
     const src = row.source_provider ?? 'wearable';
     if (pos(row.total_steps)) t.add(row.entry_date, 'steps', row.total_steps, src);
-    if (pos(row.total_distance_meters)) t.add(row.entry_date, 'distance', num(row.total_distance_meters)! / 1000, src);
-    if (pos(row.active_calories)) t.add(row.entry_date, 'active_calories', row.active_calories, src);
+    if (pos(row.total_distance_meters))
+      t.add(row.entry_date, 'distance', num(row.total_distance_meters)! / 1000, src);
+    if (pos(row.active_calories))
+      t.add(row.entry_date, 'active_calories', row.active_calories, src);
     const minutes =
       num(row.exercise_minutes) ??
       (row.moderate_intensity_minutes != null || row.vigorous_intensity_minutes != null
         ? (num(row.moderate_intensity_minutes) ?? 0) + (num(row.vigorous_intensity_minutes) ?? 0)
         : null);
     if (pos(minutes)) t.add(row.entry_date, 'active_minutes', minutes, src);
-    if (pos(row.resting_heart_rate)) t.add(row.entry_date, 'resting_hr_daily', row.resting_heart_rate, src);
+    if (pos(row.resting_heart_rate))
+      t.add(row.entry_date, 'resting_hr_daily', row.resting_heart_rate, src);
   }
 
   // Check-ins (phone sync, Fitbit, Withings). Newest row per day wins.
@@ -121,9 +130,11 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
     const key = name.toLowerCase();
     const label = category.display_name || category.name;
     if (DISTANCE_CATEGORIES.includes(key)) {
-      for (const [d, v] of dailyCustom(rows, category, 'sum')) t.add(d, 'distance', v / 1000, label);
+      for (const [d, v] of dailyCustom(rows, category, 'sum'))
+        t.add(d, 'distance', v / 1000, label);
     } else if (RESTING_HR_CATEGORIES.includes(key)) {
-      for (const [d, v] of dailyCustom(rows, category, 'avg')) t.add(d, 'resting_hr_measured', v, label);
+      for (const [d, v] of dailyCustom(rows, category, 'avg'))
+        t.add(d, 'resting_hr_measured', v, label);
     }
     const agg = input.customMetrics[key];
     if (agg) {
@@ -171,7 +182,9 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
 
   // Resting HR: wearable daily summary first, otherwise the measured category.
   const out: MergedValue[] = [];
-  const restingDaily = new Set(merged.filter((m) => m.metric === 'resting_hr_daily').map((m) => m.date));
+  const restingDaily = new Set(
+    merged.filter((m) => m.metric === 'resting_hr_daily').map((m) => m.date),
+  );
   for (const m of merged) {
     if (m.metric === 'resting_hr_daily') out.push({ ...m, metric: 'resting_hr' });
     else if (m.metric === 'resting_hr_measured') {
@@ -182,7 +195,11 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
 }
 
 /** Reduce custom measurement rows to one value per day. */
-function dailyCustom(rows: CustomMeasurementRow[], category: CustomCategory, aggregate: MetricAggregate): Map<string, number> {
+function dailyCustom(
+  rows: CustomMeasurementRow[],
+  category: CustomCategory,
+  aggregate: MetricAggregate,
+): Map<string, number> {
   const groups = new Map<string, { value: number; ts: string }[]>();
   for (const r of rows) {
     const d = normDate(r.date);

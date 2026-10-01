@@ -11,22 +11,36 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
     await ctx.db
       .select({ id: challengeParticipants.challengeId })
       .from(challengeParticipants)
-      .where(and(eq(challengeParticipants.userId, userId), eq(challengeParticipants.state, 'joined')))
+      .where(
+        and(eq(challengeParticipants.userId, userId), eq(challengeParticipants.state, 'joined')),
+      )
   ).map((r) => r.id);
 
   const visible = myChallenges.length
-    ? or(inArray(feedEvents.challengeId, myChallenges), and(isNull(feedEvents.challengeId), inArray(feedEvents.actorId, people)))
+    ? or(
+        inArray(feedEvents.challengeId, myChallenges),
+        and(isNull(feedEvents.challengeId), inArray(feedEvents.actorId, people)),
+      )
     : and(isNull(feedEvents.challengeId), inArray(feedEvents.actorId, people));
 
   const rows = await ctx.db
-    .select({ e: feedEvents, chName: challenges.name, chMetric: challenges.metric, chLabel: challenges.customLabel, chUnit: challenges.customUnit })
+    .select({
+      e: feedEvents,
+      chName: challenges.name,
+      chMetric: challenges.metric,
+      chLabel: challenges.customLabel,
+      chUnit: challenges.customUnit,
+    })
     .from(feedEvents)
     .leftJoin(challenges, eq(challenges.id, feedEvents.challengeId))
     .where(visible)
     .orderBy(desc(feedEvents.createdAt))
     .limit(Math.min(Math.max(limit, 1), 100));
 
-  const usersById = await getUsers(ctx, rows.map((r) => r.e.actorId));
+  const usersById = await getUsers(
+    ctx,
+    rows.map((r) => r.e.actorId),
+  );
   return rows.flatMap(({ e, chName, chMetric, chLabel, chUnit }) => {
     const actor = usersById.get(e.actorId);
     if (!actor) return [];
@@ -38,17 +52,29 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
     switch (e.kind) {
       case 'progress': {
         const metric = (p.metric as MetricKey | undefined) ?? (chMetric as MetricKey);
-        const def = metricDef(metric, { label: chLabel ?? metric, unit: chUnit ?? undefined, aggregate: 'sum', lowerIsBetter: false });
+        const def = metricDef(metric, {
+          label: chLabel ?? metric,
+          unit: chUnit ?? undefined,
+          aggregate: 'sum',
+          lowerIsBetter: false,
+        });
         const delta = Number(p.delta ?? 0);
-        const amount = def.decimals ? delta.toFixed(def.decimals) : Math.round(delta).toLocaleString('en-US');
+        const amount = def.decimals
+          ? delta.toFixed(def.decimals)
+          : Math.round(delta).toLocaleString('en-US');
         badge = `+${metric === 'steps' ? formatCompact(delta) : amount}`;
         text =
-          metric === 'distance' ? `${name} covered ${amount} km`
-          : metric === 'steps' ? `${name} hit ${formatCompact(delta)} steps`
-          : metric === 'workouts' ? `${name} logged ${delta === 1 ? 'a workout' : `${amount} workouts`}`
-          : metric === 'active_minutes' ? `${name} logged ${amount} active min`
-          : metric === 'active_calories' ? `${name} burned ${amount} kcal`
-          : `${name} logged ${amount}${def.unit ? ` ${def.unit}` : ''} ${def.label.toLowerCase()}`;
+          metric === 'distance'
+            ? `${name} covered ${amount} km`
+            : metric === 'steps'
+              ? `${name} hit ${formatCompact(delta)} steps`
+              : metric === 'workouts'
+                ? `${name} logged ${delta === 1 ? 'a workout' : `${amount} workouts`}`
+                : metric === 'active_minutes'
+                  ? `${name} logged ${amount} active min`
+                  : metric === 'active_calories'
+                    ? `${name} burned ${amount} kcal`
+                    : `${name} logged ${amount}${def.unit ? ` ${def.unit}` : ''} ${def.label.toLowerCase()}`;
         break;
       }
       case 'took_lead':

@@ -37,7 +37,11 @@ export function ChallengeDetailPage() {
 
   async function invite() {
     const inv = await post<Invite>('/api/invites', { kind: 'challenge', challengeId: id });
-    const r = await shareLink(`Join ${c!.name} on Gauntlet`, `${user?.displayName} challenged you: ${c!.name}`, inv.url);
+    const r = await shareLink(
+      `Join ${c!.name} on Gauntlet`,
+      `${user?.displayName} challenged you: ${c!.name}`,
+      inv.url,
+    );
     if (r === 'copied') toast('Invite link copied');
   }
 
@@ -50,17 +54,31 @@ export function ChallengeDetailPage() {
         <>
           <p className="muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
             {c.metricLabel} · {SCORING_LABELS[c.scoring]}
-            {c.goal ? ` · ${fmt(c.goal, c)}${c.scoring === 'streak' ? '/day' : ''}` : ''} · {dateRange(c.startDate, c.endDate)} · {daysLeftText(c)}
+            {c.goal ? ` · ${fmt(c.goal, c)}${c.scoring === 'streak' ? '/day' : ''}` : ''} ·{' '}
+            {dateRange(c.startDate, c.endDate)} · {daysLeftText(c)}
           </p>
 
           {c.myState === 'invited' && (
             <div className="card stack" style={{ marginBottom: 14 }}>
               <b>You're invited</b>
               <div className="row">
-                <button className="btn" disabled={busy} onClick={() => act(() => post(`/api/challenges/${id}/respond`, { accept: true }))}>
+                <button
+                  className="btn"
+                  disabled={busy}
+                  onClick={() => act(() => post(`/api/challenges/${id}/respond`, { accept: true }))}
+                >
                   Accept
                 </button>
-                <button className="btn secondary" disabled={busy} onClick={() => act(async () => { await post(`/api/challenges/${id}/respond`, { accept: false }); navigate('/challenges'); })}>
+                <button
+                  className="btn secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    act(async () => {
+                      await post(`/api/challenges/${id}/respond`, { accept: false });
+                      navigate('/challenges');
+                    })
+                  }
+                >
                   Decline
                 </button>
               </div>
@@ -69,8 +87,13 @@ export function ChallengeDetailPage() {
 
           {c.status === 'completed' && (
             <Link to={`/c/${id}/result`} className="hero" style={{ marginBottom: 14 }}>
-              <div className="badge"><Icon name="trophy" /></div>
-              <div className="grow"><small>Challenge over</small><b>See the results</b></div>
+              <div className="badge">
+                <Icon name="trophy" />
+              </div>
+              <div className="grow">
+                <small>Challenge over</small>
+                <b>See the results</b>
+              </div>
             </Link>
           )}
 
@@ -93,11 +116,31 @@ export function ChallengeDetailPage() {
                 <Icon name="share" size={18} /> Invite friends
               </button>
               {c.createdBy === user?.id && c.status === 'upcoming' ? (
-                <button className="btn ghost" disabled={busy} onClick={() => act(async () => { await del(`/api/challenges/${id}`); navigate('/challenges'); })}>
+                <button
+                  className="btn ghost"
+                  disabled={busy}
+                  onClick={() =>
+                    act(async () => {
+                      await del(`/api/challenges/${id}`);
+                      navigate('/challenges');
+                    })
+                  }
+                >
                   Delete challenge
                 </button>
               ) : (
-                <button className="btn ghost" disabled={busy} onClick={() => confirm('Leave this challenge?') && act(async () => { await post(`/api/challenges/${id}/leave`); qc.removeQueries({ queryKey: keys.challenge(id) }); navigate('/challenges'); })}>
+                <button
+                  className="btn ghost"
+                  disabled={busy}
+                  onClick={() =>
+                    confirm('Leave this challenge?') &&
+                    act(async () => {
+                      await post(`/api/challenges/${id}/leave`);
+                      qc.removeQueries({ queryKey: keys.challenge(id) });
+                      navigate('/challenges');
+                    })
+                  }
+                >
                   Leave challenge
                 </button>
               )}

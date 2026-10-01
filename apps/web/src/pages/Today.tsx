@@ -84,7 +84,13 @@ export function TodayPage() {
 
       <div className="lbl">
         <span>Recent from your crew</span>
-        <button onClick={refresh} disabled={syncing} aria-label="Sync now" className="row" style={{ gap: 4 }}>
+        <button
+          onClick={refresh}
+          disabled={syncing}
+          aria-label="Sync now"
+          className="row"
+          style={{ gap: 4 }}
+        >
           {syncing ? 'Syncing…' : `Synced ${timeAgo(today.data?.lastSyncedAt)}`}
         </button>
       </div>

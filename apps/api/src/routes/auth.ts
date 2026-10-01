@@ -56,11 +56,19 @@ export function authRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post('/api/auth/login/2fa', loginLimit, async (req, reply) => {
     const body = twoFactorSchema.parse(req.body);
-    const [pending] = await ctx.db.select().from(pendingLogins).where(eq(pendingLogins.ticketHash, sha256(body.ticket)));
-    if (!pending || pending.expiresAt < ctx.now()) throw new HttpError(401, 'That sign-in attempt expired. Start again.', 'ticket_expired');
+    const [pending] = await ctx.db
+      .select()
+      .from(pendingLogins)
+      .where(eq(pendingLogins.ticketHash, sha256(body.ticket)));
+    if (!pending || pending.expiresAt < ctx.now())
+      throw new HttpError(401, 'That sign-in attempt expired. Start again.', 'ticket_expired');
     let verified;
     try {
-      verified = await ctx.sparky.verifyTwoFactor(decrypt(pending.cookieEnc, ctx.cfg.encryptionKey), body.code, body.method);
+      verified = await ctx.sparky.verifyTwoFactor(
+        decrypt(pending.cookieEnc, ctx.cfg.encryptionKey),
+        body.code,
+        body.method,
+      );
     } catch (err) {
       throw toAuthError(err, 'That code did not work.');
     }
@@ -102,7 +110,15 @@ async function mintAndFinish(
   } catch (err) {
     throw toAuthError(err, 'SparkyFitness would not create an access key for Gauntlet.');
   }
-  const res = await finishLogin(ctx, req, reply, sparkyUser, { apiKey: key.key, keyId: key.id }, tz, sessionToken);
+  const res = await finishLogin(
+    ctx,
+    req,
+    reply,
+    sparkyUser,
+    { apiKey: key.key, keyId: key.id },
+    tz,
+    sessionToken,
+  );
   void ctx.sparky.signOut(sessionToken);
   return res;
 }
@@ -116,10 +132,18 @@ async function finishLogin(
   tz: string | undefined,
   sessionToken?: string,
 ) {
-  const { user, previousKeyId } = await upsertFromSparky(ctx, sparkyUser, key.apiKey, key.keyId, tz);
+  const { user, previousKeyId } = await upsertFromSparky(
+    ctx,
+    sparkyUser,
+    key.apiKey,
+    key.keyId,
+    tz,
+  );
   // Clean up the key from the previous login so keys don't pile up in SparkyFitness.
   if (previousKeyId && sessionToken && previousKeyId !== key.keyId) {
-    ctx.sparky.deleteApiKey(sessionToken, previousKeyId).catch((err) => ctx.log.debug({ err }, 'old key cleanup failed'));
+    ctx.sparky
+      .deleteApiKey(sessionToken, previousKeyId)
+      .catch((err) => ctx.log.debug({ err }, 'old key cleanup failed'));
   }
   // Start pulling data in the background; the app shows it as it arrives.
   void syncUser(ctx, user.id).catch((err) => ctx.log.warn({ err }, 'initial sync failed'));
@@ -128,7 +152,13 @@ async function finishLogin(
   return { status: 'ok', ...tokens, user: toMe(user) } satisfies LoginResponse;
 }
 
-async function respondWithTokens(ctx: AppContext, req: FastifyRequest, reply: FastifyReply, userId: string, refreshToken: string) {
+async function respondWithTokens(
+  ctx: AppContext,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  userId: string,
+  refreshToken: string,
+) {
   const accessToken = await signAccessToken(ctx, userId);
   if (isNativeClient(req)) return { accessToken, refreshToken };
   reply.setCookie(REFRESH_COOKIE, refreshToken, {
@@ -158,8 +188,10 @@ function timezoneHeader(req: FastifyRequest): string | undefined {
 
 function toAuthError(err: unknown, fallback: string): HttpError {
   if (err instanceof SparkyError) {
-    if (err.status === 401 || err.status === 403 || err.status === 400) return new HttpError(401, err.message || fallback, 'sparky_auth');
-    if (err.status === 429) return new HttpError(429, 'Too many attempts. Wait a minute and try again.', 'rate_limited');
+    if (err.status === 401 || err.status === 403 || err.status === 400)
+      return new HttpError(401, err.message || fallback, 'sparky_auth');
+    if (err.status === 429)
+      return new HttpError(429, 'Too many attempts. Wait a minute and try again.', 'rate_limited');
     return new HttpError(502, `SparkyFitness is unavailable: ${err.message}`, 'sparky_unavailable');
   }
   throw err;

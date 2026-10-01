@@ -1,7 +1,22 @@
 import type { LoginRequest, LoginResponse, MeUser } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, get, login as apiLogin, logout as apiLogout, onSignedOut, refreshSession } from './api';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  ApiError,
+  get,
+  login as apiLogin,
+  logout as apiLogout,
+  onSignedOut,
+  refreshSession,
+} from './api';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
 
@@ -33,7 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setStatus('signedIn');
         }
       } catch (err) {
-        if (!cancelled) setStatus(err instanceof ApiError && err.status === 0 ? 'signedIn' : 'signedOut');
+        if (!cancelled)
+          setStatus(err instanceof ApiError && err.status === 0 ? 'signedIn' : 'signedOut');
       }
     })();
     const off = onSignedOut(() => {
@@ -60,7 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       user,
       login: async (req) => finish(await apiLogin('/api/auth/login', req)),
-      verify: async (ticket, code) => finish(await apiLogin('/api/auth/login/2fa', { ticket, code })),
+      verify: async (ticket, code) =>
+        finish(await apiLogin('/api/auth/login/2fa', { ticket, code })),
       logout: async () => {
         await apiLogout();
         qc.clear();

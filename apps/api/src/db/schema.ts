@@ -25,7 +25,9 @@ export const users = pgTable('users', {
   sparkyKeyEnc: text('sparky_key_enc'),
   /** Id of the key in SparkyFitness, when Gauntlet created it (so it can be deleted). */
   sparkyKeyId: text('sparky_key_id'),
-  keyStatus: text('key_status', { enum: ['active', 'invalid', 'revoked'] }).notNull().default('active'),
+  keyStatus: text('key_status', { enum: ['active', 'invalid', 'revoked'] })
+    .notNull()
+    .default('active'),
   shareWorkoutDetails: boolean('share_workout_details').notNull().default(true),
   healthConnectSync: boolean('health_connect_sync').notNull().default(false),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
@@ -36,7 +38,9 @@ export const refreshTokens = pgTable(
   'refresh_tokens',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
@@ -57,14 +61,23 @@ export const pendingLogins = pgTable('pending_logins', {
 export const friendships = pgTable(
   'friendships',
   {
-    userLow: uuid('user_low').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    userHigh: uuid('user_high').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    requestedBy: uuid('requested_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userLow: uuid('user_low')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    userHigh: uuid('user_high')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     status: text('status', { enum: ['pending', 'accepted'] }).notNull(),
     createdAt: createdAt(),
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
   },
-  (t) => [primaryKey({ columns: [t.userLow, t.userHigh] }), index('friendships_high_idx').on(t.userHigh)],
+  (t) => [
+    primaryKey({ columns: [t.userLow, t.userHigh] }),
+    index('friendships_high_idx').on(t.userHigh),
+  ],
 );
 
 export const challenges = pgTable('challenges', {
@@ -75,12 +88,16 @@ export const challenges = pgTable('challenges', {
   customUnit: text('custom_unit'),
   aggregate: text('aggregate', { enum: ['sum', 'avg'] }).notNull(),
   lowerIsBetter: boolean('lower_is_better').notNull().default(false),
-  scoring: text('scoring', { enum: ['total', 'race_to_goal', 'daily_avg', 'best_day', 'streak'] }).notNull(),
+  scoring: text('scoring', {
+    enum: ['total', 'race_to_goal', 'daily_avg', 'best_day', 'streak'],
+  }).notNull(),
   goal: doublePrecision('goal'),
   startDate: date('start_date', { mode: 'string' }).notNull(),
   endDate: date('end_date', { mode: 'string' }).notNull(),
   timezone: text('timezone').notNull(),
-  createdBy: uuid('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   rematchOf: uuid('rematch_of'),
   leaderId: uuid('leader_id'),
   finalizedAt: timestamp('finalized_at', { withTimezone: true }),
@@ -90,20 +107,29 @@ export const challenges = pgTable('challenges', {
 export const challengeParticipants = pgTable(
   'challenge_participants',
   {
-    challengeId: uuid('challenge_id').notNull().references(() => challenges.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    challengeId: uuid('challenge_id')
+      .notNull()
+      .references(() => challenges.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     state: text('state', { enum: ['invited', 'joined', 'declined'] }).notNull(),
     invitedBy: uuid('invited_by'),
     finalRank: integer('final_rank'),
     finalScore: doublePrecision('final_score'),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.challengeId, t.userId] }), index('participants_user_idx').on(t.userId)],
+  (t) => [
+    primaryKey({ columns: [t.challengeId, t.userId] }),
+    index('participants_user_idx').on(t.userId),
+  ],
 );
 
 export const invites = pgTable('invites', {
   code: text('code').primaryKey(),
-  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ownerId: uuid('owner_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   kind: text('kind', { enum: ['friend', 'challenge'] }).notNull(),
   challengeId: uuid('challenge_id').references(() => challenges.id, { onDelete: 'cascade' }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -117,7 +143,9 @@ export const invites = pgTable('invites', {
 export const dailyMetrics = pgTable(
   'daily_metrics',
   {
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     date: date('date', { mode: 'string' }).notNull(),
     metric: text('metric').notNull(),
     value: doublePrecision('value').notNull(),
@@ -130,8 +158,12 @@ export const dailyMetrics = pgTable(
 export const rankSnapshots = pgTable(
   'rank_snapshots',
   {
-    challengeId: uuid('challenge_id').notNull().references(() => challenges.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    challengeId: uuid('challenge_id')
+      .notNull()
+      .references(() => challenges.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     date: date('date', { mode: 'string' }).notNull(),
     rank: integer('rank').notNull(),
   },
@@ -142,11 +174,19 @@ export const feedEvents = pgTable(
   'feed_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    actorId: uuid('actor_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     challengeId: uuid('challenge_id').references(() => challenges.id, { onDelete: 'cascade' }),
     kind: text('kind').notNull(),
-    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    payload: jsonb('payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: createdAt(),
   },
-  (t) => [index('feed_actor_idx').on(t.actorId, t.createdAt), index('feed_challenge_idx').on(t.challengeId, t.createdAt)],
+  (t) => [
+    index('feed_actor_idx').on(t.actorId, t.createdAt),
+    index('feed_challenge_idx').on(t.challengeId, t.createdAt),
+  ],
 );

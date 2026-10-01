@@ -13,9 +13,14 @@ const envSchema = z.object({
   /** Name of the API key Gauntlet creates in each user's SparkyFitness account. */
   SPARKY_KEY_NAME: z.string().default('Gauntlet'),
   LOG_LEVEL: z.string().default('info'),
+  /** Directory of the built PWA to serve alongside the API (the Docker image sets this). */
+  WEB_DIST: z.string().optional(),
 });
 
-export type Config = z.infer<typeof envSchema> & { allowedOrigins: string[]; encryptionKey: Buffer };
+export type Config = z.infer<typeof envSchema> & {
+  allowedOrigins: string[];
+  encryptionKey: Buffer;
+};
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = envSchema.safeParse(env);
@@ -25,10 +30,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   const cfg = parsed.data;
   const encryptionKey = Buffer.from(cfg.ENCRYPTION_KEY, 'base64');
-  if (encryptionKey.length !== 32) throw new Error('ENCRYPTION_KEY must be 32 bytes, base64 encoded');
+  if (encryptionKey.length !== 32)
+    throw new Error('ENCRYPTION_KEY must be 32 bytes, base64 encoded');
   const allowedOrigins = [
     new URL(cfg.PUBLIC_WEB_URL).origin,
-    ...cfg.EXTRA_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
+    ...cfg.EXTRA_ORIGINS.split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
   ];
   return { ...cfg, SPARKY_URL: cfg.SPARKY_URL.replace(/\/+$/, ''), allowedOrigins, encryptionKey };
 }

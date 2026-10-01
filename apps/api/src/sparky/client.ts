@@ -25,8 +25,7 @@ export interface SparkyUser {
 }
 
 export type SignInResult =
-  | { kind: 'ok'; token: string; user: SparkyUser }
-  | { kind: 'two_factor'; cookie: string };
+  { kind: 'ok'; token: string; user: SparkyUser } | { kind: 'two_factor'; cookie: string };
 
 export interface DailyHealthRow {
   entry_date: string;
@@ -118,7 +117,11 @@ export class SparkyClient {
 
   // ---------------------------------------------------------------- auth
 
-  async settings(): Promise<{ trusted_origin?: string; email?: { enabled?: boolean }; oidc?: { enabled?: boolean } }> {
+  async settings(): Promise<{
+    trusted_origin?: string;
+    email?: { enabled?: boolean };
+    oidc?: { enabled?: boolean };
+  }> {
     return this.request('GET', '/api/auth/settings');
   }
 
@@ -147,7 +150,11 @@ export class SparkyClient {
     return { kind: 'ok', token, user: toUser(user) };
   }
 
-  async verifyTwoFactor(cookie: string, code: string, method: 'totp' | 'otp'): Promise<{ token: string; user: SparkyUser }> {
+  async verifyTwoFactor(
+    cookie: string,
+    code: string,
+    method: 'totp' | 'otp',
+  ): Promise<{ token: string; user: SparkyUser }> {
     const res = await this.raw('POST', `/api/auth/two-factor/verify-${method}`, {
       body: { code },
       headers: { Origin: await this.origin(), Cookie: cookie },
@@ -161,26 +168,37 @@ export class SparkyClient {
   }
 
   async createApiKey(sessionToken: string, name: string): Promise<{ id: string; key: string }> {
-    const body = await this.request<{ apiKey?: { id: string; key: string } }>('POST', '/api/identity/user/generate-api-key', {
-      token: sessionToken,
-      body: { name, expiresIn: 60 * 60 * 24 * 365 },
-    });
-    if (!body.apiKey?.key) throw new SparkyError('SparkyFitness did not return an API key', 502, body);
+    const body = await this.request<{ apiKey?: { id: string; key: string } }>(
+      'POST',
+      '/api/identity/user/generate-api-key',
+      {
+        token: sessionToken,
+        body: { name, expiresIn: 60 * 60 * 24 * 365 },
+      },
+    );
+    if (!body.apiKey?.key)
+      throw new SparkyError('SparkyFitness did not return an API key', 502, body);
     return { id: body.apiKey.id, key: body.apiKey.key };
   }
 
   async deleteApiKey(token: string, keyId: string): Promise<void> {
-    await this.request('DELETE', `/api/identity/user/api-key/${encodeURIComponent(keyId)}`, { token });
+    await this.request('DELETE', `/api/identity/user/api-key/${encodeURIComponent(keyId)}`, {
+      token,
+    });
   }
 
   async signOut(sessionToken: string): Promise<void> {
-    await this.raw('POST', '/api/auth/sign-out', { token: sessionToken, headers: { Origin: await this.origin() }, body: {} }).catch(
-      () => undefined,
-    );
+    await this.raw('POST', '/api/auth/sign-out', {
+      token: sessionToken,
+      headers: { Origin: await this.origin() },
+      body: {},
+    }).catch(() => undefined);
   }
 
   async currentUser(token: string): Promise<SparkyUser> {
-    const body = await this.request<Record<string, unknown>>('GET', '/api/identity/user', { token });
+    const body = await this.request<Record<string, unknown>>('GET', '/api/identity/user', {
+      token,
+    });
     const id = (body.activeUserId ?? body.authenticatedUserId ?? body.id) as string | undefined;
     if (!id) throw new SparkyError('Unexpected user response', 502, body);
     return {
@@ -202,18 +220,31 @@ export class SparkyClient {
   }
 
   async checkIns(token: string, start: string, end: string): Promise<CheckInRow[]> {
-    return asArray(await this.request('GET', `/api/measurements/check-in-measurements-range/${start}/${end}`, { token }));
+    return asArray(
+      await this.request('GET', `/api/measurements/check-in-measurements-range/${start}/${end}`, {
+        token,
+      }),
+    );
   }
 
   async customCategories(token: string): Promise<CustomCategory[]> {
     return asArray(await this.request('GET', '/api/measurements/custom-categories', { token }));
   }
 
-  async customMeasurements(token: string, categoryId: string, start: string, end: string): Promise<CustomMeasurementRow[]> {
+  async customMeasurements(
+    token: string,
+    categoryId: string,
+    start: string,
+    end: string,
+  ): Promise<CustomMeasurementRow[]> {
     return asArray(
-      await this.request('GET', `/api/measurements/custom-measurements-range/${encodeURIComponent(categoryId)}/${start}/${end}`, {
-        token,
-      }),
+      await this.request(
+        'GET',
+        `/api/measurements/custom-measurements-range/${encodeURIComponent(categoryId)}/${start}/${end}`,
+        {
+          token,
+        },
+      ),
     );
   }
 
@@ -238,9 +269,13 @@ export class SparkyClient {
   }
 
   async sleep(token: string, start: string, end: string): Promise<SleepRow[]> {
-    const body = await this.request<SleepRow[] | { data?: SleepRow[] }>('GET', `/api/sleep?startDate=${start}&endDate=${end}`, {
-      token,
-    });
+    const body = await this.request<SleepRow[] | { data?: SleepRow[] }>(
+      'GET',
+      `/api/sleep?startDate=${start}&endDate=${end}`,
+      {
+        token,
+      },
+    );
     return Array.isArray(body) ? body : (body.data ?? []);
   }
 
@@ -250,12 +285,19 @@ export class SparkyClient {
 
   // ---------------------------------------------------------------- writes
 
-  async ingestHealthData(token: string, records: unknown[]): Promise<{ processed: number; errors: unknown[] }> {
-    const body = await this.request<{ processed?: unknown[]; errors?: unknown[] }>('POST', '/api/health-data', {
-      token,
-      body: records,
-      headers: { 'X-Workout-Model-Version': '3' },
-    });
+  async ingestHealthData(
+    token: string,
+    records: unknown[],
+  ): Promise<{ processed: number; errors: unknown[] }> {
+    const body = await this.request<{ processed?: unknown[]; errors?: unknown[] }>(
+      'POST',
+      '/api/health-data',
+      {
+        token,
+        body: records,
+        headers: { 'X-Workout-Model-Version': '3' },
+      },
+    );
     return { processed: body.processed?.length ?? 0, errors: body.errors ?? [] };
   }
 
@@ -277,7 +319,11 @@ export class SparkyClient {
       }
       const body = await readJson(res);
       if (!res.ok) {
-        throw new SparkyError(errorMessage(body) ?? `${method} ${path} failed with ${res.status}`, res.status, body);
+        throw new SparkyError(
+          errorMessage(body) ?? `${method} ${path} failed with ${res.status}`,
+          res.status,
+          body,
+        );
       }
       return body as T;
     }
@@ -328,7 +374,11 @@ function errorMessage(body: unknown): string | null {
     const b = body as Record<string, unknown>;
     const msg = b.error ?? b.message;
     if (typeof msg === 'string') return msg;
-    if (msg && typeof msg === 'object' && typeof (msg as { message?: unknown }).message === 'string') {
+    if (
+      msg &&
+      typeof msg === 'object' &&
+      typeof (msg as { message?: unknown }).message === 'string'
+    ) {
       return (msg as { message: string }).message;
     }
   }
@@ -345,7 +395,10 @@ function asArray<T>(body: unknown): T[] {
 
 /** Collapse Set-Cookie headers into a Cookie header value (name=value pairs only). */
 function cookieHeader(res: Response): string {
-  const all = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [res.headers.get('set-cookie') ?? ''];
+  const all =
+    typeof res.headers.getSetCookie === 'function'
+      ? res.headers.getSetCookie()
+      : [res.headers.get('set-cookie') ?? ''];
   return all
     .map((c) => c.split(';')[0]?.trim())
     .filter((c): c is string => !!c)

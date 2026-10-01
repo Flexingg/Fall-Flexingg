@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres@localhost:5432/gauntlet_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create databases
+        run: |
+          psql -h localhost -U postgres -c "create database gauntlet_test"
+          psql -h localhost -U postgres -c "create database gauntlet_e2e"
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Build PWA
+        run: pnpm --filter @gauntlet/web build
+      - name: End-to-end (demo API + built PWA)
+        run: |
+          pnpm --filter @gauntlet/web exec playwright install --with-deps chromium
+          DATABASE_URL=postgres://postgres@localhost:5432/gauntlet_e2e PORT=8080 pnpm --filter @gauntlet/api demo &
+          for i in $(seq 1 60); do curl -sf localhost:8080/api/health && break; sleep 1; done
+          mkdir -p screens
+          SCREENSHOT_DIR=$PWD/screens pnpm --filter @gauntlet/web e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens
+          path: screens
+          if-no-files-found: ignore
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - name: Build web assets for Android
+        run: pnpm --filter @gauntlet/web cap:sync
+      - name: Decode signing key
+        if: env.HAS_KEYSTORE == 'true'
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/gauntlet.jks"
+      - name: Gradle build
+        working-directory: apps/web/android
+        env:
+          GAUNTLET_VERSION_CODE: ${{ github.run_number }}
+          GAUNTLET_VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('0.1.{0}', github.run_number) }}
+          GAUNTLET_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GAUNTLET_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          GAUNTLET_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ "$HAS_KEYSTORE" = "true" ]; then
+            export GAUNTLET_KEYSTORE_PATH="$RUNNER_TEMP/gauntlet.jks"
+            ./gradlew assembleDebug assembleRelease --no-daemon
+          else
+            ./gradlew assembleDebug --no-daemon
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gauntlet-android
+          path: apps/web/android/app/build/outputs/apk/**/*.apk
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: gauntlet:ci

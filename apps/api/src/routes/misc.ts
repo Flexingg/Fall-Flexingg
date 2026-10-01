@@ -24,14 +24,26 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 /** Record types the Android app may forward from Health Connect. */
-const INGEST_TYPES = new Set(['step', 'steps', 'distance', 'Active Calories', 'active_calories', 'resting_heart_rate', 'weight', 'SleepSession', 'ExerciseSession']);
+const INGEST_TYPES = new Set([
+  'step',
+  'steps',
+  'distance',
+  'Active Calories',
+  'active_calories',
+  'resting_heart_rate',
+  'weight',
+  'SleepSession',
+  'ExerciseSession',
+]);
 
 export function miscRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
 
   app.get('/api/health', async () => ({ ok: true }));
 
-  app.get<{ Querystring: { limit?: string } }>('/api/feed', auth, async (req) => feedFor(ctx, req.userId, Number(req.query.limit) || 30));
+  app.get<{ Querystring: { limit?: string } }>('/api/feed', auth, async (req) =>
+    feedFor(ctx, req.userId, Number(req.query.limit) || 30),
+  );
 
   app.get('/api/sources', auth, async (req): Promise<SourcesResponse> => {
     const user = await getUser(ctx, req.userId);
@@ -41,7 +53,9 @@ export function miscRoutes(app: FastifyInstance, ctx: AppContext) {
       integrationsUrl: `${ctx.cfg.SPARKY_URL}/settings?section=integrations`,
       providers: sources.map((s) => ({
         source: s.source,
-        label: SOURCE_LABELS[s.source.toLowerCase()] ?? s.source.charAt(0).toUpperCase() + s.source.slice(1),
+        label:
+          SOURCE_LABELS[s.source.toLowerCase()] ??
+          s.source.charAt(0).toUpperCase() + s.source.slice(1),
         records: s.totalCount,
       })),
     };

@@ -1,6 +1,10 @@
 import { formatMetricValue, type ChallengeSummary } from '@gauntlet/shared';
 
-export function fmt(value: number | null | undefined, c: Pick<ChallengeSummary, 'decimals' | 'unit'>, withUnit = true) {
+export function fmt(
+  value: number | null | undefined,
+  c: Pick<ChallengeSummary, 'decimals' | 'unit'>,
+  withUnit = true,
+) {
   return formatMetricValue(value, c, withUnit);
 }
 
@@ -34,7 +38,9 @@ export function dateRange(start: string, end: string): string {
   return start === end ? a : `${a} – ${b}`;
 }
 
-export function daysLeftText(c: Pick<ChallengeSummary, 'status' | 'daysLeft' | 'startDate'>): string {
+export function daysLeftText(
+  c: Pick<ChallengeSummary, 'status' | 'daysLeft' | 'startDate'>,
+): string {
   if (c.status === 'completed') return 'Final';
   if (c.status === 'upcoming') return `Starts ${dateRange(c.startDate, c.startDate)}`;
   return c.daysLeft === 1 ? 'Last day' : `${c.daysLeft} days left`;

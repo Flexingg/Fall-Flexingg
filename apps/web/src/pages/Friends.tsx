@@ -30,7 +30,11 @@ export function FriendsPage() {
   async function share() {
     try {
       const inv = await getInvite();
-      const r = await shareLink('Join me on Gauntlet', `${user?.displayName} wants to compete with you on Gauntlet.`, inv.url);
+      const r = await shareLink(
+        'Join me on Gauntlet',
+        `${user?.displayName} wants to compete with you on Gauntlet.`,
+        inv.url,
+      );
       if (r === 'copied') toast('Invite link copied');
     } catch (err) {
       setError(err);
@@ -70,7 +74,13 @@ export function FriendsPage() {
       <Header
         title="Friends"
         action={
-          <button className="av lead" style={{ width: 36, height: 36 }} onClick={() => setAdding((a) => !a)} aria-label="Add friend" aria-expanded={adding}>
+          <button
+            className="av lead"
+            style={{ width: 36, height: 36 }}
+            onClick={() => setAdding((a) => !a)}
+            aria-label="Add friend"
+            aria-expanded={adding}
+          >
             <Icon name={adding ? 'close' : 'plus'} size={20} strokeWidth={2.5} />
           </button>
         }
@@ -78,8 +88,18 @@ export function FriendsPage() {
       {adding && (
         <form onSubmit={add} className="stack" style={{ marginBottom: 14 }}>
           <label className="input">
-            <input type="email" placeholder="Friend's SparkyFitness email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus aria-label="Friend's email" />
-            <button className="btn sm" style={{ width: 'auto' }}>Add</button>
+            <input
+              type="email"
+              placeholder="Friend's SparkyFitness email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoFocus
+              aria-label="Friend's email"
+            />
+            <button className="btn sm" style={{ width: 'auto' }}>
+              Add
+            </button>
           </label>
         </form>
       )}
@@ -96,27 +116,34 @@ export function FriendsPage() {
       <ErrorBox error={q.error ?? error} />
       {q.isPending && <Skeleton height={300} />}
 
-      {q.data && tab === 'crew' && (
-        q.data.friends.length ? (
+      {q.data &&
+        tab === 'crew' &&
+        (q.data.friends.length ? (
           <div className="list">
             {q.data.friends.map((f) => (
               <div key={f.id} className="item">
                 <Avatar user={f} size={42} />
                 <div className="grow">
                   <div className="t">{f.displayName}</div>
-                  <small className="ellipsis">{f.status ?? `Synced ${timeAgo(f.lastSyncedAt)}`}</small>
+                  <small className="ellipsis">
+                    {f.status ?? `Synced ${timeAgo(f.lastSyncedAt)}`}
+                  </small>
                 </div>
                 {f.sharedRank && <span className="pill">{ordinal(f.sharedRank)}</span>}
-                <i className={`dot${f.online ? '' : ' off'}`} aria-label={f.online ? 'Recently active' : 'Inactive'} />
+                <i
+                  className={`dot${f.online ? '' : ' off'}`}
+                  aria-label={f.online ? 'Recently active' : 'Inactive'}
+                />
               </div>
             ))}
           </div>
         ) : (
           <div className="list">
-            <Empty title="No crew yet">Share your invite link. Anyone who joins with it becomes your friend.</Empty>
+            <Empty title="No crew yet">
+              Share your invite link. Anyone who joins with it becomes your friend.
+            </Empty>
           </div>
-        )
-      )}
+        ))}
 
       {q.data && tab === 'requests' && (
         <div className="list">
@@ -124,26 +151,46 @@ export function FriendsPage() {
           {incoming.map((r) => (
             <div key={r.id} className="item">
               <Avatar user={r.user} size={42} />
-              <div className="grow"><div className="t">{r.user.displayName}</div><small>Wants to be friends</small></div>
-              <button className="btn sm" onClick={() => respond(r.user.id, true)}>Accept</button>
-              <button className="btn sm secondary" onClick={() => respond(r.user.id, false)} aria-label="Decline"><Icon name="close" size={14} /></button>
+              <div className="grow">
+                <div className="t">{r.user.displayName}</div>
+                <small>Wants to be friends</small>
+              </div>
+              <button className="btn sm" onClick={() => respond(r.user.id, true)}>
+                Accept
+              </button>
+              <button
+                className="btn sm secondary"
+                onClick={() => respond(r.user.id, false)}
+                aria-label="Decline"
+              >
+                <Icon name="close" size={14} />
+              </button>
             </div>
           ))}
           {outgoing.map((r) => (
             <div key={r.id} className="item">
               <Avatar user={r.user} size={42} />
-              <div className="grow"><div className="t">{r.user.displayName}</div><small>Request sent</small></div>
-              <button className="btn sm secondary" onClick={() => respond(r.user.id, false)}>Cancel</button>
+              <div className="grow">
+                <div className="t">{r.user.displayName}</div>
+                <small>Request sent</small>
+              </div>
+              <button className="btn sm secondary" onClick={() => respond(r.user.id, false)}>
+                Cancel
+              </button>
             </div>
           ))}
         </div>
       )}
 
       <button className="hero" style={{ marginTop: 14 }} onClick={share}>
-        <div className="badge"><Icon name="share" /></div>
+        <div className="badge">
+          <Icon name="share" />
+        </div>
         <div className="grow">
           <small>Invite link</small>
-          <b className="ellipsis">{invite ? invite.url.replace(/^https?:\/\//, '') : 'Share your invite'}</b>
+          <b className="ellipsis">
+            {invite ? invite.url.replace(/^https?:\/\//, '') : 'Share your invite'}
+          </b>
         </div>
       </button>
     </Screen>

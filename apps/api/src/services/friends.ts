@@ -10,7 +10,12 @@ export async function friendIds(ctx: AppContext, userId: string): Promise<string
   const rows = await ctx.db
     .select()
     .from(friendships)
-    .where(and(eq(friendships.status, 'accepted'), or(eq(friendships.userLow, userId), eq(friendships.userHigh, userId))));
+    .where(
+      and(
+        eq(friendships.status, 'accepted'),
+        or(eq(friendships.userLow, userId), eq(friendships.userHigh, userId)),
+      ),
+    );
   return rows.map((r) => (r.userLow === userId ? r.userHigh : r.userLow));
 }
 
@@ -19,7 +24,13 @@ export async function areFriends(ctx: AppContext, a: string, b: string): Promise
   const [row] = await ctx.db
     .select()
     .from(friendships)
-    .where(and(eq(friendships.userLow, p.userLow), eq(friendships.userHigh, p.userHigh), eq(friendships.status, 'accepted')));
+    .where(
+      and(
+        eq(friendships.userLow, p.userLow),
+        eq(friendships.userHigh, p.userHigh),
+        eq(friendships.status, 'accepted'),
+      ),
+    );
   return !!row;
 }
 

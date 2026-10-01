@@ -4,9 +4,23 @@ import { Link, NavLink, useNavigate } from 'react-router';
 import { ApiError } from '../lib/api';
 import { Icon } from './Icon';
 
-export function Avatar({ user, size = 40, me, lead }: { user: Pick<PublicUser, 'initials'>; size?: number; me?: boolean; lead?: boolean }) {
+export function Avatar({
+  user,
+  size = 40,
+  me,
+  lead,
+}: {
+  user: Pick<PublicUser, 'initials'>;
+  size?: number;
+  me?: boolean;
+  lead?: boolean;
+}) {
   return (
-    <span className={`av${me ? ' me' : ''}${lead ? ' lead' : ''}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.32) }} aria-hidden="true">
+    <span
+      className={`av${me ? ' me' : ''}${lead ? ' lead' : ''}`}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.32) }}
+      aria-hidden="true"
+    >
       {user.initials}
     </span>
   );
@@ -22,7 +36,12 @@ export function TabBar() {
   return (
     <nav className="tabbar" aria-label="Main">
       {tabs.map((t) => (
-        <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink
+          key={t.to}
+          to={t.to}
+          end={t.end}
+          className={({ isActive }) => (isActive ? 'active' : '')}
+        >
           <Icon name={t.icon} />
           {t.label}
         </NavLink>
@@ -40,7 +59,15 @@ export function Screen({ children, tabs = true }: { children: ReactNode; tabs?: 
   );
 }
 
-export function Header({ title, back, action }: { title: ReactNode; back?: string | true; action?: ReactNode }) {
+export function Header({
+  title,
+  back,
+  action,
+}: {
+  title: ReactNode;
+  back?: string | true;
+  action?: ReactNode;
+}) {
   const navigate = useNavigate();
   return (
     <>
@@ -57,11 +84,26 @@ export function Header({ title, back, action }: { title: ReactNode; back?: strin
   );
 }
 
-export function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
+export function Seg<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  label: string;
+}) {
   return (
     <div className="seg" role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={o.value === value}
+          onClick={() => onChange(o.value)}
+        >
           {o.label}
         </button>
       ))}
@@ -69,13 +111,34 @@ export function Seg<T extends string>({ value, options, onChange, label }: { val
   );
 }
 
-export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
-  return <button type="button" role="switch" className="toggle" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)} />;
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      className="toggle"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    />
+  );
 }
 
 export function ErrorBox({ error }: { error: unknown }) {
   if (!error) return null;
-  const msg = error instanceof ApiError || error instanceof Error ? error.message : 'Something went wrong';
+  const msg =
+    error instanceof ApiError || error instanceof Error ? error.message : 'Something went wrong';
   const reconnect = error instanceof ApiError && error.code === 'sparky_key_invalid';
   return (
     <div className="error" role="alert">

@@ -32,23 +32,72 @@ export interface MetricDef {
 }
 
 export type MetricIcon =
-  | 'steps'
-  | 'distance'
-  | 'timer'
-  | 'flame'
-  | 'dumbbell'
-  | 'moon'
-  | 'pulse'
-  | 'plus';
+  'steps' | 'distance' | 'timer' | 'flame' | 'dumbbell' | 'moon' | 'pulse' | 'plus';
 
 export const METRICS: Record<BuiltinMetricKey, MetricDef> = {
-  steps: { key: 'steps', label: 'Steps', unit: '', aggregate: 'sum', lowerIsBetter: false, decimals: 0, icon: 'steps' },
-  distance: { key: 'distance', label: 'Distance', unit: 'km', aggregate: 'sum', lowerIsBetter: false, decimals: 1, icon: 'distance' },
-  active_minutes: { key: 'active_minutes', label: 'Active min', unit: 'min', aggregate: 'sum', lowerIsBetter: false, decimals: 0, icon: 'timer' },
-  active_calories: { key: 'active_calories', label: 'Calories', unit: 'kcal', aggregate: 'sum', lowerIsBetter: false, decimals: 0, icon: 'flame' },
-  workouts: { key: 'workouts', label: 'Workouts', unit: '', aggregate: 'sum', lowerIsBetter: false, decimals: 0, icon: 'dumbbell' },
-  sleep: { key: 'sleep', label: 'Sleep', unit: 'h', aggregate: 'avg', lowerIsBetter: false, decimals: 1, icon: 'moon' },
-  resting_hr: { key: 'resting_hr', label: 'Resting HR', unit: 'bpm', aggregate: 'avg', lowerIsBetter: true, decimals: 0, icon: 'pulse' },
+  steps: {
+    key: 'steps',
+    label: 'Steps',
+    unit: '',
+    aggregate: 'sum',
+    lowerIsBetter: false,
+    decimals: 0,
+    icon: 'steps',
+  },
+  distance: {
+    key: 'distance',
+    label: 'Distance',
+    unit: 'km',
+    aggregate: 'sum',
+    lowerIsBetter: false,
+    decimals: 1,
+    icon: 'distance',
+  },
+  active_minutes: {
+    key: 'active_minutes',
+    label: 'Active min',
+    unit: 'min',
+    aggregate: 'sum',
+    lowerIsBetter: false,
+    decimals: 0,
+    icon: 'timer',
+  },
+  active_calories: {
+    key: 'active_calories',
+    label: 'Calories',
+    unit: 'kcal',
+    aggregate: 'sum',
+    lowerIsBetter: false,
+    decimals: 0,
+    icon: 'flame',
+  },
+  workouts: {
+    key: 'workouts',
+    label: 'Workouts',
+    unit: '',
+    aggregate: 'sum',
+    lowerIsBetter: false,
+    decimals: 0,
+    icon: 'dumbbell',
+  },
+  sleep: {
+    key: 'sleep',
+    label: 'Sleep',
+    unit: 'h',
+    aggregate: 'avg',
+    lowerIsBetter: false,
+    decimals: 1,
+    icon: 'moon',
+  },
+  resting_hr: {
+    key: 'resting_hr',
+    label: 'Resting HR',
+    unit: 'bpm',
+    aggregate: 'avg',
+    lowerIsBetter: true,
+    decimals: 0,
+    icon: 'pulse',
+  },
 };
 
 export function isBuiltinMetric(key: string): key is BuiltinMetricKey {
@@ -84,7 +133,11 @@ export function metricDef(key: MetricKey, custom?: CustomMetricOptions): MetricD
   };
 }
 
-export function formatMetricValue(value: number | null | undefined, def: Pick<MetricDef, 'decimals' | 'unit'>, withUnit = true): string {
+export function formatMetricValue(
+  value: number | null | undefined,
+  def: Pick<MetricDef, 'decimals' | 'unit'>,
+  withUnit = true,
+): string {
   if (value == null || !Number.isFinite(value)) return '–';
   const text = value.toLocaleString('en-US', {
     minimumFractionDigits: def.decimals,

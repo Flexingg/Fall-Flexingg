@@ -9,12 +9,20 @@ import { post } from './api';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
 
-const READ: HealthDataType[] = ['steps', 'distance', 'calories', 'restingHeartRate', 'sleep', 'workouts'];
+const READ: HealthDataType[] = [
+  'steps',
+  'distance',
+  'calories',
+  'restingHeartRate',
+  'sleep',
+  'workouts',
+];
 const LAST_SYNC_KEY = 'gauntlet.hc.lastSync';
 const CHUNK = 500;
 
 export async function healthAvailable(): Promise<{ available: boolean; reason?: string }> {
-  if (!isNative) return { available: false, reason: 'Health Connect is only available in the Android app.' };
+  if (!isNative)
+    return { available: false, reason: 'Health Connect is only available in the Android app.' };
   try {
     return await Health.isAvailable();
   } catch (err) {
@@ -23,7 +31,11 @@ export async function healthAvailable(): Promise<{ available: boolean; reason?: 
 }
 
 export async function requestHealthAccess(): Promise<boolean> {
-  const status = await Health.requestAuthorization({ read: READ, write: [], requestHistoryAccess: true });
+  const status = await Health.requestAuthorization({
+    read: READ,
+    write: [],
+    requestHistoryAccess: true,
+  });
   return status.readAuthorized.includes('steps');
 }
 
@@ -48,12 +60,28 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
   const records: HcRecord[] = [];
   const source = 'Health Connect';
 
-  const daily = async (dataType: HealthDataType, aggregation: 'sum' | 'average', type: string, unit: string) => {
+  const daily = async (
+    dataType: HealthDataType,
+    aggregation: 'sum' | 'average',
+    type: string,
+    unit: string,
+  ) => {
     try {
-      const { samples } = await Health.queryAggregated({ ...range, dataType, bucket: 'day', aggregation });
+      const { samples } = await Health.queryAggregated({
+        ...range,
+        dataType,
+        bucket: 'day',
+        aggregation,
+      });
       for (const s of samples) {
         if (!Number.isFinite(s.value) || s.value <= 0) continue;
-        records.push({ type, value: Math.round(s.value * 100) / 100, date: day(s.startDate), unit, source });
+        records.push({
+          type,
+          value: Math.round(s.value * 100) / 100,
+          date: day(s.startDate),
+          unit,
+          source,
+        });
       }
     } catch {
       /* permission not granted for this type */
@@ -69,7 +97,10 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
     for (const s of samples) {
       const secs = (Date.parse(s.endDate) - Date.parse(s.startDate)) / 1000;
       if (!(secs > 0)) continue;
-      const stage = (name: string) => (s.stages ?? []).filter((x) => x.stage === name).reduce((a, x) => a + x.durationMinutes * 60, 0);
+      const stage = (name: string) =>
+        (s.stages ?? [])
+          .filter((x) => x.stage === name)
+          .reduce((a, x) => a + x.durationMinutes * 60, 0);
       const awake = stage('awake') + stage('inBed');
       records.push({
         type: 'SleepSession',

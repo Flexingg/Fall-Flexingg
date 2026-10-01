@@ -42,7 +42,13 @@ describe('mergeDaily', () => {
         },
       },
       exerciseDays: [
-        { startDate: '2026-10-03', distanceMeters: 10200, durationMinutes: 55, caloriesBurned: 640, workoutCount: 1 },
+        {
+          startDate: '2026-10-03',
+          distanceMeters: 10200,
+          durationMinutes: 55,
+          caloriesBurned: 640,
+          workoutCount: 1,
+        },
       ],
     });
     expect(pick(rows, '2026-10-01', 'distance')!.value).toBe(6.2);

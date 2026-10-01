@@ -37,8 +37,12 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       .set({
         ...(body.displayName ? { displayName: body.displayName } : {}),
         ...(body.timezone ? { timezone: body.timezone } : {}),
-        ...(body.settings?.shareWorkoutDetails != null ? { shareWorkoutDetails: body.settings.shareWorkoutDetails } : {}),
-        ...(body.settings?.healthConnectSync != null ? { healthConnectSync: body.settings.healthConnectSync } : {}),
+        ...(body.settings?.shareWorkoutDetails != null
+          ? { shareWorkoutDetails: body.settings.shareWorkoutDetails }
+          : {}),
+        ...(body.settings?.healthConnectSync != null
+          ? { healthConnectSync: body.settings.healthConnectSync }
+          : {}),
       })
       .where(eq(users.id, req.userId))
       .returning();
@@ -46,9 +50,13 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** Pull fresh data from SparkyFitness now (pull-to-refresh). */
-  app.post('/api/me/sync', { ...auth, config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
-    return syncUser(ctx, req.userId);
-  });
+  app.post(
+    '/api/me/sync',
+    { ...auth, config: { rateLimit: { max: 6, timeWindow: '1 minute' } } },
+    async (req) => {
+      return syncUser(ctx, req.userId);
+    },
+  );
 
   app.get('/api/me/today', auth, async (req): Promise<TodayResponse> => {
     const user = await getUser(ctx, req.userId);
@@ -58,7 +66,10 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       .from(dailyMetrics)
       .where(and(eq(dailyMetrics.userId, user.id), eq(dailyMetrics.date, date)));
     const val = (m: string) => rows.find((r) => r.metric === m)?.value ?? null;
-    const featured = (await listForUser(ctx, user.id)).find((c) => c.status === 'active' && c.myState === 'joined') ?? null;
+    const featured =
+      (await listForUser(ctx, user.id)).find(
+        (c) => c.status === 'active' && c.myState === 'joined',
+      ) ?? null;
     return {
       date,
       lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
@@ -94,7 +105,14 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     const rows = await ctx.db
       .select({ date: dailyMetrics.date, value: dailyMetrics.value })
       .from(dailyMetrics)
-      .where(and(eq(dailyMetrics.userId, user.id), eq(dailyMetrics.metric, q.metric), gte(dailyMetrics.date, prevStart), lte(dailyMetrics.date, end)));
+      .where(
+        and(
+          eq(dailyMetrics.userId, user.id),
+          eq(dailyMetrics.metric, q.metric),
+          gte(dailyMetrics.date, prevStart),
+          lte(dailyMetrics.date, end),
+        ),
+      );
     const byDate = new Map(rows.map((r) => [r.date, r.value]));
     const avg = q.metric === 'sleep' || q.metric === 'resting_hr';
     const agg = (dates: string[]) => {
@@ -117,7 +135,11 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
 
     // Rank history from the most recent challenge with snapshots.
     const snaps = await ctx.db
-      .select({ challengeId: rankSnapshots.challengeId, date: rankSnapshots.date, rank: rankSnapshots.rank })
+      .select({
+        challengeId: rankSnapshots.challengeId,
+        date: rankSnapshots.date,
+        rank: rankSnapshots.rank,
+      })
       .from(rankSnapshots)
       .where(eq(rankSnapshots.userId, user.id))
       .orderBy(desc(rankSnapshots.date))
@@ -126,7 +148,10 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     const latest = snaps[0];
     if (latest) {
       const list = (await listForUser(ctx, user.id)).find((c) => c.id === latest.challengeId);
-      const points = snaps.filter((s) => s.challengeId === latest.challengeId).map((s) => ({ date: s.date, rank: s.rank })).reverse();
+      const points = snaps
+        .filter((s) => s.challengeId === latest.challengeId)
+        .map((s) => ({ date: s.date, rank: s.rank }))
+        .reverse();
       rankHistory = { challengeId: latest.challengeId, name: list?.name ?? 'Challenge', points };
     }
 
@@ -149,7 +174,11 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     return cats
       .filter((c) => (c.data_type ?? 'numeric') === 'numeric' && !builtin.has(c.name.toLowerCase()))
       .filter((c) => isMetricKey(`custom:${c.name.toLowerCase()}`))
-      .map((c) => ({ categoryId: c.id, label: c.display_name || c.name, unit: c.measurement_type && c.measurement_type !== 'N/A' ? c.measurement_type : null }));
+      .map((c) => ({
+        categoryId: c.id,
+        label: c.display_name || c.name,
+        unit: c.measurement_type && c.measurement_type !== 'N/A' ? c.measurement_type : null,
+      }));
   });
 
   /** Delete the Gauntlet account and the API key it holds. SparkyFitness data is untouched. */
@@ -157,7 +186,9 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     const user = await getUser(ctx, req.userId);
     if (user.sparkyKeyId && user.sparkyKeyEnc && user.keyStatus === 'active') {
       // A key can delete itself, which revokes Gauntlet's access.
-      await ctx.sparky.deleteApiKey(sparkyToken(ctx, user), user.sparkyKeyId).catch(() => undefined);
+      await ctx.sparky
+        .deleteApiKey(sparkyToken(ctx, user), user.sparkyKeyId)
+        .catch(() => undefined);
     }
     await revokeAllRefreshTokens(ctx, user.id);
     await ctx.db.delete(users).where(eq(users.id, user.id));
@@ -165,7 +196,10 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 }
 
-async function personalBests(ctx: AppContext, userId: string): Promise<{ label: string; value: string }[]> {
+async function personalBests(
+  ctx: AppContext,
+  userId: string,
+): Promise<{ label: string; value: string }[]> {
   const best = async (metric: string) => {
     const [r] = await ctx.db
       .select({ v: max(dailyMetrics.value) })
@@ -179,7 +213,13 @@ async function personalBests(ctx: AppContext, userId: string): Promise<{ label: 
   const days = await ctx.db
     .select({ date: dailyMetrics.date })
     .from(dailyMetrics)
-    .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.metric, 'steps'), gte(dailyMetrics.value, 10_000)))
+    .where(
+      and(
+        eq(dailyMetrics.userId, userId),
+        eq(dailyMetrics.metric, 'steps'),
+        gte(dailyMetrics.value, 10_000),
+      ),
+    )
     .orderBy(asc(dailyMetrics.date));
   let streak = 0;
   let run = 0;
@@ -196,7 +236,10 @@ async function personalBests(ctx: AppContext, userId: string): Promise<{ label: 
 
   return [
     { label: 'Best distance day', value: distance != null ? `${distance.toFixed(1)} km` : '–' },
-    { label: 'Best step day', value: steps != null ? Math.round(steps).toLocaleString('en-US') : '–' },
+    {
+      label: 'Best step day',
+      value: steps != null ? Math.round(steps).toLocaleString('en-US') : '–',
+    },
     { label: '10k-step streak', value: `${streak} ${streak === 1 ? 'day' : 'days'}` },
     { label: 'Challenges won', value: `${wins?.n ?? 0} ${wins?.n === 1 ? 'win' : 'wins'}` },
   ];

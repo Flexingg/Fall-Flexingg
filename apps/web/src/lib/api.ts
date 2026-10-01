@@ -46,7 +46,8 @@ async function raw(path: string, init: RequestInit & { json?: unknown } = {}): P
 async function parse<T>(res: Response): Promise<T> {
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status, body?.code);
+  if (!res.ok)
+    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status, body?.code);
   return body as T;
 }
 
@@ -56,7 +57,10 @@ export function refreshSession(): Promise<boolean> {
     try {
       const stored = isNative ? await storage.get(REFRESH_KEY) : null;
       if (isNative && !stored) return false;
-      const res = await raw('/api/auth/refresh', { method: 'POST', json: stored ? { refreshToken: stored } : {} });
+      const res = await raw('/api/auth/refresh', {
+        method: 'POST',
+        json: stored ? { refreshToken: stored } : {},
+      });
       if (!res.ok) {
         if (res.status === 401) await clearSession();
         return false;
@@ -82,7 +86,10 @@ async function clearSession() {
   await storage.set(REFRESH_KEY, null);
 }
 
-export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  init: RequestInit & { json?: unknown } = {},
+): Promise<T> {
   if (!accessToken) await refreshSession();
   let res = await raw(path, init);
   if (res.status === 401) {
@@ -97,7 +104,10 @@ export const post = <T>(path: string, json: unknown = {}) => api<T>(path, { meth
 export const patch = <T>(path: string, json: unknown) => api<T>(path, { method: 'PATCH', json });
 export const del = <T>(path: string) => api<T>(path, { method: 'DELETE' });
 
-export async function login(path: '/api/auth/login' | '/api/auth/login/2fa', body: unknown): Promise<LoginResponse> {
+export async function login(
+  path: '/api/auth/login' | '/api/auth/login/2fa',
+  body: unknown,
+): Promise<LoginResponse> {
   const res = await raw(path, { method: 'POST', json: body });
   const data = await parse<LoginResponse>(res);
   if (data.status === 'ok') await adoptTokens(data);
@@ -106,7 +116,10 @@ export async function login(path: '/api/auth/login' | '/api/auth/login/2fa', bod
 
 export async function logout() {
   const stored = isNative ? await storage.get(REFRESH_KEY) : null;
-  await raw('/api/auth/logout', { method: 'POST', json: stored ? { refreshToken: stored } : {} }).catch(() => undefined);
+  await raw('/api/auth/logout', {
+    method: 'POST',
+    json: stored ? { refreshToken: stored } : {},
+  }).catch(() => undefined);
   await clearSession();
 }
 

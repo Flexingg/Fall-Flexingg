@@ -12,34 +12,52 @@ const LOCK_ID = 7_340_112;
  * challenges that have ended. Users not competing are synced when they open
  * the app instead.
  */
-export async function runSyncCycle(ctx: AppContext): Promise<{ synced: number; finalized: number }> {
-  const [lock] = await ctx.db.execute<{ ok: boolean }>(sql`select pg_try_advisory_lock(${LOCK_ID}) as ok`);
-  if (!lock?.ok) return { synced: 0, finalized: 0 };
-  try {
-    const open = await ctx.db.select().from(challenges).where(isNull(challenges.finalizedAt));
-    const ids = open.map((c) => c.id);
-    const competitors = ids.length
-      ? await ctx.db
-          .selectDistinct({ userId: challengeParticipants.userId })
-          .from(challengeParticipants)
-          .innerJoin(users, eq(users.id, challengeParticipants.userId))
-          .where(and(inArray(challengeParticipants.challengeId, ids), eq(challengeParticipants.state, 'joined'), eq(users.keyStatus, 'active')))
-      : [];
-    let synced = 0;
-    // Gentle on SparkyFitness: a few users at a time.
-    for (let i = 0; i < competitors.length; i += 4) {
-      const batch = competitors.slice(i, i + 4);
-      const results = await Promise.all(batch.map((c) => syncUser(ctx, c.userId).catch((err) => ({ ok: false, err }))));
-      synced += results.filter((r) => r.ok).length;
-    }
-    let finalized = 0;
-    for (const ch of open) if (await finalizeChallenge(ctx, ch)) finalized++;
-    await ctx.db.execute(sql`delete from refresh_tokens where expires_at < now() - interval '7 days'`);
-    await ctx.db.execute(sql`delete from pending_logins where expires_at < now()`);
-    return { synced, finalized };
-  } finally {
-    await ctx.db.execute(sql`select pg_advisory_unlock(${LOCK_ID})`);
+export async function runSyncCycle(
+  ctx: AppContext,
+): Promise<{ synced: number; finalized: number }> {
+  // The lock lives in a transaction held open for the whole cycle, so it is
+  // tied to one connection and released even if this process dies.
+  return ctx.db.transaction(async (tx) => {
+    const [lock] = await tx.execute<{ ok: boolean }>(
+      sql`select pg_try_advisory_xact_lock(${LOCK_ID}) as ok`,
+    );
+    if (!lock?.ok) return { synced: 0, finalized: 0 };
+    return cycle(ctx);
+  });
+}
+
+async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: number }> {
+  const open = await ctx.db.select().from(challenges).where(isNull(challenges.finalizedAt));
+  const ids = open.map((c) => c.id);
+  const competitors = ids.length
+    ? await ctx.db
+        .selectDistinct({ userId: challengeParticipants.userId })
+        .from(challengeParticipants)
+        .innerJoin(users, eq(users.id, challengeParticipants.userId))
+        .where(
+          and(
+            inArray(challengeParticipants.challengeId, ids),
+            eq(challengeParticipants.state, 'joined'),
+            eq(users.keyStatus, 'active'),
+          ),
+        )
+    : [];
+  let synced = 0;
+  // Gentle on SparkyFitness: a few users at a time.
+  for (let i = 0; i < competitors.length; i += 4) {
+    const batch = competitors.slice(i, i + 4);
+    const results = await Promise.all(
+      batch.map((c) => syncUser(ctx, c.userId).catch(() => ({ ok: false }))),
+    );
+    synced += results.filter((r) => r.ok).length;
   }
+  let finalized = 0;
+  for (const ch of open) if (await finalizeChallenge(ctx, ch)) finalized++;
+  await ctx.db.execute(
+    sql`delete from refresh_tokens where expires_at < now() - interval '7 days'`,
+  );
+  await ctx.db.execute(sql`delete from pending_logins where expires_at < now()`);
+  return { synced, finalized };
 }
 
 export function startScheduler(ctx: AppContext, minutes: number): () => void {

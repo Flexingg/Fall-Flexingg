@@ -19,9 +19,11 @@ export type IconName =
 const PATHS: Record<IconName, string> = {
   today: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8',
   trophy: 'M7 4h10v5a5 5 0 0 1-10 0zM9 20h6M12 14v6M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3',
-  friends: 'M9 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M17 6.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M3 20c0-5 12-5 12 0M15 15c4-1 6 2 6 5',
+  friends:
+    'M9 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M17 6.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M3 20c0-5 12-5 12 0M15 15c4-1 6 2 6 5',
   trends: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
-  steps: 'M8 20c-2 0-3-2-2-4l2-4c1-2 3-1 3 1l-1 5c0 1-1 2-2 2zM16 14c2 0 3-2 2-4l-2-4c-1-2-3-1-3 1l1 5c0 1 1 2 2 2z',
+  steps:
+    'M8 20c-2 0-3-2-2-4l2-4c1-2 3-1 3 1l-1 5c0 1-1 2-2 2zM16 14c2 0 3-2 2-4l-2-4c-1-2-3-1-3 1l1 5c0 1 1 2 2 2z',
   distance: 'M5 19l5-14 4 8 5-3',
   timer: 'M12 5a8 8 0 1 0 0 16a8 8 0 1 0 0-16M12 9v4l3 2M9 2h6',
   flame: 'M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 3-6 1 1 2 1 3-5z',
@@ -37,12 +39,31 @@ const PATHS: Record<IconName, string> = {
   user: 'M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8M4 21c0-5 16-5 16 0',
   check: 'M5 12l5 5 9-10',
   close: 'M6 6l12 12M18 6L6 18',
-  settings: 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M19 12l2-1-1-3-2 .3-1.4-1.4.3-2-3-1-1 2h-2l-1-2-3 1 .3 2L6 7.3 4 7 3 10l2 1v2l-2 1 1 3 2-.3 1.4 1.4-.3 2 3 1 1-2h2l1 2 3-1-.3-2 1.4-1.4 2 .3 1-3-2-1z',
+  settings:
+    'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M19 12l2-1-1-3-2 .3-1.4-1.4.3-2-3-1-1 2h-2l-1-2-3 1 .3 2L6 7.3 4 7 3 10l2 1v2l-2 1 1 3 2-.3 1.4 1.4-.3 2 3 1 1-2h2l1 2 3-1-.3-2 1.4-1.4 2 .3 1-3-2-1z',
 };
 
-export function Icon({ name, size = 24, strokeWidth = 2 }: { name: IconName; size?: number; strokeWidth?: number }) {
+export function Icon({
+  name,
+  size = 24,
+  strokeWidth = 2,
+}: {
+  name: IconName;
+  size?: number;
+  strokeWidth?: number;
+}) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d={PATHS[name]} />
     </svg>
   );

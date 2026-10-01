@@ -27,15 +27,45 @@ export const keys = {
 
 const live = { refetchInterval: 60_000, refetchOnWindowFocus: true };
 
-export const useToday = () => useQuery({ queryKey: keys.today, queryFn: () => get<TodayResponse>('/api/me/today'), ...live });
-export const useFeed = () => useQuery({ queryKey: keys.feed, queryFn: () => get<FeedEvent[]>('/api/feed?limit=20'), ...live });
-export const useChallenges = () => useQuery({ queryKey: keys.challenges, queryFn: () => get<ChallengeSummary[]>('/api/challenges'), ...live });
+export const useToday = () =>
+  useQuery({ queryKey: keys.today, queryFn: () => get<TodayResponse>('/api/me/today'), ...live });
+export const useFeed = () =>
+  useQuery({ queryKey: keys.feed, queryFn: () => get<FeedEvent[]>('/api/feed?limit=20'), ...live });
+export const useChallenges = () =>
+  useQuery({
+    queryKey: keys.challenges,
+    queryFn: () => get<ChallengeSummary[]>('/api/challenges'),
+    ...live,
+  });
 export const useChallenge = (id: string) =>
-  useQuery({ queryKey: keys.challenge(id), queryFn: () => get<ChallengeDetail>(`/api/challenges/${id}`), ...live });
-export const useResult = (id: string) => useQuery({ queryKey: keys.result(id), queryFn: () => get<ChallengeResult>(`/api/challenges/${id}/result`) });
-export const useFriends = () => useQuery({ queryKey: keys.friends, queryFn: () => get<FriendsResponse>('/api/friends'), ...live });
+  useQuery({
+    queryKey: keys.challenge(id),
+    queryFn: () => get<ChallengeDetail>(`/api/challenges/${id}`),
+    ...live,
+  });
+export const useResult = (id: string) =>
+  useQuery({
+    queryKey: keys.result(id),
+    queryFn: () => get<ChallengeResult>(`/api/challenges/${id}/result`),
+  });
+export const useFriends = () =>
+  useQuery({
+    queryKey: keys.friends,
+    queryFn: () => get<FriendsResponse>('/api/friends'),
+    ...live,
+  });
 export const useTrends = (range: 'day' | 'week' | 'month', metric: MetricKey) =>
-  useQuery({ queryKey: keys.trends(range, metric), queryFn: () => get<TrendsResponse>(`/api/me/trends?range=${range}&metric=${encodeURIComponent(metric)}`) });
-export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: () => get<SourcesResponse>('/api/sources') });
+  useQuery({
+    queryKey: keys.trends(range, metric),
+    queryFn: () =>
+      get<TrendsResponse>(`/api/me/trends?range=${range}&metric=${encodeURIComponent(metric)}`),
+  });
+export const useSources = () =>
+  useQuery({ queryKey: keys.sources, queryFn: () => get<SourcesResponse>('/api/sources') });
 export const useCustomMetrics = (enabled: boolean) =>
-  useQuery({ queryKey: keys.customMetrics, queryFn: () => get<CustomMetricOption[]>('/api/me/custom-metrics'), enabled, staleTime: 300_000 });
+  useQuery({
+    queryKey: keys.customMetrics,
+    queryFn: () => get<CustomMetricOption[]>('/api/me/custom-metrics'),
+    enabled,
+    staleTime: 300_000,
+  });

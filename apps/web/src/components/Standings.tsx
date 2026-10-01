@@ -15,7 +15,12 @@ export function Podium({ challenge }: { challenge: ChallengeDetail }) {
         return (
           <div key={s.user.id} className={`pd${place === 1 ? ' first' : ''}`}>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <Avatar user={s.user} size={place === 1 ? 60 : place === 2 ? 52 : 48} lead={place === 1} me={s.isMe && place !== 1} />
+              <Avatar
+                user={s.user}
+                size={place === 1 ? 60 : place === 2 ? 52 : 48}
+                lead={place === 1}
+                me={s.isMe && place !== 1}
+              />
             </div>
             <small>{s.isMe ? 'You' : shortName(s.user.displayName).split(' ')[0]}</small>
             <div className="step num" style={{ height: heights[place] }}>
@@ -28,15 +33,28 @@ export function Podium({ challenge }: { challenge: ChallengeDetail }) {
   );
 }
 
-export function StandingsList({ challenge, showToday }: { challenge: ChallengeDetail; showToday?: boolean }) {
+export function StandingsList({
+  challenge,
+  showToday,
+}: {
+  challenge: ChallengeDetail;
+  showToday?: boolean;
+}) {
   const scores = challenge.standings.map((s) => s.score ?? 0);
-  const top = challenge.goal && challenge.scoring === 'race_to_goal' ? challenge.goal : Math.max(...scores, 0);
+  const top =
+    challenge.goal && challenge.scoring === 'race_to_goal'
+      ? challenge.goal
+      : Math.max(...scores, 0);
   return (
     <div className="list">
       {challenge.standings.map((s) => {
         const pct = challenge.lowerIsBetter
-          ? s.score ? Math.min(Math.min(...scores.filter((x) => x > 0)) / s.score, 1) : 0
-          : top > 0 ? Math.min((s.score ?? 0) / top, 1) : 0;
+          ? s.score
+            ? Math.min(Math.min(...scores.filter((x) => x > 0)) / s.score, 1)
+            : 0
+          : top > 0
+            ? Math.min((s.score ?? 0) / top, 1)
+            : 0;
         return (
           <div key={s.user.id} className={`item${s.isMe ? ' me' : ''}`}>
             <span className="num" style={{ width: 18, color: 'var(--dim)', fontWeight: 800 }}>
@@ -50,7 +68,9 @@ export function StandingsList({ challenge, showToday }: { challenge: ChallengeDe
             </div>
             <div style={{ textAlign: 'right' }}>
               <div className="v num">{fmt(s.score, challenge)}</div>
-              {showToday && s.todayValue != null && <small className="muted num">+{fmt(s.todayValue, challenge, false)} today</small>}
+              {showToday && s.todayValue != null && (
+                <small className="muted num">+{fmt(s.todayValue, challenge, false)} today</small>
+              )}
               {s.reachedGoalOn && <small style={{ color: 'var(--volt)' }}>Finished</small>}
             </div>
           </div>

@@ -23,7 +23,9 @@ for (const [d, scale] of Object.entries(densities)) {
   jobs.push(['foreground.svg', join(res, `mipmap-${d}/ic_launcher_foreground.png`), 108 * scale]);
 }
 
-const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+const browser = await chromium.launch(
+  process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+);
 const page = await browser.newPage();
 for (const [svg, out, size, round] of jobs) {
   const markup = readFileSync(join(icons, svg), 'utf8');
@@ -32,14 +34,20 @@ for (const [svg, out, size, round] of jobs) {
     `<html><body style="margin:0;background:transparent"><div style="width:${size}px;height:${size}px;${round ? 'border-radius:50%;overflow:hidden' : ''}">${markup.replace('<svg ', `<svg width="${size}" height="${size}" `)}</div></body></html>`,
   );
   mkdirSync(dirname(out), { recursive: true });
-  await page.screenshot({ path: out, omitBackground: true, clip: { x: 0, y: 0, width: size, height: size } });
+  await page.screenshot({
+    path: out,
+    omitBackground: true,
+    clip: { x: 0, y: 0, width: size, height: size },
+  });
 }
 await browser.close();
 console.log(`wrote ${jobs.length} icons`);
 
 // Splash screens: Gauntlet mark centred on the app background, at the sizes Capacitor ships.
 import { readdirSync, existsSync } from 'node:fs';
-const splashBrowser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+const splashBrowser = await chromium.launch(
+  process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+);
 const sp = await splashBrowser.newPage();
 const mark = readFileSync(join(icons, 'icon.svg'), 'utf8');
 let splashes = 0;

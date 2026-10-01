@@ -24,7 +24,12 @@ export default defineConfig(({ mode }) => ({
           icons: [
             { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-            { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+            {
+              src: '/icons/maskable-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
           ],
         },
         workbox: {
@@ -38,11 +43,15 @@ export default defineConfig(({ mode }) => ({
   ],
   server: {
     port: 5173,
-    proxy: { '/api': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: false } },
+    proxy: {
+      '/api': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: false },
+    },
   },
   preview: {
     port: 4173,
-    proxy: { '/api': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: false } },
+    proxy: {
+      '/api': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: false },
+    },
   },
   build: { target: 'es2022', sourcemap: true },
 }));

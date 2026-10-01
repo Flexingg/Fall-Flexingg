@@ -41,7 +41,9 @@ export function MePage() {
         <Avatar user={user} size={64} me />
         <div className="grow">
           <div style={{ fontWeight: 800, fontSize: 20 }}>{user.displayName}</div>
-          <div className="muted" style={{ fontSize: 14 }}>{user.email}</div>
+          <div className="muted" style={{ fontSize: 14 }}>
+            {user.email}
+          </div>
         </div>
       </div>
       <ErrorBox error={error} />
@@ -52,7 +54,13 @@ export function MePage() {
       )}
       <div className="lbl">Display name</div>
       <label className="input">
-        <input value={name} onChange={(e) => setName(e.target.value)} onBlur={saveName} maxLength={40} aria-label="Display name" />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={saveName}
+          maxLength={40}
+          aria-label="Display name"
+        />
         <span>Shown to friends</span>
       </label>
 
@@ -65,15 +73,30 @@ export function MePage() {
         </Link>
         <div className="item">
           <Icon name="today" size={20} />
-          <div className="grow"><div className="t">Time zone</div><small>{user.timezone}</small></div>
+          <div className="grow">
+            <div className="t">Time zone</div>
+            <small>{user.timezone}</small>
+          </div>
         </div>
       </div>
 
       <div className="stack" style={{ marginTop: 24 }}>
-        <button className="btn secondary" onClick={async () => { await logout(); navigate('/login'); }}>Sign out</button>
-        <button className="btn danger" onClick={deleteAccount}>Delete Gauntlet account</button>
+        <button
+          className="btn secondary"
+          onClick={async () => {
+            await logout();
+            navigate('/login');
+          }}
+        >
+          Sign out
+        </button>
+        <button className="btn danger" onClick={deleteAccount}>
+          Delete Gauntlet account
+        </button>
       </div>
-      <p className="muted center" style={{ fontSize: 12, marginTop: 18 }}>Gauntlet · powered by SparkyFitness</p>
+      <p className="muted center" style={{ fontSize: 12, marginTop: 18 }}>
+        Gauntlet · powered by SparkyFitness
+      </p>
     </Screen>
   );
 }

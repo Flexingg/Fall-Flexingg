@@ -57,9 +57,12 @@ export interface Standing {
   daysWithData: number;
 }
 
-export function validateRules(rules: Pick<ScoringRules, 'scoring' | 'aggregate' | 'goal'>): string | null {
+export function validateRules(
+  rules: Pick<ScoringRules, 'scoring' | 'aggregate' | 'goal'>,
+): string | null {
   if (rules.scoring === 'race_to_goal') {
-    if (rules.aggregate !== 'sum') return 'Race to target only works with metrics that add up (steps, distance…).';
+    if (rules.aggregate !== 'sum')
+      return 'Race to target only works with metrics that add up (steps, distance…).';
     if (!rules.goal || rules.goal <= 0) return 'Race to target needs a goal.';
   }
   if (rules.scoring === 'streak' && (rules.goal == null || rules.goal <= 0)) {
@@ -69,7 +72,9 @@ export function validateRules(rules: Pick<ScoringRules, 'scoring' | 'aggregate' 
 }
 
 /** Window of days that currently count: start .. min(end, asOf). */
-export function countedDates(rules: Pick<ScoringRules, 'startDate' | 'endDate' | 'asOf'>): string[] {
+export function countedDates(
+  rules: Pick<ScoringRules, 'startDate' | 'endDate' | 'asOf'>,
+): string[] {
   return listDates(rules.startDate, minDate(rules.endDate, rules.asOf));
 }
 
@@ -82,7 +87,10 @@ interface Scored {
   daysWithData: number;
 }
 
-export function computeStandings(rules: ScoringRules, participants: ParticipantSeries[]): Standing[] {
+export function computeStandings(
+  rules: ScoringRules,
+  participants: ParticipantSeries[],
+): Standing[] {
   const dates = countedDates(rules);
   const dateSet = new Set(dates);
   const better = (a: number, b: number) => (rules.lowerIsBetter ? a < b : a > b);
@@ -98,8 +106,16 @@ export function computeStandings(rules: ScoringRules, participants: ParticipantS
     const base = { userId: p.userId, todayValue, daysWithData };
 
     if (daysWithData === 0) {
-      const zero = rules.aggregate === 'sum' && !rules.lowerIsBetter && rules.scoring !== 'best_day' ? 0 : null;
-      return { ...base, score: rules.scoring === 'streak' ? 0 : zero, progress: rules.goal ? 0 : null, reachedGoalOn: null };
+      const zero =
+        rules.aggregate === 'sum' && !rules.lowerIsBetter && rules.scoring !== 'best_day'
+          ? 0
+          : null;
+      return {
+        ...base,
+        score: rules.scoring === 'streak' ? 0 : zero,
+        progress: rules.goal ? 0 : null,
+        reachedGoalOn: null,
+      };
     }
 
     const sum = values.reduce((a, b) => a + b, 0);
@@ -123,9 +139,15 @@ export function computeStandings(rules: ScoringRules, participants: ParticipantS
         let reachedGoalOn: string | null = null;
         for (const d of dates) {
           cumulative += byDate.get(d) ?? 0;
-          if (reachedGoalOn == null && rules.goal != null && cumulative >= rules.goal) reachedGoalOn = d;
+          if (reachedGoalOn == null && rules.goal != null && cumulative >= rules.goal)
+            reachedGoalOn = d;
         }
-        return { ...base, score: sum, progress: rules.goal ? Math.min(sum / rules.goal, 1) : null, reachedGoalOn };
+        return {
+          ...base,
+          score: sum,
+          progress: rules.goal ? Math.min(sum / rules.goal, 1) : null,
+          reachedGoalOn,
+        };
       }
       case 'streak': {
         const goal = rules.goal ?? 0;
@@ -137,7 +159,12 @@ export function computeStandings(rules: ScoringRules, participants: ParticipantS
           run = v != null && hits(v) ? run + 1 : 0;
           best = Math.max(best, run);
         }
-        return { ...base, score: best, progress: dates.length ? best / dates.length : 0, reachedGoalOn: null };
+        return {
+          ...base,
+          score: best,
+          progress: dates.length ? best / dates.length : 0,
+          reachedGoalOn: null,
+        };
       }
     }
   });

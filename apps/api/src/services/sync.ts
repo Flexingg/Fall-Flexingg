@@ -2,7 +2,14 @@
  * Pulls a user's recent health data from SparkyFitness, normalises it into
  * daily_metrics, and updates the challenges that user is in.
  */
-import { addDays, BUILTIN_METRICS, isCustomMetric, minDate, todayIn, type MetricAggregate } from '@gauntlet/shared';
+import {
+  addDays,
+  BUILTIN_METRICS,
+  isCustomMetric,
+  minDate,
+  todayIn,
+  type MetricAggregate,
+} from '@gauntlet/shared';
 import { and, eq, gte, lte } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics, feedEvents, users } from '../db/schema.js';
@@ -61,7 +68,8 @@ export function syncUser(ctx: AppContext, userId: string): Promise<SyncResult> {
 
 async function doSync(ctx: AppContext, userId: string): Promise<SyncResult> {
   const user = await getUser(ctx, userId);
-  if (user.keyStatus !== 'active' || !user.sparkyKeyEnc) return { userId, ok: false, changed: 0, error: 'sparky_key_invalid' };
+  if (user.keyStatus !== 'active' || !user.sparkyKeyEnc)
+    return { userId, ok: false, changed: 0, error: 'sparky_key_invalid' };
   const token = sparkyToken(ctx, user);
   const open = await openChallengesForUser(ctx, userId);
 
@@ -74,7 +82,8 @@ async function doSync(ctx: AppContext, userId: string): Promise<SyncResult> {
 
   const customMetrics: Record<string, MetricAggregate> = {};
   for (const ch of open) {
-    if (isCustomMetric(ch.metric)) customMetrics[ch.metric.slice('custom:'.length).toLowerCase()] = ch.aggregate;
+    if (isCustomMetric(ch.metric))
+      customMetrics[ch.metric.slice('custom:'.length).toLowerCase()] = ch.aggregate;
   }
 
   let merged: MergedValue[];
@@ -116,7 +125,10 @@ async function fetchAndMerge(
       return await p;
     } catch (err) {
       if (err instanceof SparkyError && err.status === 401) throw err;
-      ctx.log.warn({ err: (err as Error).message, label }, 'sparky read failed; continuing without it');
+      ctx.log.warn(
+        { err: (err as Error).message, label },
+        'sparky read failed; continuing without it',
+      );
       partial = true;
       return fallback;
     }
@@ -131,7 +143,17 @@ async function fetchAndMerge(
     settle('exercise-entries', s.exerciseEntries(token, start, end), []),
     settle('sleep', s.sleep(token, start, end), []),
     Promise.all(
-      matched.map(async (c) => [c, await settle(`custom:${c.name}`, s.customMeasurements(token, c.id, start, end), [] as CustomMeasurementRow[])] as const),
+      matched.map(
+        async (c) =>
+          [
+            c,
+            await settle(
+              `custom:${c.name}`,
+              s.customMeasurements(token, c.id, start, end),
+              [] as CustomMeasurementRow[],
+            ),
+          ] as const,
+      ),
     ),
   ]);
 
@@ -141,7 +163,20 @@ async function fetchAndMerge(
     const existing = custom[key];
     custom[key] = existing ? { category, rows: [...existing.rows, ...rows] } : { category, rows };
   }
-  return { merged: mergeDaily({ start, end, daily, checkIns, custom, exerciseDays, exerciseEntries, sleep, customMetrics }), partial };
+  return {
+    merged: mergeDaily({
+      start,
+      end,
+      daily,
+      checkIns,
+      custom,
+      exerciseDays,
+      exerciseEntries,
+      sleep,
+      customMetrics,
+    }),
+    partial,
+  };
 }
 
 interface Change {
@@ -166,7 +201,13 @@ async function store(
   const existing = await ctx.db
     .select()
     .from(dailyMetrics)
-    .where(and(eq(dailyMetrics.userId, userId), gte(dailyMetrics.date, start), lte(dailyMetrics.date, end)));
+    .where(
+      and(
+        eq(dailyMetrics.userId, userId),
+        gte(dailyMetrics.date, start),
+        lte(dailyMetrics.date, end),
+      ),
+    );
   const before = new Map(existing.map((r) => [`${r.date}|${r.metric}`, r.value]));
   const managed = new Set<string>([...BUILTIN_METRICS, ...customNames.map((n) => `custom:${n}`)]);
 
@@ -177,16 +218,31 @@ async function store(
     seen.add(k);
     const prev = before.get(k);
     if (prev === m.value) continue;
-    changes.push({ date: m.date, metric: m.metric, before: prev ?? 0, after: m.value, source: m.source });
+    changes.push({
+      date: m.date,
+      metric: m.metric,
+      before: prev ?? 0,
+      after: m.value,
+      source: m.source,
+    });
   }
-  const removed = partial ? [] : existing.filter((r) => managed.has(r.metric) && !seen.has(`${r.date}|${r.metric}`));
+  const removed = partial
+    ? []
+    : existing.filter((r) => managed.has(r.metric) && !seen.has(`${r.date}|${r.metric}`));
 
   await ctx.db.transaction(async (tx) => {
     for (const c of changes) {
       const m = merged.find((x) => x.date === c.date && x.metric === c.metric)!;
       await tx
         .insert(dailyMetrics)
-        .values({ userId, date: m.date, metric: m.metric, value: m.value, source: m.source, updatedAt: ctx.now() })
+        .values({
+          userId,
+          date: m.date,
+          metric: m.metric,
+          value: m.value,
+          source: m.source,
+          updatedAt: ctx.now(),
+        })
         .onConflictDoUpdate({
           target: [dailyMetrics.userId, dailyMetrics.date, dailyMetrics.metric],
           set: { value: m.value, source: m.source, updatedAt: ctx.now() },
@@ -195,7 +251,13 @@ async function store(
     for (const r of removed) {
       await tx
         .delete(dailyMetrics)
-        .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.date, r.date), eq(dailyMetrics.metric, r.metric)));
+        .where(
+          and(
+            eq(dailyMetrics.userId, userId),
+            eq(dailyMetrics.date, r.date),
+            eq(dailyMetrics.metric, r.metric),
+          ),
+        );
       changes.push({ date: r.date, metric: r.metric, before: r.value, after: 0, source: null });
     }
   });
@@ -203,11 +265,18 @@ async function store(
 }
 
 /** Post a feed item when someone makes a meaningful jump in a metric they're competing on. */
-async function postProgress(ctx: AppContext, userId: string, open: ChallengeRow[], changes: Change[]) {
+async function postProgress(
+  ctx: AppContext,
+  userId: string,
+  open: ChallengeRow[],
+  changes: Change[],
+) {
   const posted = new Set<string>();
   for (const ch of open) {
     if (posted.has(ch.metric)) continue;
-    const relevant = changes.filter((c) => c.metric === ch.metric && c.date >= ch.startDate && c.date <= ch.endDate);
+    const relevant = changes.filter(
+      (c) => c.metric === ch.metric && c.date >= ch.startDate && c.date <= ch.endDate,
+    );
     const delta = relevant.reduce((sum, c) => sum + (c.after - c.before), 0);
     const threshold = PROGRESS_THRESHOLD[ch.metric] ?? (isCustomMetric(ch.metric) ? 0 : Infinity);
     if (!(delta > 0 && delta >= threshold)) continue;

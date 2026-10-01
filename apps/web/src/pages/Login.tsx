@@ -35,10 +35,15 @@ export function LoginPage() {
   }
 
   return (
-    <main className="screen no-tabs" style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+    <main
+      className="screen no-tabs"
+      style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}
+    >
       <div style={{ marginTop: '12vh', marginBottom: 28 }}>
         <img src="/icons/favicon.svg" width={64} height={64} alt="" style={{ borderRadius: 16 }} />
-        <h1 style={{ fontSize: 40, fontWeight: 900, letterSpacing: '-0.03em', marginTop: 18 }}>Gauntlet</h1>
+        <h1 style={{ fontSize: 40, fontWeight: 900, letterSpacing: '-0.03em', marginTop: 18 }}>
+          Gauntlet
+        </h1>
         <p className="muted" style={{ marginTop: 6, fontSize: 15, lineHeight: 1.45 }}>
           Throw down challenges with friends. Sign in with your SparkyFitness account.
         </p>
@@ -49,7 +54,15 @@ export function LoginPage() {
           <>
             <div className="notice">Enter the 6-digit code from your authenticator app.</div>
             <label className="input">
-              <input inputMode="numeric" autoComplete="one-time-code" placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} autoFocus aria-label="Code" />
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                autoFocus
+                aria-label="Code"
+              />
             </label>
           </>
         ) : (
@@ -66,19 +79,43 @@ export function LoginPage() {
             {method === 'password' ? (
               <>
                 <label className="input">
-                  <input type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required aria-label="Email" />
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    aria-label="Email"
+                  />
                 </label>
                 <label className="input">
-                  <input type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required aria-label="Password" />
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    aria-label="Password"
+                  />
                 </label>
               </>
             ) : (
               <>
                 <div className="notice">
-                  Signed up with Google? Create an API key in SparkyFitness under Settings → API keys and paste it here.
+                  Signed up with Google? Create an API key in SparkyFitness under Settings → API
+                  keys and paste it here.
                 </div>
                 <label className="input">
-                  <input autoComplete="off" placeholder="Paste API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required aria-label="API key" />
+                  <input
+                    autoComplete="off"
+                    placeholder="Paste API key"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    required
+                    aria-label="API key"
+                  />
                 </label>
               </>
             )}
@@ -94,8 +131,12 @@ export function LoginPage() {
           </button>
         )}
       </form>
-      <p className="muted center" style={{ fontSize: 12, marginTop: 'auto', paddingTop: 24, lineHeight: 1.5 }}>
-        Gauntlet reads your SparkyFitness data to score challenges. Your friends only see challenge totals.
+      <p
+        className="muted center"
+        style={{ fontSize: 12, marginTop: 'auto', paddingTop: 24, lineHeight: 1.5 }}
+      >
+        Gauntlet reads your SparkyFitness data to score challenges. Your friends only see challenge
+        totals.
       </p>
     </main>
   );

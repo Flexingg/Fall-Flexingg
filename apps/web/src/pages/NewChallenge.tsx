@@ -82,14 +82,24 @@ export function NewChallengePage() {
   const aggregate = isCustom ? customAgg : (def?.aggregate ?? 'sum');
   const customChoice = customMetrics.data?.find((m) => m.categoryId === customId);
   const unit = isCustom ? (customChoice?.unit ?? '') : (def?.unit ?? '');
-  const suggested = scoring === 'streak' ? DAILY_TARGETS[metric as MetricKey] : scoring === 'race_to_goal' ? DEFAULT_GOALS[metric as MetricKey] : undefined;
+  const suggested =
+    scoring === 'streak'
+      ? DAILY_TARGETS[metric as MetricKey]
+      : scoring === 'race_to_goal'
+        ? DEFAULT_GOALS[metric as MetricKey]
+        : undefined;
   const goalNum = goal.trim() ? Number(goal) : (suggested ?? null);
   const ruleProblem = validateRules({ scoring, aggregate, goal: goalNum });
   const scoringOptions = useMemo(
-    () => (Object.keys(SCORING_LABELS) as ScoringMode[]).filter((s) => aggregate === 'sum' || s !== 'race_to_goal'),
+    () =>
+      (Object.keys(SCORING_LABELS) as ScoringMode[]).filter(
+        (s) => aggregate === 'sum' || s !== 'race_to_goal',
+      ),
     [aggregate],
   );
-  const placeholderName = isCustom ? (customChoice?.label ?? 'Custom') : `${def?.label} ${duration === 'weekend' ? 'Weekend' : `${duration}-Day`}`;
+  const placeholderName = isCustom
+    ? (customChoice?.label ?? 'Custom')
+    : `${def?.label} ${duration === 'weekend' ? 'Weekend' : `${duration}-Day`}`;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -98,8 +108,19 @@ export function NewChallengePage() {
     try {
       const body: CreateChallengeRequest = {
         name: name.trim() || placeholderName,
-        metric: isCustom ? (`custom:${customChoice?.label.toLowerCase() ?? 'x'}` as MetricKey) : (metric as MetricKey),
-        custom: isCustom && customChoice ? { categoryId: customChoice.categoryId, label: customChoice.label, unit: customChoice.unit ?? undefined, aggregate: customAgg, lowerIsBetter: customLower } : undefined,
+        metric: isCustom
+          ? (`custom:${customChoice?.label.toLowerCase() ?? 'x'}` as MetricKey)
+          : (metric as MetricKey),
+        custom:
+          isCustom && customChoice
+            ? {
+                categoryId: customChoice.categoryId,
+                label: customChoice.label,
+                unit: customChoice.unit ?? undefined,
+                aggregate: customAgg,
+                lowerIsBetter: customLower,
+              }
+            : undefined,
         scoring,
         goal: goalNum,
         startDate: start,
@@ -117,7 +138,11 @@ export function NewChallengePage() {
     }
   }
 
-  const tiles: { key: MetricKey | typeof CUSTOM; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
+  const tiles: {
+    key: MetricKey | typeof CUSTOM;
+    label: string;
+    icon: Parameters<typeof Icon>[0]['name'];
+  }[] = [
     ...BUILTIN_METRICS.map((k) => ({ key: k, label: METRICS[k].label, icon: METRICS[k].icon })),
     { key: CUSTOM, label: 'Custom', icon: 'plus' },
   ];
@@ -127,7 +152,13 @@ export function NewChallengePage() {
       <Header title="New challenge" back="/challenges" />
       <form onSubmit={submit}>
         <label className="input">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={placeholderName} maxLength={60} aria-label="Challenge name" />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={placeholderName}
+            maxLength={60}
+            aria-label="Challenge name"
+          />
           <span>Name</span>
         </label>
 
@@ -140,7 +171,12 @@ export function NewChallengePage() {
               aria-pressed={metric === t.key}
               onClick={() => {
                 setMetric(t.key);
-                if (t.key !== CUSTOM && METRICS[t.key as keyof typeof METRICS].aggregate === 'avg' && scoring === 'race_to_goal') setScoring('total');
+                if (
+                  t.key !== CUSTOM &&
+                  METRICS[t.key as keyof typeof METRICS].aggregate === 'avg' &&
+                  scoring === 'race_to_goal'
+                )
+                  setScoring('total');
               }}
             >
               <Icon name={t.icon} size={22} />
@@ -152,8 +188,17 @@ export function NewChallengePage() {
         {isCustom && (
           <div className="stack" style={{ marginTop: 10 }}>
             <label className="input">
-              <select value={customId} onChange={(e) => setCustomId(e.target.value)} aria-label="Custom metric" required>
-                <option value="">{customMetrics.isPending ? 'Loading your SparkyFitness metrics…' : 'Choose a SparkyFitness metric'}</option>
+              <select
+                value={customId}
+                onChange={(e) => setCustomId(e.target.value)}
+                aria-label="Custom metric"
+                required
+              >
+                <option value="">
+                  {customMetrics.isPending
+                    ? 'Loading your SparkyFitness metrics…'
+                    : 'Choose a SparkyFitness metric'}
+                </option>
                 {customMetrics.data?.map((m) => (
                   <option key={m.categoryId} value={m.categoryId}>
                     {m.label}
@@ -162,10 +207,25 @@ export function NewChallengePage() {
                 ))}
               </select>
             </label>
-            {customMetrics.data?.length === 0 && <div className="notice">No custom measurements found. Create one in SparkyFitness under Check-in → Custom measurements.</div>}
-            <Seg label="Combine days by" value={customAgg} onChange={setCustomAgg} options={[{ value: 'sum', label: 'Add up days' }, { value: 'avg', label: 'Average days' }]} />
+            {customMetrics.data?.length === 0 && (
+              <div className="notice">
+                No custom measurements found. Create one in SparkyFitness under Check-in → Custom
+                measurements.
+              </div>
+            )}
+            <Seg
+              label="Combine days by"
+              value={customAgg}
+              onChange={setCustomAgg}
+              options={[
+                { value: 'sum', label: 'Add up days' },
+                { value: 'avg', label: 'Average days' },
+              ]}
+            />
             <div className="row card" style={{ padding: '10px 14px' }}>
-              <span className="grow" style={{ fontSize: 14, fontWeight: 600 }}>Lower is better</span>
+              <span className="grow" style={{ fontSize: 14, fontWeight: 600 }}>
+                Lower is better
+              </span>
               <Toggle checked={customLower} onChange={setCustomLower} label="Lower is better" />
             </div>
           </div>
@@ -173,7 +233,11 @@ export function NewChallengePage() {
 
         <div className="lbl">How to win</div>
         <label className="input">
-          <select value={scoring} onChange={(e) => setScoring(e.target.value as ScoringMode)} aria-label="How to win">
+          <select
+            value={scoring}
+            onChange={(e) => setScoring(e.target.value as ScoringMode)}
+            aria-label="How to win"
+          >
             {scoringOptions.map((s) => (
               <option key={s} value={s}>
                 {SCORING_LABELS[s]}
@@ -193,13 +257,21 @@ export function NewChallengePage() {
           />
           <span>
             {unit}
-            {scoring === 'race_to_goal' ? ' · first to reach it wins' : scoring === 'streak' ? ' per day' : scoring === 'total' ? ' · optional' : ''}
+            {scoring === 'race_to_goal'
+              ? ' · first to reach it wins'
+              : scoring === 'streak'
+                ? ' per day'
+                : scoring === 'total'
+                  ? ' · optional'
+                  : ''}
           </span>
         </label>
 
         <div className="lbl">
           <span>Duration</span>
-          <span className="muted" style={{ textTransform: 'none', letterSpacing: 0 }}>{dateRange(start, end)}</span>
+          <span className="muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
+            {dateRange(start, end)}
+          </span>
         </div>
         <Seg
           label="Duration"
@@ -224,13 +296,20 @@ export function NewChallengePage() {
                 key={f.id}
                 aria-pressed={on}
                 aria-label={`Invite ${f.displayName}`}
-                onClick={() => setInvited((s) => {
-                  const n = new Set(s);
-                  if (on) n.delete(f.id);
-                  else n.add(f.id);
-                  return n;
-                })}
-                style={{ borderRadius: '50%', outline: on ? '2px solid var(--volt)' : 'none', outlineOffset: 2, color: on ? 'var(--volt)' : undefined }}
+                onClick={() =>
+                  setInvited((s) => {
+                    const n = new Set(s);
+                    if (on) n.delete(f.id);
+                    else n.add(f.id);
+                    return n;
+                  })
+                }
+                style={{
+                  borderRadius: '50%',
+                  outline: on ? '2px solid var(--volt)' : 'none',
+                  outlineOffset: 2,
+                  color: on ? 'var(--volt)' : undefined,
+                }}
               >
                 <Avatar user={f} size={42} />
               </button>
@@ -238,7 +317,8 @@ export function NewChallengePage() {
           })}
         </div>
         <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          {friends.data?.friends.length ? 'Tap friends to invite them. ' : ''}You can share a link to the challenge once it's created.
+          {friends.data?.friends.length ? 'Tap friends to invite them. ' : ''}You can share a link
+          to the challenge once it's created.
         </p>
 
         <div className="dock stack">

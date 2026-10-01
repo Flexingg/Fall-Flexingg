@@ -40,7 +40,8 @@ export function ResultPage() {
 
   const leader = c?.standings[0];
   // "16,000 steps" rather than a bare "16,000" for unitless metrics.
-  const amount = (v: number) => (c!.unit ? fmt(v, c!) : `${fmt(v, c!)} ${c!.metricLabel.toLowerCase()}`);
+  const amount = (v: number) =>
+    c!.unit ? fmt(v, c!) : `${fmt(v, c!)} ${c!.metricLabel.toLowerCase()}`;
   const sub =
     !r?.me?.rank || !c
       ? ''
@@ -59,16 +60,37 @@ export function ResultPage() {
       {q.isPending && <Skeleton height={400} />}
       {c && r && (
         <div className="center">
-          <div className="lbl" style={{ justifyContent: 'center', marginTop: 0 }}>{c.name} · Final</div>
-          <div className="av lead" style={{ width: 96, height: 96, fontSize: 30, fontWeight: 900, margin: '18px auto 14px' }}>
+          <div className="lbl" style={{ justifyContent: 'center', marginTop: 0 }}>
+            {c.name} · Final
+          </div>
+          <div
+            className="av lead"
+            style={{
+              width: 96,
+              height: 96,
+              fontSize: 30,
+              fontWeight: 900,
+              margin: '18px auto 14px',
+            }}
+          >
             {r.me?.rank ? ordinal(r.me.rank) : '–'}
           </div>
-          <div className="big" style={{ fontSize: 36 }}>{headline(r.me?.rank ?? null, c.standings.length)}</div>
-          <p className="muted" style={{ fontSize: 15, margin: '8px 0 22px' }}>{sub}</p>
+          <div className="big" style={{ fontSize: 36 }}>
+            {headline(r.me?.rank ?? null, c.standings.length)}
+          </div>
+          <p className="muted" style={{ fontSize: 15, margin: '8px 0 22px' }}>
+            {sub}
+          </p>
           <div className="list" style={{ textAlign: 'left' }}>
             {c.standings.slice(0, 5).map((s) => (
-              <div key={s.user.id} className={`item${s.isMe ? ' me' : ''}`} style={{ minHeight: 48 }}>
-                <span className="num" style={{ width: 18, color: 'var(--dim)', fontWeight: 800 }}>{s.rank}</span>
+              <div
+                key={s.user.id}
+                className={`item${s.isMe ? ' me' : ''}`}
+                style={{ minHeight: 48 }}
+              >
+                <span className="num" style={{ width: 18, color: 'var(--dim)', fontWeight: 800 }}>
+                  {s.rank}
+                </span>
                 <span className="grow t">{s.isMe ? 'You' : shortName(s.user.displayName)}</span>
                 <span className="v num">{fmt(s.score, c)}</span>
               </div>

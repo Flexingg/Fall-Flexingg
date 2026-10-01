@@ -17,5 +17,9 @@ export default defineConfig({
   },
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : { command: 'pnpm vite preview --port 4173 --strictPort', port: 4173, reuseExistingServer: true },
+    : {
+        command: 'pnpm vite preview --port 4173 --strictPort',
+        port: 4173,
+        reuseExistingServer: true,
+      },
 });
