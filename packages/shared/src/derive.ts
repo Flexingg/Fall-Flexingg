@@ -4,7 +4,7 @@
  * the phone), so both always agree.
  */
 import { addDays, listDates, weekday } from './dates.js';
-import { METRICS, type MetricKey } from './metrics.js';
+import { METRICS, metricDef, type MetricKey } from './metrics.js';
 import type { TodayResponse, TrendsResponse } from './api.js';
 
 export interface MetricRow {
@@ -68,7 +68,7 @@ export function buildTrends(opts: {
       .filter((r) => r.metric === metric && r.date >= prevStart && r.date <= end)
       .map((r) => [r.date, r.value]),
   );
-  const avg = metric === 'sleep' || metric === 'resting_hr';
+  const avg = metricDef(metric).aggregate !== 'sum';
   const agg = (dates: string[]) => {
     const vals = dates.map((d) => byDate.get(d)).filter((v): v is number => v != null);
     if (!vals.length) return 0;

@@ -204,7 +204,9 @@ export class DirectBackend {
     // One day ahead of UTC so people east of it get their "today".
     const end = addDays(todayIn('UTC', this.now()), 1);
     const start = addDays(this.today_(), -HISTORY_DAYS);
-    const { merged } = await fetchMerged(this.client, this.o.apiKey, start, end);
+    const { merged } = await fetchMerged(this.client, this.o.apiKey, start, end, {
+      timezone: this.o.timezone,
+    });
     const fresh: Cached = {
       savedAt: this.now().toISOString(),
       rows: merged.map(({ date, metric, value }) => ({ date, metric, value })),

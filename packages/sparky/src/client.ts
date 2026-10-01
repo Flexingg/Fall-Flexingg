@@ -96,6 +96,49 @@ export interface ExerciseEntryRow {
   duration_minutes?: number | string | null;
   exercise_source?: string | null;
   exercise_category?: string | null;
+  /** Strength sets (Liftosaur, Hevy, SparkyFitness' own log). Weight in kg. */
+  sets?: ExerciseSetRow[] | null;
+}
+
+export interface ExerciseSetRow {
+  set_number?: number | null;
+  /** "Working Set", "Warm-up", "Drop Set"… */
+  set_type?: string | null;
+  reps?: number | string | null;
+  weight?: number | string | null;
+}
+
+/** One day of food totals from SparkyFitness' report. */
+export interface NutritionDayRow {
+  date: string;
+  calories?: number | string | null;
+  protein?: number | string | null;
+  carbs?: number | string | null;
+  fat?: number | string | null;
+}
+
+export interface WaterRow {
+  entry_date: string;
+  water_ml?: number | string | null;
+}
+
+/** The person's goals in effect on a day (SparkyFitness falls back to its defaults). */
+export interface GoalsRow {
+  calories?: number | string | null;
+  protein?: number | string | null;
+  carbs?: number | string | null;
+  fat?: number | string | null;
+  water_goal_ml?: number | string | null;
+}
+
+export interface FastRow {
+  id: string;
+  start_time: string;
+  end_time?: string | null;
+  target_end_time?: string | null;
+  duration_minutes?: number | string | null;
+  fasting_type?: string | null;
+  status?: string | null;
 }
 
 export interface SleepRow {
@@ -307,14 +350,61 @@ export class SparkyClient {
     return body.intervalsBreakdown ?? [];
   }
 
+  /**
+   * SparkyFitness' report for a range: exercise entries with their sets, and food totals per day
+   * (only days with food logged). One call covers workouts, strength and nutrition.
+   */
+  async report(
+    token: string,
+    start: string,
+    end: string,
+  ): Promise<{ exerciseEntries: ExerciseEntryRow[]; nutrition: NutritionDayRow[] }> {
+    const body = await this.request<{
+      exerciseEntries?: ExerciseEntryRow[];
+      nutritionData?: NutritionDayRow[];
+    }>('GET', `/api/reports?startDate=${start}&endDate=${end}`, { token });
+    return { exerciseEntries: body.exerciseEntries ?? [], nutrition: body.nutritionData ?? [] };
+  }
+
   /** Raw exercise entries, used for phone-synced "Active Calories" entries. */
   async exerciseEntries(token: string, start: string, end: string): Promise<ExerciseEntryRow[]> {
-    const body = await this.request<{ exerciseEntries?: ExerciseEntryRow[] }>(
-      'GET',
-      `/api/reports?startDate=${start}&endDate=${end}`,
-      { token },
+    return (await this.report(token, start, end)).exerciseEntries;
+  }
+
+  /** Water drunk per day (including days with no food logged, which the report leaves out). */
+  async water(token: string, start: string, end: string): Promise<WaterRow[]> {
+    return asArray(
+      await this.request('GET', `/api/measurements/water-intake-range/${start}/${end}`, { token }),
     );
-    return body.exerciseEntries ?? [];
+  }
+
+  async goalsByDate(token: string, date: string): Promise<GoalsRow> {
+    return this.request<GoalsRow>('GET', `/api/goals/by-date/${date}`, { token });
+  }
+
+  /** Fasts that overlap a range, from SparkyFitness' fasting tracker. */
+  async fasts(token: string, start: string, end: string): Promise<FastRow[]> {
+    return asArray(
+      await this.request('GET', `/api/fasting/history/range/${start}/${end}`, { token }),
+    );
+  }
+
+  async currentFast(token: string): Promise<FastRow | null> {
+    return (await this.request<FastRow | null>('GET', '/api/fasting/current', { token })) ?? null;
+  }
+
+  async startFast(
+    token: string,
+    body: { start_time: string; target_end_time: string | null; fasting_type: string },
+  ): Promise<FastRow> {
+    return this.request<FastRow>('POST', '/api/fasting/start', { token, body });
+  }
+
+  async endFast(token: string, id: string, endTime: string): Promise<FastRow> {
+    return this.request<FastRow>('POST', '/api/fasting/end', {
+      token,
+      body: { id, end_time: endTime },
+    });
   }
 
   async sleep(token: string, start: string, end: string): Promise<SleepRow[]> {

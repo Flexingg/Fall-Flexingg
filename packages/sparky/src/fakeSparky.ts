@@ -9,8 +9,21 @@ import type {
   DailyHealthRow,
   ExerciseDayBucket,
   ExerciseEntryRow,
+  FastRow,
+  GoalsRow,
+  NutritionDayRow,
   SleepRow,
+  WaterRow,
 } from './client.js';
+
+/** SparkyFitness' default goals for someone who never set any. */
+export const DEFAULT_GOALS: GoalsRow = {
+  calories: 2000,
+  protein: 150,
+  carbs: 250,
+  fat: 67,
+  water_goal_ml: 1920,
+};
 
 export interface FakeUser {
   id: string;
@@ -25,6 +38,11 @@ export interface FakeUser {
   exerciseDays: ExerciseDayBucket[];
   exerciseEntries: ExerciseEntryRow[];
   sleep: SleepRow[];
+  nutrition: NutritionDayRow[];
+  water: WaterRow[];
+  /** Goals from a date on (sorted by date), like SparkyFitness' goal history. */
+  goals: { from: string; goals: GoalsRow }[];
+  fasts: FastRow[];
   ingested: unknown[];
   /** Set once the person has linked Garmin Connect inside this SparkyFitness. */
   garmin?: { linkedAt: string; syncs: number };
@@ -79,6 +97,10 @@ export class FakeSparky {
       exerciseDays: [],
       exerciseEntries: [],
       sleep: [],
+      nutrition: [],
+      water: [],
+      goals: [],
+      fasts: [],
       ingested: [],
       providers: [],
       ...u,
@@ -253,11 +275,62 @@ export class FakeSparky {
       });
     }
     if (method === 'GET' && path === '/api/reports') {
+      const [from, to] = [q.get('startDate')!, q.get('endDate')!];
       return json(200, {
-        exerciseEntries: user.exerciseEntries.filter((r) =>
-          inRange(r.entry_date, q.get('startDate')!, q.get('endDate')!),
-        ),
+        exerciseEntries: user.exerciseEntries
+          .filter((r) => inRange(r.entry_date, from, to))
+          .map((r) => ({ sets: [], ...r })),
+        nutritionData: user.nutrition
+          .filter((r) => inRange(r.date, from, to))
+          .map((r) => ({
+            water: user.water.find((w) => w.entry_date === r.date)?.water_ml ?? 0,
+            ...r,
+          })),
       });
+    }
+    const water = /^\/api\/measurements\/water-intake-range\/([\d-]+)\/([\d-]+)$/.exec(path);
+    if (method === 'GET' && water)
+      return json(
+        200,
+        user.water.filter((r) => inRange(r.entry_date, water[1]!, water[2]!)),
+      );
+    const goals = /^\/api\/goals\/by-date\/([\d-]+)$/.exec(path);
+    if (method === 'GET' && goals) {
+      const set = user.goals.filter((g) => g.from <= goals[1]!).at(-1);
+      return json(200, set?.goals ?? DEFAULT_GOALS);
+    }
+    const fasting = /^\/api\/fasting\/history\/range\/([\d-]+)\/([\d-]+)$/.exec(path);
+    if (method === 'GET' && fasting)
+      return json(
+        200,
+        user.fasts.filter((f) => inRange(f.start_time.slice(0, 10), fasting[1]!, fasting[2]!)),
+      );
+    if (method === 'GET' && path === '/api/fasting/current')
+      return json(200, user.fasts.find((f) => f.status === 'ACTIVE') ?? null);
+    if (method === 'POST' && path === '/api/fasting/start') {
+      if (!body?.start_time || !body?.fasting_type)
+        return json(400, { error: 'Start time and fasting type are required' });
+      if (user.fasts.some((f) => f.status === 'ACTIVE'))
+        return json(400, { error: 'There is already an active fast' });
+      const fast: FastRow = {
+        id: `fast-${++this.seq}`,
+        start_time: new Date(body.start_time).toISOString(),
+        target_end_time: body.target_end_time ? new Date(body.target_end_time).toISOString() : null,
+        fasting_type: body.fasting_type,
+        status: 'ACTIVE',
+      };
+      user.fasts.push(fast);
+      return json(201, fast);
+    }
+    if (method === 'POST' && path === '/api/fasting/end') {
+      const fast = user.fasts.find((f) => f.id === body?.id);
+      if (!fast) return json(404, { error: 'Fast not found' });
+      fast.end_time = new Date(body.end_time).toISOString();
+      fast.duration_minutes = Math.round(
+        (Date.parse(fast.end_time) - Date.parse(fast.start_time)) / 60_000,
+      );
+      fast.status = 'COMPLETED';
+      return json(200, fast);
     }
     if (method === 'GET' && path === '/api/sleep')
       return json(

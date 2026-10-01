@@ -12,7 +12,7 @@
  * - Sleep takes the source with the most sleep that night.
  * - Resting heart rate prefers wearable daily summaries, then measurements.
  */
-import type { MetricAggregate } from '@gauntlet/shared';
+import { adherenceScore, epley1rm, todayIn, type MetricAggregate } from '@gauntlet/shared';
 import type {
   CheckInRow,
   CustomCategory,
@@ -20,7 +20,12 @@ import type {
   DailyHealthRow,
   ExerciseDayBucket,
   ExerciseEntryRow,
+  ExerciseSetRow,
+  FastRow,
+  GoalsRow,
+  NutritionDayRow,
   SleepRow,
+  WaterRow,
 } from './client.js';
 
 export interface MergedValue {
@@ -42,6 +47,16 @@ export interface MergeInput {
   sleep: SleepRow[];
   /** Custom metrics wanted by the user's challenges: name (lower case) -> aggregate. */
   customMetrics: Record<string, MetricAggregate>;
+  /** Food totals per day (days with food logged). */
+  nutrition?: NutritionDayRow[];
+  water?: WaterRow[];
+  /** The person's goals per day, where known. Adherence is only scored on these days. */
+  goals?: Record<string, GoalsRow>;
+  fasts?: FastRow[];
+  /** Exercises (lower case) wanted for per-exercise strength metrics. */
+  lifts?: string[];
+  /** The person's time zone, to put a fast on the day it ended. Defaults to UTC. */
+  timezone?: string;
 }
 
 /** Custom categories SparkyFitness' own phone sync and integrations create for built-in metrics. */
@@ -189,6 +204,14 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
     t.add(d, 'sleep', secs / 3600, src);
   }
 
+  addNutrition(t, input);
+  addStrength(t, input);
+  addFasting(t, input);
+  // Weigh-ins: newest check-in per day. Only ever used for % toward a person's own target.
+  for (const [d, row] of latestCheckIn) {
+    if (pos(row.weight)) t.add(d, 'weight', row.weight, 'check-in');
+  }
+
   const merged = t.collect((metric, cands) => {
     if (metric === 'resting_hr_daily' || metric === 'resting_hr_measured') return cands[0] ?? null;
     if (metric.startsWith('custom:')) return cands[0] ?? null;
@@ -209,6 +232,115 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
     } else out.push(m);
   }
   return out;
+}
+
+function addNutrition(t: DayTable, input: MergeInput) {
+  const food = new Map<string, { calories: number; protein: number; carbs: number; fat: number }>();
+  for (const row of input.nutrition ?? []) {
+    const d = normDate(row.date);
+    if (!d) continue;
+    const day = {
+      calories: num(row.calories) ?? 0,
+      protein: num(row.protein) ?? 0,
+      carbs: num(row.carbs) ?? 0,
+      fat: num(row.fat) ?? 0,
+    };
+    if (!(day.calories > 0 || day.protein > 0 || day.carbs > 0 || day.fat > 0)) continue;
+    food.set(d, day);
+    t.add(d, 'calories_in', day.calories, 'food');
+    t.add(d, 'protein', day.protein, 'food');
+    t.add(d, 'carbs', day.carbs, 'food');
+    t.add(d, 'fat', day.fat, 'food');
+  }
+  const water = new Map<string, number>();
+  for (const row of input.water ?? []) {
+    const d = normDate(row.entry_date);
+    const ml = num(row.water_ml);
+    if (d && ml && ml > 0) water.set(d, (water.get(d) ?? 0) + ml);
+  }
+  for (const [d, ml] of water) t.add(d, 'water', ml / 1000, 'water');
+
+  for (const [d, g] of Object.entries(input.goals ?? {})) {
+    const goal = {
+      calories: num(g.calories),
+      protein: num(g.protein),
+      carbs: num(g.carbs),
+      fat: num(g.fat),
+      water: num(g.water_goal_ml),
+    };
+    if (pos(goal.calories)) t.add(d, 'goal_calories', goal.calories, 'goals');
+    if (pos(goal.protein)) t.add(d, 'goal_protein', goal.protein, 'goals');
+    if (pos(goal.carbs)) t.add(d, 'goal_carbs', goal.carbs, 'goals');
+    if (pos(goal.fat)) t.add(d, 'goal_fat', goal.fat, 'goals');
+    if (pos(goal.water)) t.add(d, 'goal_water', goal.water! / 1000, 'goals');
+
+    // Adherence: only on days something was logged (no log scores nothing, i.e. 0 over a challenge).
+    const eaten = food.get(d);
+    if (eaten && eaten.calories > 0) {
+      const cal = adherenceScore(eaten.calories, goal.calories);
+      if (cal != null) t.add(d, 'calorie_adherence', cal, 'food');
+    }
+    if (eaten) {
+      const macros = (['protein', 'carbs', 'fat'] as const)
+        .map((k) => adherenceScore(eaten[k], goal[k]))
+        .filter((v): v is number => v != null);
+      if (macros.length)
+        t.add(d, 'macro_adherence', macros.reduce((a, b) => a + b, 0) / macros.length, 'food');
+    }
+    const drank = water.get(d);
+    if (drank && goal.water && goal.water > 0)
+      t.add(d, 'water_goal', Math.min(100, (drank / goal.water) * 100), 'water');
+  }
+}
+
+/** Warm-ups don't count toward strength metrics. */
+function isWorkingSet(s: ExerciseSetRow): boolean {
+  return !/warm/i.test(s.set_type ?? '') && (num(s.reps) ?? 0) > 0;
+}
+
+function addStrength(t: DayTable, input: MergeInput) {
+  const wanted = new Set((input.lifts ?? []).map((l) => l.toLowerCase()));
+  const volume = new Map<string, number>();
+  const sets = new Map<string, number>();
+  for (const e of input.exerciseEntries) {
+    const d = normDate(e.entry_date);
+    if (!d || !e.sets?.length) continue;
+    const name = (e.exercise_name ?? '').trim().toLowerCase();
+    for (const s of e.sets) {
+      if (!isWorkingSet(s)) continue;
+      const reps = num(s.reps)!;
+      const kg = num(s.weight) ?? 0;
+      sets.set(d, (sets.get(d) ?? 0) + 1);
+      if (kg > 0) volume.set(d, (volume.get(d) ?? 0) + kg * reps);
+      if (kg > 0 && wanted.has(name)) {
+        t.add(d, `lift_max:${name}`, kg, e.exercise_source ?? 'workouts');
+        t.add(d, `lift_e1rm:${name}`, epley1rm(kg, reps), e.exercise_source ?? 'workouts');
+      }
+    }
+  }
+  for (const [d, v] of volume) t.add(d, 'lift_volume', v, 'workouts');
+  for (const [d, n] of sets) t.add(d, 'lift_sets', n, 'workouts');
+}
+
+function addFasting(t: DayTable, input: MergeInput) {
+  const tz = input.timezone ?? 'UTC';
+  const hours = new Map<string, number>();
+  const done = new Map<string, number>();
+  for (const f of input.fasts ?? []) {
+    if ((f.status ?? '').toUpperCase() !== 'COMPLETED' || !f.end_time) continue;
+    const end = new Date(f.end_time);
+    const start = new Date(f.start_time);
+    if (Number.isNaN(end.getTime()) || Number.isNaN(start.getTime())) continue;
+    const mins = num(f.duration_minutes) ?? (end.getTime() - start.getTime()) / 60_000;
+    if (!(mins > 0)) continue;
+    const d = todayIn(tz, end);
+    hours.set(d, (hours.get(d) ?? 0) + mins / 60);
+    const target = f.target_end_time ? new Date(f.target_end_time) : null;
+    if (!target || Number.isNaN(target.getTime()) || end.getTime() >= target.getTime() - 60_000)
+      done.set(d, (done.get(d) ?? 0) + 1);
+  }
+  for (const [d, h] of hours) t.add(d, 'fast_hours', h, 'fasting');
+  for (const [d, n] of done) t.add(d, 'fasts_completed', n, 'fasting');
 }
 
 /** A workout longer than this is a session someone forgot to stop. */
@@ -292,4 +424,22 @@ function pos(value: unknown): boolean {
 
 function round(v: number): number {
   return Math.round(v * 1000) / 1000;
+}
+
+/** Exercises with weighted working sets, most-trained first (for the strength-challenge picker). */
+export function liftOptions(
+  entries: ExerciseEntryRow[],
+): { key: string; label: string; sessions: number }[] {
+  const seen = new Map<string, { label: string; sessions: number }>();
+  for (const e of entries) {
+    const label = (e.exercise_name ?? '').trim();
+    const key = label.toLowerCase();
+    if (!key || key.length > 60) continue;
+    if (!e.sets?.some((s) => isWorkingSet(s) && (num(s.weight) ?? 0) > 0)) continue;
+    const prev = seen.get(key);
+    seen.set(key, { label: prev?.label ?? label, sessions: (prev?.sessions ?? 0) + 1 });
+  }
+  return [...seen]
+    .map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label));
 }

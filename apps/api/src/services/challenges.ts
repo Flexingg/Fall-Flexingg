@@ -1,6 +1,12 @@
 import {
+  addDays,
   computeStandings,
   daysBetween,
+  participantParamsSchema,
+  relativeSeries,
+  weightGoalSeries,
+  type MetricTransform,
+  type ParticipantParams,
   maxDate,
   metricDef,
   minDate,
@@ -97,19 +103,23 @@ export async function computeChallengeStandings(
 ): Promise<ComputedStandings> {
   const joined = parts.filter((p) => p.state === 'joined').map((p) => p.userId);
   const asOf = minDate(maxDate(challengeToday(ctx, ch), ch.startDate), ch.endDate);
-  const rows = joined.length
+  const def = challengeMetricDef(ch);
+  // Per-person transforms need each person's values from before the start, as their baseline.
+  const from = def.transform ? addDays(ch.startDate, -BASELINE_DAYS) : ch.startDate;
+  const raw = joined.length
     ? await ctx.db
         .select({ userId: dailyMetrics.userId, date: dailyMetrics.date, value: dailyMetrics.value })
         .from(dailyMetrics)
         .where(
           and(
             inArray(dailyMetrics.userId, joined),
-            eq(dailyMetrics.metric, ch.metric),
-            gte(dailyMetrics.date, ch.startDate),
+            eq(dailyMetrics.metric, def.source ?? ch.metric),
+            gte(dailyMetrics.date, from),
             lte(dailyMetrics.date, ch.endDate),
           ),
         )
     : [];
+  const rows = def.transform ? transformRows(def.transform, raw, parts, ch.startDate) : raw;
   const byUser = new Map<string, { date: string; value: number }[]>(joined.map((id) => [id, []]));
   const bestDays = new Map<string, number>();
   for (const r of rows) {
@@ -135,6 +145,40 @@ export async function computeChallengeStandings(
     [...byUser].map(([userId, days]) => ({ userId, days })),
   );
   return { asOf, standings, bestDays };
+}
+
+/** How far back to look for someone's starting weight or starting 1RM. */
+const BASELINE_DAYS = 90;
+
+/** Turn stored values into what each person is scored on (their own target or starting point). */
+function transformRows(
+  transform: MetricTransform,
+  raw: { userId: string; date: string; value: number }[],
+  parts: ParticipantRow[],
+  startDate: string,
+): { userId: string; date: string; value: number }[] {
+  const byUser = new Map<string, { date: string; value: number }[]>();
+  for (const r of raw) {
+    const list = byUser.get(r.userId) ?? [];
+    list.push({ date: r.date, value: r.value });
+    byUser.set(r.userId, list);
+  }
+  const out: { userId: string; date: string; value: number }[] = [];
+  for (const [userId, series] of byUser) {
+    let values: { date: string; value: number }[] = [];
+    if (transform === 'relative') values = relativeSeries(series, startDate);
+    else {
+      const params = paramsOf(parts.find((p) => p.userId === userId));
+      if (params.weightGoal) values = weightGoalSeries(series, params.weightGoal, startDate);
+    }
+    for (const v of values) out.push({ userId, ...v });
+  }
+  return out;
+}
+
+export function paramsOf(p: Pick<ParticipantRow, 'params'> | undefined): ParticipantParams {
+  const parsed = participantParamsSchema.safeParse(p?.params ?? {});
+  return parsed.success ? parsed.data : {};
 }
 
 interface BuildArgs {
@@ -246,8 +290,10 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
     .map((p) => usersById.get(p.userId))
     .filter((u): u is UserRow => !!u)
     .map(toPublicUser);
+  const mine = partByUser.get(viewerId);
   return {
     ...summary,
+    myParams: mine ? paramsOf(mine) : null,
     lowerIsBetter: ch.lowerIsBetter,
     aggregate: ch.aggregate,
     standings,

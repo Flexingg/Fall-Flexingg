@@ -1,5 +1,5 @@
-import type { MetricAggregate } from '@gauntlet/shared';
-import type { CustomMeasurementRow, SparkyClient } from './client.js';
+import { addDays, type MetricAggregate } from '@gauntlet/shared';
+import type { CustomMeasurementRow, GoalsRow, SparkyClient } from './client.js';
 import { SparkyError } from './client.js';
 import { mergeDaily, wantedCategoryNames, type MergedValue, type MergeInput } from './merge.js';
 
@@ -10,14 +10,33 @@ import { mergeDaily, wantedCategoryNames, type MergedValue, type MergeInput } fr
  * A source that fails is skipped (reported through `onSkip`, and `partial` is set) so one flaky
  * endpoint doesn't blank the whole app. A rejected key (401) always throws.
  */
+export interface FetchOptions {
+  /** Custom metrics wanted by the user's challenges: name (lower case) -> aggregate. */
+  customMetrics?: Record<string, MetricAggregate>;
+  /** Exercises (lower case) wanted for per-exercise strength metrics. */
+  lifts?: string[];
+  /** The person's time zone (fasts count on the day they end). */
+  timezone?: string;
+  /**
+   * Read the person's goals for days with food or water logged (one call per day), for adherence
+   * metrics. `known` holds goals already stored, which aren't fetched again.
+   */
+  goals?: { known?: Record<string, GoalsRow> };
+  onSkip?: (label: string, err: Error) => void;
+}
+
+/** At most this many goal look-ups per sync; the rest come on later syncs. */
+const MAX_GOAL_FETCHES = 40;
+
 export async function fetchMerged(
   sparky: SparkyClient,
   token: string,
   start: string,
   end: string,
-  customMetrics: Record<string, MetricAggregate> = {},
-  onSkip: (label: string, err: Error) => void = () => {},
+  opts: FetchOptions = {},
 ): Promise<{ merged: MergedValue[]; partial: boolean }> {
+  const customMetrics = opts.customMetrics ?? {};
+  const onSkip = opts.onSkip ?? (() => {});
   let partial = false;
   // Fail fast on a revoked key before fanning out.
   const categories = await sparky.customCategories(token);
@@ -35,26 +54,30 @@ export async function fetchMerged(
 
   const wanted = new Set(wantedCategoryNames(customMetrics));
   const matched = categories.filter((c) => wanted.has(c.name.toLowerCase()));
-  const [daily, checkIns, exerciseDays, exerciseEntries, sleep, customRows] = await Promise.all([
-    settle('daily', sparky.dailyHealthMetrics(token, start, end), []),
-    settle('checkins', sparky.checkIns(token, start, end), []),
-    settle('exercise-days', sparky.exerciseDays(token, start, end), []),
-    settle('exercise-entries', sparky.exerciseEntries(token, start, end), []),
-    settle('sleep', sparky.sleep(token, start, end), []),
-    Promise.all(
-      matched.map(
-        async (c) =>
-          [
-            c,
-            await settle(
-              `custom:${c.name}`,
-              sparky.customMeasurements(token, c.id, start, end),
-              [] as CustomMeasurementRow[],
-            ),
-          ] as const,
+  const [daily, checkIns, exerciseDays, report, sleep, water, fasts, customRows] =
+    await Promise.all([
+      settle('daily', sparky.dailyHealthMetrics(token, start, end), []),
+      settle('checkins', sparky.checkIns(token, start, end), []),
+      settle('exercise-days', sparky.exerciseDays(token, start, end), []),
+      settle('report', sparky.report(token, start, end), { exerciseEntries: [], nutrition: [] }),
+      settle('sleep', sparky.sleep(token, start, end), []),
+      settle('water', sparky.water(token, start, end), []),
+      // A fast that ends on the first day started the day before.
+      settle('fasting', sparky.fasts(token, addDays(start, -1), end), []),
+      Promise.all(
+        matched.map(
+          async (c) =>
+            [
+              c,
+              await settle(
+                `custom:${c.name}`,
+                sparky.customMeasurements(token, c.id, start, end),
+                [] as CustomMeasurementRow[],
+              ),
+            ] as const,
+        ),
       ),
-    ),
-  ]);
+    ]);
 
   const custom: MergeInput['custom'] = {};
   for (const [category, rows] of customRows) {
@@ -62,6 +85,29 @@ export async function fetchMerged(
     const existing = custom[key];
     custom[key] = existing ? { category, rows: [...existing.rows, ...rows] } : { category, rows };
   }
+
+  let goals: Record<string, GoalsRow> | undefined;
+  if (opts.goals) {
+    goals = { ...opts.goals.known };
+    const logged = new Set<string>();
+    for (const r of report.nutrition) if (r.date) logged.add(String(r.date).slice(0, 10));
+    for (const r of water) if (r.entry_date) logged.add(String(r.entry_date).slice(0, 10));
+    const missing = [...logged]
+      .filter((d) => d >= start && d <= end && !goals![d])
+      .sort()
+      .reverse()
+      .slice(0, MAX_GOAL_FETCHES);
+    for (let i = 0; i < missing.length; i += 4) {
+      const batch = missing.slice(i, i + 4);
+      const got = await Promise.all(
+        batch.map((d) => settle(`goals:${d}`, sparky.goalsByDate(token, d), null)),
+      );
+      batch.forEach((d, j) => {
+        if (got[j]) goals![d] = got[j]!;
+      });
+    }
+  }
+
   return {
     merged: mergeDaily({
       start,
@@ -70,9 +116,15 @@ export async function fetchMerged(
       checkIns,
       custom,
       exerciseDays,
-      exerciseEntries,
+      exerciseEntries: report.exerciseEntries,
       sleep,
       customMetrics,
+      nutrition: report.nutrition,
+      water,
+      goals,
+      fasts,
+      lifts: opts.lifts,
+      timezone: opts.timezone,
     }),
     partial,
   };

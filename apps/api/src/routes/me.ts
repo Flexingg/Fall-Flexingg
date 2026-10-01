@@ -7,8 +7,11 @@ import {
   todayIn,
   trendsNeedFrom,
   trendsQuerySchema,
+  startFastSchema,
   updateMeSchema,
   type CustomMetricOption,
+  type FastStatus,
+  type LiftOption,
   type MetricRow,
   type TodayResponse,
   type TrendsResponse,
@@ -21,14 +24,15 @@ import { badRequest, HttpError } from '../context.js';
 import { challengeParticipants, dailyMetrics, rankSnapshots, users } from '../db/schema.js';
 import { listForUser } from '../services/challenges.js';
 import { syncUser } from '../services/sync.js';
+import { getUser, isValidTimeZone, sparkyToken, toMe, type UserRow } from '../services/users.js';
 import {
-  getUser,
-  isValidTimeZone,
-  sparkyToken,
-  toMe,
-  type UserRow,
-} from '../services/users.js';
-import { DISTANCE_CATEGORIES, listConnections, RESTING_HR_CATEGORIES } from '@gauntlet/sparky';
+  DISTANCE_CATEGORIES,
+  liftOptions,
+  listConnections,
+  RESTING_HR_CATEGORIES,
+  SparkyError,
+  type FastRow,
+} from '@gauntlet/sparky';
 import { connectionsEnv } from './connections.js';
 
 export function meRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -154,6 +158,52 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       }));
   });
 
+  /** Exercises with weighted sets in the last four months, for per-exercise strength challenges. */
+  app.get('/api/me/lifts', auth, async (req): Promise<LiftOption[]> => {
+    const user = await getUser(ctx, req.userId);
+    const today = todayIn(user.timezone, ctx.now());
+    const { exerciseEntries } = await ctx.sparky.report(
+      sparkyToken(ctx, user),
+      addDays(today, -120),
+      today,
+    );
+    return liftOptions(exerciseEntries);
+  });
+
+  /** SparkyFitness' fasting tracker: what's running, start one, end it. */
+  app.get('/api/me/fast', auth, async (req): Promise<FastStatus> => {
+    const user = await getUser(ctx, req.userId);
+    return toFastStatus(await ctx.sparky.currentFast(sparkyToken(ctx, user)));
+  });
+
+  app.post('/api/me/fast/start', auth, async (req): Promise<FastStatus> => {
+    const { hours } = startFastSchema.parse(req.body);
+    const user = await getUser(ctx, req.userId);
+    const now = ctx.now();
+    try {
+      const fast = await ctx.sparky.startFast(sparkyToken(ctx, user), {
+        start_time: now.toISOString(),
+        target_end_time: new Date(now.getTime() + hours * 3_600_000).toISOString(),
+        fasting_type: `${hours}h`,
+      });
+      return toFastStatus(fast);
+    } catch (err) {
+      if (err instanceof SparkyError && err.status === 400)
+        throw badRequest('You already have a fast running.', 'fast_running');
+      throw err;
+    }
+  });
+
+  app.post('/api/me/fast/end', auth, async (req): Promise<FastStatus> => {
+    const user = await getUser(ctx, req.userId);
+    const token = sparkyToken(ctx, user);
+    const current = await ctx.sparky.currentFast(token);
+    if (!current) throw badRequest('No fast is running.', 'no_fast');
+    await ctx.sparky.endFast(token, current.id, ctx.now().toISOString());
+    void syncUser(ctx, user.id).catch(() => undefined);
+    return { active: null };
+  });
+
   /** Delete the Gauntlet account and the API key it holds. SparkyFitness data is untouched. */
   app.delete('/api/me', auth, async (req) => {
     const user = await getUser(ctx, req.userId);
@@ -187,6 +237,13 @@ async function hasSources(ctx: AppContext, user: UserRow, today: string): Promis
   } catch {
     return true;
   }
+}
+
+function toFastStatus(f: FastRow | null): FastStatus {
+  if (!f || (f.status ?? '').toUpperCase() !== 'ACTIVE') return { active: null };
+  return {
+    active: { id: f.id, startedAt: f.start_time, targetEndAt: f.target_end_time ?? null },
+  };
 }
 
 /** Rows the personal-bests tiles are computed from (steps and distance, all time). */

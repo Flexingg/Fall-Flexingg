@@ -1,0 +1,240 @@
+import type { ChallengeDetail, FastStatus, LiftOption, MeUser } from '@gauntlet/shared';
+import { SparkyClient } from '@gauntlet/sparky';
+import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
+import { sql } from 'drizzle-orm';
+import type { FastifyInstance } from 'fastify';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildApp } from '../src/app.js';
+import { loadConfig } from '../src/config.js';
+import type { AppContext } from '../src/context.js';
+import { createDb, runMigrations } from '../src/db/index.js';
+import { syncUser } from '../src/services/sync.js';
+
+const DB_URL = process.env.TEST_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:5433/gauntlet_test';
+const fake = new FakeSparky();
+let app: FastifyInstance;
+let ctx: AppContext;
+let closeDb: () => Promise<void>;
+const clock = new Date('2026-10-02T18:00:00Z');
+const people = { bulk: 'Bo Bulk', cut: 'Cy Cut' } as const;
+type Who = keyof typeof people;
+const access = {} as Record<Who, string>;
+const ids = {} as Record<Who, string>;
+const sparkyUser = {} as Record<Who, FakeUser>;
+
+beforeAll(async () => {
+  const { db, client } = createDb(DB_URL);
+  await db.execute(
+    sql`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public;`,
+  );
+  await runMigrations(db);
+  const cfg = loadConfig({
+    DATABASE_URL: DB_URL,
+    SPARKY_URL: fake.baseUrl,
+    PUBLIC_WEB_URL: 'https://gauntlet.test',
+    JWT_SECRET: 'test-secret-test-secret-test-secret-123',
+    ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+    SYNC_INTERVAL_MINUTES: '0',
+  });
+  ({ app, ctx } = await buildApp({
+    db,
+    cfg,
+    sparky: new SparkyClient({ baseUrl: fake.baseUrl, fetch: fake.fetch }),
+    now: () => clock,
+  }));
+  closeDb = () => client.end();
+  for (const who of Object.keys(people) as Who[]) {
+    sparkyUser[who] = fake.addUser({
+      id: `u-${who}`,
+      email: `${who}@example.com`,
+      password: 'pw',
+      name: people[who],
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { method: 'password', email: `${who}@example.com`, password: 'pw' },
+      headers: { 'x-gauntlet-client': 'native', 'x-timezone': 'UTC' },
+    });
+    const body = res.json() as { accessToken: string; user: MeUser };
+    access[who] = body.accessToken;
+    ids[who] = body.user.id;
+  }
+  // Friends, so they can invite each other.
+  await call('bulk', 'POST', '/api/friends/requests', { email: 'cut@example.com' });
+  await call('cut', 'POST', `/api/friends/requests/${ids.bulk}/accept`);
+});
+
+afterAll(async () => {
+  await app.close();
+  await closeDb();
+});
+
+async function call<T = unknown>(
+  who: Who,
+  method: 'GET' | 'POST',
+  url: string,
+  payload?: object,
+  expect = method === 'POST' && url === '/api/challenges' ? 201 : 200,
+): Promise<T> {
+  const res = await app.inject({
+    method,
+    url,
+    payload,
+    headers: { authorization: `Bearer ${access[who]}` },
+  });
+  if (res.statusCode !== expect)
+    throw new Error(`${method} ${url} -> ${res.statusCode}: ${res.body}`);
+  return res.json() as T;
+}
+
+const base = {
+  startDate: '2026-10-01',
+  endDate: '2026-10-07',
+  timezone: 'UTC',
+};
+const syncAll = async () => {
+  for (const who of Object.keys(people) as Who[]) await syncUser(ctx, ids[who]);
+};
+
+describe('calorie adherence', () => {
+  it('lets a bulker and a cutter both score 100 by hitting their own goals', async () => {
+    sparkyUser.bulk.goals.push({ from: '2026-01-01', goals: { calories: 3200, protein: 200 } });
+    sparkyUser.cut.goals.push({ from: '2026-01-01', goals: { calories: 1800, protein: 160 } });
+    sparkyUser.bulk.nutrition.push(
+      { date: '2026-10-01', calories: 3200, protein: 200 },
+      { date: '2026-10-02', calories: 3200, protein: 200 },
+    );
+    sparkyUser.cut.nutrition.push(
+      { date: '2026-10-01', calories: 1800, protein: 160 },
+      { date: '2026-10-02', calories: 1980, protein: 160 }, // 10% over: 80
+    );
+    const ch = await call<ChallengeDetail>('bulk', 'POST', '/api/challenges', {
+      ...base,
+      name: 'Dial it in',
+      metric: 'calorie_adherence',
+      scoring: 'daily_avg',
+      inviteUserIds: [ids.cut],
+    });
+    await call('cut', 'POST', `/api/challenges/${ch.id}/respond`, { accept: true });
+    await syncAll();
+    const d = await call<ChallengeDetail>('bulk', 'GET', `/api/challenges/${ch.id}`);
+    expect(d.standings.map((s) => [s.user.displayName, s.score])).toEqual([
+      ['Bo Bulk', 100],
+      ['Cy Cut', 90],
+    ]);
+    // Goals were looked up once per logged day and are not looked up again for settled days.
+    const before = fake.calls.filter((c) => c.includes('/api/goals/')).length;
+    await syncAll();
+    const after = fake.calls.filter((c) => c.includes('/api/goals/')).length;
+    expect(after - before).toBe(4); // today and yesterday, for each of the two
+  });
+
+  it('refuses a way of winning that makes no sense for the metric', async () => {
+    await call(
+      'bulk',
+      'POST',
+      '/api/challenges',
+      { ...base, name: 'x', metric: 'weight_goal', scoring: 'streak', goal: 1 },
+      400,
+    );
+  });
+});
+
+describe('weight goal', () => {
+  let ch: ChallengeDetail;
+  const lose = { direction: 'lose', targetType: 'kg', target: 4 } as const;
+  const gain = { direction: 'gain', targetType: 'percent', target: 5 } as const;
+
+  it('needs everyone to pick their own target', async () => {
+    const body = { ...base, name: 'Recomp', metric: 'weight_goal', scoring: 'total' };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/challenges',
+      payload: body,
+      headers: { authorization: `Bearer ${access.bulk}` },
+    });
+    expect(res.json()).toMatchObject({ code: 'needs_weight_goal' });
+    ch = await call<ChallengeDetail>('bulk', 'POST', '/api/challenges', {
+      ...body,
+      params: { weightGoal: gain },
+      inviteUserIds: [ids.cut],
+    });
+    expect(ch.myParams).toEqual({ weightGoal: gain });
+    await call('cut', 'POST', `/api/challenges/${ch.id}/respond`, { accept: true }, 400);
+    await call('cut', 'POST', `/api/challenges/${ch.id}/respond`, {
+      accept: true,
+      params: { weightGoal: lose },
+    });
+  });
+
+  it('scores % of each person’s own target and never shows weights', async () => {
+    sparkyUser.bulk.checkIns.push(
+      { entry_date: '2026-09-29', weight: 70, updated_at: '2026-09-29T07:00:00Z' },
+      { entry_date: '2026-10-02', weight: 71.75, updated_at: '2026-10-02T07:00:00Z' },
+    );
+    sparkyUser.cut.checkIns.push(
+      { entry_date: '2026-10-01', weight: 90, updated_at: '2026-10-01T07:00:00Z' },
+      { entry_date: '2026-10-02', weight: 89, updated_at: '2026-10-02T07:00:00Z' },
+    );
+    await syncAll();
+    const d = await call<ChallengeDetail>('cut', 'GET', `/api/challenges/${ch.id}`);
+    // Bo gained 1.75 of 3.5 kg (5% of 70); Cy lost 1 of 4 kg.
+    expect(d.standings.map((s) => [s.user.displayName, s.score])).toEqual([
+      ['Bo Bulk', 50],
+      ['Cy Cut', 25],
+    ]);
+    const text = JSON.stringify(d);
+    // No raw weight appears as a value anywhere (ids can contain the digits, so match numbers only).
+    expect(text).not.toMatch(/[:,[](71\.75|89|90|70)[,}\]]/);
+    expect(d.myParams).toEqual({ weightGoal: lose });
+  });
+});
+
+describe('strength', () => {
+  it('lists exercises with weighted sets and races on the heaviest squat', async () => {
+    sparkyUser.bulk.exerciseEntries.push({
+      entry_date: '2026-10-01',
+      exercise_name: 'Squat',
+      exercise_source: 'liftosaur',
+      sets: [
+        { set_type: 'Warm-up', reps: 5, weight: 60 },
+        { set_type: 'Working Set', reps: 5, weight: 140 },
+      ],
+    });
+    sparkyUser.cut.exerciseEntries.push({
+      entry_date: '2026-10-02',
+      exercise_name: 'Squat',
+      sets: [{ reps: 3, weight: 120 }],
+    });
+    const lifts = await call<LiftOption[]>('bulk', 'GET', '/api/me/lifts');
+    expect(lifts).toEqual([{ key: 'squat', label: 'Squat', sessions: 1 }]);
+    const ch = await call<ChallengeDetail>('bulk', 'POST', '/api/challenges', {
+      ...base,
+      name: 'Squat-off',
+      metric: 'lift_max:squat',
+      scoring: 'best_day',
+      inviteUserIds: [ids.cut],
+    });
+    expect(ch.metricLabel).toBe('Squat max');
+    await call('cut', 'POST', `/api/challenges/${ch.id}/respond`, { accept: true });
+    await syncAll();
+    const d = await call<ChallengeDetail>('bulk', 'GET', `/api/challenges/${ch.id}`);
+    expect(d.standings.map((s) => s.score)).toEqual([140, 120]);
+  });
+});
+
+describe('fasting', () => {
+  it('starts and ends a fast through Gauntlet', async () => {
+    expect(await call<FastStatus>('cut', 'GET', '/api/me/fast')).toEqual({ active: null });
+    const started = await call<FastStatus>('cut', 'POST', '/api/me/fast/start', { hours: 16 });
+    expect(started.active?.targetEndAt).toBe('2026-10-03T10:00:00.000Z');
+    await call('cut', 'POST', '/api/me/fast/start', { hours: 16 }, 400);
+    expect((await call<FastStatus>('cut', 'GET', '/api/me/fast')).active?.id).toBe(
+      started.active!.id,
+    );
+    await call('cut', 'POST', '/api/me/fast/end');
+    expect(await call<FastStatus>('cut', 'GET', '/api/me/fast')).toEqual({ active: null });
+    await call('cut', 'POST', '/api/me/fast/end', undefined, 400);
+  });
+});

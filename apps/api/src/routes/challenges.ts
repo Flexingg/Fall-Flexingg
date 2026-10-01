@@ -2,6 +2,9 @@ import {
   addDays,
   createChallengeSchema,
   featureChallengeSchema,
+  joinChallengeSchema,
+  needsWeightGoal,
+  type ParticipantParams,
   daysBetween,
   isCustomMetric,
   metricDef,
@@ -29,6 +32,7 @@ import {
   getParticipants,
   listForUser,
   loadDetail,
+  paramsOf,
   summarize,
 } from '../services/challenges.js';
 import { friendIds } from '../services/friends.js';
@@ -81,9 +85,12 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       const def = metricDef(metric);
       aggregate = def.aggregate;
       lowerIsBetter = def.lowerIsBetter;
+      if (!def.scoring.includes(body.scoring))
+        throw badRequest(`${def.label} can't be won that way. Pick another way to win.`);
     }
     const problem = validateRules({ scoring: body.scoring, aggregate, goal: body.goal });
     if (problem) throw badRequest(problem);
+    const params = checkParams(metric, body.params);
 
     if (body.visibility === 'public') {
       const me = await getUser(ctx, req.userId);
@@ -117,7 +124,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         })
         .returning({ id: challenges.id });
       await tx.insert(challengeParticipants).values([
-        { challengeId: ch!.id, userId: req.userId, state: 'joined' as const },
+        { challengeId: ch!.id, userId: req.userId, state: 'joined' as const, params },
         ...invitees.map((userId) => ({
           challengeId: ch!.id,
           userId,
@@ -165,12 +172,14 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /** Join a public challenge without an invite. */
   app.post<{ Params: { id: string } }>('/api/challenges/:id/join', auth, async (req) => {
+    const body = joinChallengeSchema.parse(req.body ?? {});
     const ch = await getChallenge(ctx, uuid(req.params.id));
     const parts = await getParticipants(ctx, ch.id);
     const mine = parts.find((p) => p.userId === req.userId);
     if (ch.visibility !== 'public' && !mine) throw notFound('Challenge not found');
     if (challengeStatus(ctx, ch) === 'completed') throw badRequest('That challenge is over');
-    if (mine?.state === 'joined') return loadDetail(ctx, ch.id, req.userId);
+    if (mine?.state === 'joined' && !body.params) return loadDetail(ctx, ch.id, req.userId);
+    const params = checkParams(ch.metric, body.params ?? (mine ? paramsOf(mine) : undefined));
     if (!mine) {
       const me = await getUser(ctx, req.userId);
       if (me.visibility !== 'public')
@@ -183,14 +192,15 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     await ctx.db
       .insert(challengeParticipants)
-      .values({ challengeId: ch.id, userId: req.userId, state: 'joined' })
+      .values({ challengeId: ch.id, userId: req.userId, state: 'joined', params })
       .onConflictDoUpdate({
         target: [challengeParticipants.challengeId, challengeParticipants.userId],
-        set: { state: 'joined' },
+        set: { state: 'joined', params },
       });
-    await ctx.db
-      .insert(feedEvents)
-      .values({ actorId: req.userId, challengeId: ch.id, kind: 'joined', payload: {} });
+    if (mine?.state !== 'joined')
+      await ctx.db
+        .insert(feedEvents)
+        .values({ actorId: req.userId, challengeId: ch.id, kind: 'joined', payload: {} });
     void syncUser(ctx, req.userId).catch(() => undefined);
     return loadDetail(ctx, ch.id, req.userId);
   });
@@ -211,15 +221,16 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
   );
 
   app.post<{ Params: { id: string } }>('/api/challenges/:id/respond', auth, async (req) => {
-    const { accept } = respondChallengeSchema.parse(req.body);
+    const { accept, params: given } = respondChallengeSchema.parse(req.body);
     const ch = await getChallenge(ctx, uuid(req.params.id));
     const parts = await assertCanView(ctx, ch, req.userId);
     const mine = parts.find((p) => p.userId === req.userId)!;
     if (challengeStatus(ctx, ch) === 'completed') throw badRequest('That challenge is over');
-    if (mine.state !== 'joined' || !accept) {
+    const params = accept ? checkParams(ch.metric, given ?? paramsOf(mine)) : mine.params;
+    if (mine.state !== 'joined' || !accept || given) {
       await ctx.db
         .update(challengeParticipants)
-        .set({ state: accept ? 'joined' : 'declined' })
+        .set({ state: accept ? 'joined' : 'declined', params })
         .where(
           and(
             eq(challengeParticipants.challengeId, ch.id),
@@ -322,7 +333,13 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         })
         .returning({ id: challenges.id });
       await tx.insert(challengeParticipants).values([
-        { challengeId: copy!.id, userId: req.userId, state: 'joined' as const },
+        {
+          challengeId: copy!.id,
+          userId: req.userId,
+          state: 'joined' as const,
+          // Same target as last time; others pick theirs when they accept.
+          params: parts.find((p) => p.userId === req.userId)?.params ?? null,
+        },
         ...others.map((userId) => ({
           challengeId: copy!.id,
           userId,
@@ -368,6 +385,20 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       };
     },
   );
+}
+
+/** Weight challenges need each person's own target; everything else takes no settings. */
+function checkParams(
+  metric: string,
+  params: ParticipantParams | undefined,
+): ParticipantParams | null {
+  if (!needsWeightGoal(metric as MetricKey)) return null;
+  if (!params?.weightGoal)
+    throw badRequest(
+      'Pick whether you want to lose or gain, and your target.',
+      'needs_weight_goal',
+    );
+  return { weightGoal: params.weightGoal };
 }
 
 function uuid(id: string): string {

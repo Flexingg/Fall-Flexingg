@@ -5,15 +5,17 @@
 import {
   addDays,
   BUILTIN_METRICS,
+  HIDDEN_METRICS,
   isCustomMetric,
+  liftExercise,
   minDate,
   todayIn,
   type MetricAggregate,
 } from '@gauntlet/shared';
-import { and, eq, gte, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics, feedEvents, users } from '../db/schema.js';
-import { fetchMerged, SparkyError, type MergedValue } from '@gauntlet/sparky';
+import { fetchMerged, SparkyError, type GoalsRow, type MergedValue } from '@gauntlet/sparky';
 import { openChallengesForUser, refreshChallenge, type ChallengeRow } from './challenges.js';
 import { getUser, markKeyInvalid, sparkyToken } from './users.js';
 
@@ -29,7 +31,18 @@ const PROGRESS_THRESHOLD: Record<string, number> = {
   active_minutes: 15,
   active_calories: 150,
   workouts: 1,
+  lift_volume: 2000,
+  lift_sets: 10,
+  water: 1,
+  fast_hours: 12,
+  fasts_completed: 1,
 };
+
+/** Metrics scored against the person's own goals, which cost a goal look-up per day. */
+const GOAL_METRICS = new Set(['calorie_adherence', 'macro_adherence', 'water_goal']);
+const GOAL_ROWS = ['goal_calories', 'goal_protein', 'goal_carbs', 'goal_fat', 'goal_water'];
+/** Goals can still change for recent days, so these are always looked up again. */
+const GOALS_SETTLED_AFTER_DAYS = 2;
 
 export interface SyncResult {
   userId: string;
@@ -93,15 +106,34 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   start = start < addDays(end, -MAX_WINDOW_DAYS) ? addDays(end, -MAX_WINDOW_DAYS) : start;
 
   const customMetrics: Record<string, MetricAggregate> = {};
+  const lifts = new Set<string>();
   for (const ch of open) {
     if (isCustomMetric(ch.metric))
       customMetrics[ch.metric.slice('custom:'.length).toLowerCase()] = ch.aggregate;
+    const lift = liftExercise(ch.metric);
+    if (lift) lifts.add(lift.exercise);
   }
+  const wantsGoals = open.some((ch) => GOAL_METRICS.has(ch.metric));
+  const knownGoals = wantsGoals
+    ? await storedGoals(
+        ctx,
+        userId,
+        start,
+        addDays(todayIn(user.timezone, ctx.now()), -GOALS_SETTLED_AFTER_DAYS),
+      )
+    : undefined;
 
   let merged: MergedValue[];
   let partial: boolean;
   try {
-    ({ merged, partial } = await fetchAndMerge(ctx, token, start, end, customMetrics));
+    ({ merged, partial } = await fetchMerged(ctx.sparky, token, start, end, {
+      customMetrics,
+      lifts: [...lifts],
+      timezone: user.timezone,
+      goals: wantsGoals ? { known: knownGoals } : undefined,
+      onSkip: (label, err) =>
+        ctx.log.warn({ err: err.message, label }, 'sparky read failed; continuing without it'),
+    }));
   } catch (err) {
     if (err instanceof SparkyError && err.status === 401) {
       await markKeyInvalid(ctx, userId);
@@ -111,7 +143,15 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
     return { userId, ok: false, changed: 0, error: (err as Error).message };
   }
 
-  const changes = await store(ctx, userId, start, end, merged, Object.keys(customMetrics), partial);
+  // Metrics this sync is responsible for: a value it no longer sees was deleted in SparkyFitness.
+  const managed = new Set<string>([
+    ...BUILTIN_METRICS,
+    ...HIDDEN_METRICS,
+    ...Object.keys(customMetrics).map((n) => `custom:${n}`),
+    ...[...lifts].flatMap((l) => [`lift_max:${l}`, `lift_e1rm:${l}`]),
+  ]);
+  if (!wantsGoals) for (const m of [...GOAL_METRICS, ...GOAL_ROWS]) managed.delete(m);
+  const changes = await store(ctx, userId, start, end, merged, managed, partial);
   await ctx.db.update(users).set({ lastSyncedAt: ctx.now() }).where(eq(users.id, userId));
 
   // First sync pulls weeks of history at once; don't post that as "progress".
@@ -120,16 +160,34 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   return { userId, ok: true, changed: changes.length };
 }
 
-async function fetchAndMerge(
+/** Goals already stored for settled days, so they aren't looked up again. */
+async function storedGoals(
   ctx: AppContext,
-  token: string,
+  userId: string,
   start: string,
-  end: string,
-  customMetrics: Record<string, MetricAggregate>,
-): Promise<{ merged: MergedValue[]; partial: boolean }> {
-  return fetchMerged(ctx.sparky, token, start, end, customMetrics, (label, err) =>
-    ctx.log.warn({ err: err.message, label }, 'sparky read failed; continuing without it'),
-  );
+  before: string,
+): Promise<Record<string, GoalsRow>> {
+  const rows = await ctx.db
+    .select()
+    .from(dailyMetrics)
+    .where(
+      and(
+        eq(dailyMetrics.userId, userId),
+        gte(dailyMetrics.date, start),
+        lte(dailyMetrics.date, before),
+        inArray(dailyMetrics.metric, GOAL_ROWS),
+      ),
+    );
+  const out: Record<string, GoalsRow> = {};
+  for (const r of rows) {
+    const g = (out[r.date] ??= {});
+    if (r.metric === 'goal_calories') g.calories = r.value;
+    if (r.metric === 'goal_protein') g.protein = r.value;
+    if (r.metric === 'goal_carbs') g.carbs = r.value;
+    if (r.metric === 'goal_fat') g.fat = r.value;
+    if (r.metric === 'goal_water') g.water_goal_ml = r.value * 1000;
+  }
+  return out;
 }
 
 interface Change {
@@ -147,7 +205,7 @@ async function store(
   start: string,
   end: string,
   merged: MergedValue[],
-  customNames: string[],
+  managed: Set<string>,
   /** A source failed to load: keep existing values rather than treating them as deleted. */
   partial: boolean,
 ): Promise<Change[]> {
@@ -162,7 +220,6 @@ async function store(
       ),
     );
   const before = new Map(existing.map((r) => [`${r.date}|${r.metric}`, r.value]));
-  const managed = new Set<string>([...BUILTIN_METRICS, ...customNames.map((n) => `custom:${n}`)]);
 
   const changes: Change[] = [];
   const seen = new Set<string>();

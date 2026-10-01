@@ -164,6 +164,24 @@ const metricKey = z
   .string()
   .refine(isMetricKey, 'Unknown metric') as unknown as z.ZodType<MetricKey>;
 
+/** What each person picks when joining a weight challenge. Their weights stay private. */
+export const weightGoalParamsSchema = z
+  .object({
+    direction: z.enum(['lose', 'gain']),
+    targetType: z.enum(['percent', 'kg']),
+    target: z.number().positive(),
+  })
+  .refine((p) => (p.targetType === 'percent' ? p.target <= 30 : p.target <= 60), {
+    message: 'Pick a realistic target (at most 30% or 60 kg)',
+    path: ['target'],
+  });
+
+/** Settings a participant brings to a challenge (only weight challenges use them today). */
+export const participantParamsSchema = z.object({ weightGoal: weightGoalParamsSchema.optional() });
+export type ParticipantParams = z.infer<typeof participantParamsSchema>;
+
+export const joinChallengeSchema = z.object({ params: participantParamsSchema.optional() });
+
 export const createChallengeSchema = z
   .object({
     name: z.string().trim().min(1).max(60),
@@ -185,6 +203,8 @@ export const createChallengeSchema = z
     inviteUserIds: z.array(z.string().uuid()).max(50).default([]),
     /** public: listed in Discover so anyone public can join. */
     visibility: z.enum(['private', 'public']).default('private'),
+    /** The creator's own settings (e.g. their weight target). */
+    params: participantParamsSchema.optional(),
   })
   .refine((v) => v.endDate >= v.startDate, {
     message: 'End date must be on or after start date',
@@ -238,6 +258,8 @@ export interface StandingRow {
 }
 
 export interface ChallengeDetail extends ChallengeSummary {
+  /** The viewer's own settings in this challenge (e.g. their weight target). */
+  myParams: ParticipantParams | null;
   lowerIsBetter: boolean;
   aggregate: MetricAggregate;
   standings: StandingRow[];
@@ -256,7 +278,10 @@ export interface ChallengeResult {
   winner: PublicUser | null;
 }
 
-export const respondChallengeSchema = z.object({ accept: z.boolean() });
+export const respondChallengeSchema = z.object({
+  accept: z.boolean(),
+  params: participantParamsSchema.optional(),
+});
 
 export const featureChallengeSchema = z.object({ featured: z.boolean() });
 
@@ -407,6 +432,20 @@ export type ConnectResult = { status: 'connected' } | { status: 'redirect'; url:
 export const ingestSchema = z.object({
   records: z.array(z.record(z.string(), z.unknown())).min(1).max(5000),
 });
+
+/** An exercise the person has logged weighted sets for, for per-exercise strength challenges. */
+export interface LiftOption {
+  /** Lower-case name used in the metric key, e.g. "bench press". */
+  key: string;
+  label: string;
+  sessions: number;
+}
+
+export interface FastStatus {
+  active: { id: string; startedAt: string; targetEndAt: string | null } | null;
+}
+
+export const startFastSchema = z.object({ hours: z.number().min(1).max(168) });
 
 export interface CustomMetricOption {
   categoryId: string;
