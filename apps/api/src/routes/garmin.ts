@@ -6,7 +6,7 @@ import {
   type GarminLoginResult,
   type GarminStatus,
 } from '@gauntlet/shared';
-import { describeGarminError, SparkyError } from '@gauntlet/sparky';
+import { describeGarminError, keepSynced, SparkyError } from '@gauntlet/sparky';
 import type { FastifyInstance } from 'fastify';
 import { requireUser } from '../auth.js';
 import type { AppContext } from '../context.js';
@@ -39,6 +39,7 @@ export function garminRoutes(app: FastifyInstance, ctx: AppContext) {
   /** Pull Garmin's data into SparkyFitness, then into Gauntlet's standings. Never blocks the caller. */
   function syncInBackground(userId: string, token: string, days: number) {
     const today = todayIn('UTC', ctx.now());
+    void keepSynced(ctx.sparky, token, 'garmin');
     void ctx.sparky
       .garminSync(token, addDays(today, -days), today)
       .catch((err) => ctx.log.warn({ err: String(err) }, 'garmin sync failed'))

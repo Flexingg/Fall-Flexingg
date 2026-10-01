@@ -20,12 +20,25 @@ const envSchema = z.object({
   WEB_DIST: z.string().optional(),
   /** Directory holding the released APK and latest.json, served under /downloads. */
   DOWNLOADS_DIR: z.string().optional(),
+  /** OAuth app credentials for linking apps, registered once by whoever runs the server. */
+  OAUTH_STRAVA_CLIENT_ID: z.string().optional(),
+  OAUTH_STRAVA_CLIENT_SECRET: z.string().optional(),
+  OAUTH_FITBIT_CLIENT_ID: z.string().optional(),
+  OAUTH_FITBIT_CLIENT_SECRET: z.string().optional(),
+  OAUTH_OURA_CLIENT_ID: z.string().optional(),
+  OAUTH_OURA_CLIENT_SECRET: z.string().optional(),
+  OAUTH_POLAR_CLIENT_ID: z.string().optional(),
+  OAUTH_POLAR_CLIENT_SECRET: z.string().optional(),
   /** Release key SHA-256 fingerprint(s), comma separated, for Android App Links (invite links open the app). */
   ASSETLINKS_SHA256: z.string().default(''),
 });
 
 export type Config = Omit<z.infer<typeof envSchema>, 'SPARKY_PUBLIC_URL'> & {
   SPARKY_PUBLIC_URL: string;
+  /** Provider -> OAuth app credentials, only those that are fully set. */
+  oauthApps: Partial<
+    Record<'strava' | 'fitbit' | 'oura' | 'polar', { clientId: string; clientSecret: string }>
+  >;
   allowedOrigins: string[];
   encryptionKey: Buffer;
 };
@@ -48,5 +61,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   ];
   const SPARKY_URL = cfg.SPARKY_URL.replace(/\/+$/, '');
   const SPARKY_PUBLIC_URL = (cfg.SPARKY_PUBLIC_URL ?? SPARKY_URL).replace(/\/+$/, '');
-  return { ...cfg, SPARKY_URL, SPARKY_PUBLIC_URL, allowedOrigins, encryptionKey };
+  const oauthApps: Config['oauthApps'] = {};
+  for (const id of ['strava', 'fitbit', 'oura', 'polar'] as const) {
+    const up = id.toUpperCase();
+    const clientId = (env[`OAUTH_${up}_CLIENT_ID`] ?? '').trim();
+    const clientSecret = (env[`OAUTH_${up}_CLIENT_SECRET`] ?? '').trim();
+    if (clientId && clientSecret) oauthApps[id] = { clientId, clientSecret };
+  }
+  return { ...cfg, SPARKY_URL, SPARKY_PUBLIC_URL, oauthApps, allowedOrigins, encryptionKey };
 }

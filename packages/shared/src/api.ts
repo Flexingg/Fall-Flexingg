@@ -304,6 +304,56 @@ export type GarminMfaRequest = z.infer<typeof garminMfaSchema>;
 export type GarminLoginResult =
   { status: 'connected' } | { status: 'needs_mfa'; clientState: string };
 
+// ---------- Connections (devices and apps linked inside SparkyFitness) ----------
+
+export const PROVIDER_IDS = [
+  'garmin',
+  'strava',
+  'fitbit',
+  'oura',
+  'polar',
+  'coros',
+  'hevy',
+  'liftosaur',
+  'wger',
+] as const;
+export type ProviderId = (typeof PROVIDER_IDS)[number];
+export const isProviderId = (v: unknown): v is ProviderId =>
+  typeof v === 'string' && (PROVIDER_IDS as readonly string[]).includes(v);
+
+/** login: email + password (Garmin). oauth: sign in on the provider's site. api_key: paste a key. library: just switch it on. */
+export type ConnectKind = 'login' | 'oauth' | 'api_key' | 'library';
+
+export interface ConnectionInfo {
+  id: ProviderId;
+  label: string;
+  blurb: string;
+  kind: ConnectKind;
+  state: 'connected' | 'disconnected' | 'unavailable';
+  /** For "unavailable": why, and what to do. Otherwise a short status line, if any. */
+  note: string | null;
+  lastSyncAt: string | null;
+  /** Where to finish in SparkyFitness when this app can't (OAuth without a Gauntlet server). */
+  settingsUrl: string | null;
+}
+
+export interface ConnectionsResponse {
+  connections: ConnectionInfo[];
+}
+
+export const connectBodySchema = z.object({
+  apiKey: z.string().trim().min(8, 'Paste the API key').max(500).optional(),
+});
+export type ConnectBody = z.infer<typeof connectBodySchema>;
+
+export const oauthCallbackSchema = z.object({
+  code: z.string().min(1).max(2000),
+  state: z.string().max(2000).optional(),
+});
+export type OAuthCallbackBody = z.infer<typeof oauthCallbackSchema>;
+
+export type ConnectResult = { status: 'connected' } | { status: 'redirect'; url: string };
+
 export const ingestSchema = z.object({
   records: z.array(z.record(z.string(), z.unknown())).min(1).max(5000),
 });

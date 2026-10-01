@@ -28,6 +28,22 @@ export interface FakeUser {
   ingested: unknown[];
   /** Set once the person has linked Garmin Connect inside this SparkyFitness. */
   garmin?: { linkedAt: string; syncs: number };
+  /** The person's own linked-app records (what SparkyFitness lists under external providers). */
+  providers: FakeProvider[];
+}
+
+export interface FakeProvider {
+  id: string;
+  provider_type: string;
+  provider_name: string;
+  is_active: boolean;
+  is_public: boolean;
+  has_token: boolean;
+  sync_frequency: string;
+  last_sync_at: string | null;
+  app_id?: string;
+  app_key?: string;
+  syncs: number;
 }
 
 export class FakeSparky {
@@ -46,6 +62,10 @@ export class FakeSparky {
   private garminPending = new Map<string, string>();
   /** Set to make the Garmin service answer like a refused connection. */
   garminDown = false;
+  /** API keys Hevy and Liftosaur accept; anything else gets their "invalid key" answer. */
+  goodAppKeys = new Set<string>(['good-hevy-key', 'good-liftosaur-key']);
+  /** The OAuth code every pretend provider accepts. */
+  goodOAuthCode = 'good-code';
   /** Artificial response delay per user id (ms), to force sync interleavings in tests. */
   latencyMs: Record<string, number> = {};
   private seq = 0;
@@ -60,6 +80,7 @@ export class FakeSparky {
       exerciseEntries: [],
       sleep: [],
       ingested: [],
+      providers: [],
       ...u,
     };
     this.users.set(user.id, user);
@@ -304,6 +325,113 @@ export class FakeSparky {
           return json(400, { error: 'Garmin Connect account not found for this user.' });
         user.garmin = undefined;
         return json(200, { success: true });
+      }
+    }
+    // Linked apps: the provider records and the per-provider endpoints, shaped like SparkyFitness's.
+    if (path === '/api/external-providers' || path.startsWith('/api/external-providers/')) {
+      const id = path.split('/')[3];
+      if (method === 'GET' && !id)
+        return json(200, [
+          { id: 'public-wger', provider_type: 'wger', is_public: true, is_active: true },
+          ...user.providers,
+        ]);
+      if (method === 'POST' && !id) {
+        const rec: FakeProvider = {
+          id: `prov-${++this.seq}`,
+          provider_type: String(body.provider_type),
+          provider_name: String(body.provider_name),
+          is_active: body.is_active !== false,
+          is_public: false,
+          has_token: false,
+          sync_frequency: String(body.sync_frequency ?? 'manual'),
+          last_sync_at: null,
+          app_id: body.app_id,
+          app_key: body.app_key,
+          syncs: 0,
+        };
+        user.providers.push(rec);
+        return json(201, rec);
+      }
+      const rec = user.providers.find((p) => p.id === id);
+      if (!rec) return json(404, { error: 'External data provider not found.' });
+      if (method === 'PUT') {
+        for (const k of ['is_active', 'sync_frequency', 'app_id', 'app_key'] as const)
+          if (body[k] !== undefined) (rec as unknown as Record<string, unknown>)[k] = body[k];
+        return json(200, rec);
+      }
+      if (method === 'DELETE') {
+        user.providers = user.providers.filter((p) => p.id !== id);
+        return json(200, { message: 'External data provider deleted successfully.' });
+      }
+    }
+    const integ =
+      /^\/api\/integrations\/(strava|fitbit|oura|polar|coros|hevy|liftosaur)\/(\w+)$/.exec(path);
+    if (integ) {
+      const [, route, action] = integ as unknown as [string, string, string];
+      const type = route === 'coros' ? 'coros_mcp' : route;
+      const rec = user.providers.find((p) => p.provider_type === type);
+      const oauth = ['strava', 'fitbit', 'oura', 'polar', 'coros'].includes(route);
+      if (action === 'status')
+        return json(
+          200,
+          rec
+            ? {
+                connected: rec.is_active && (!oauth || rec.has_token),
+                isActive: rec.is_active,
+                lastSyncAt: rec.last_sync_at,
+              }
+            : { connected: false, isActive: false },
+        );
+      if (action === 'authorize') {
+        if (!rec) return json(500, { error: 'Strava provider not configured.' });
+        const url = `https://auth.${route}.test/authorize?client_id=${rec.app_id ?? 'dyn'}&state=st-${user.id}`;
+        return json(200, route === 'strava' ? { url } : { authUrl: url });
+      }
+      if (action === 'callback') {
+        if (!rec || body.code !== this.goodOAuthCode)
+          return json(500, {
+            message: `Error handling ${route} OAuth callback`,
+            error: 'invalid_grant',
+          });
+        if ((route === 'polar' || route === 'coros') && !body.state)
+          return json(400, { message: 'Invalid or expired authorization state.' });
+        rec.has_token = true;
+        rec.is_active = true;
+        return json(200, { message: 'Account linked successfully.' });
+      }
+      if (action === 'sync') {
+        if (!rec) return json(200, { success: true, processedCount: 0 });
+        if (oauth && !rec.has_token)
+          return json(500, {
+            message: 'Error initiating manual sync',
+            error: 'No access token available. Please authorize first.',
+          });
+        if (
+          (route === 'hevy' || route === 'liftosaur') &&
+          !this.goodAppKeys.has(String(rec.app_key))
+        )
+          return json(401, {
+            message:
+              route === 'hevy'
+                ? 'Invalid Hevy API Key. Please check your key and try again.'
+                : 'Invalid Liftosaur API key.',
+            error: 'Request failed with status code 401',
+          });
+        rec.syncs++;
+        rec.last_sync_at = new Date().toISOString();
+        const day = String(body.endDate);
+        user.daily = user.daily.filter(
+          (r) => !(r.entry_date === day && r.source_provider === route),
+        );
+        user.daily.push({ entry_date: day, source_provider: route, total_steps: 1111 });
+        return json(200, { success: true });
+      }
+      if (action === 'disconnect') {
+        if (rec) {
+          rec.has_token = false;
+          rec.is_active = false;
+        }
+        return json(200, { message: 'Account disconnected successfully.' });
       }
     }
     if (method === 'GET' && path === '/api/synced-data/sources')

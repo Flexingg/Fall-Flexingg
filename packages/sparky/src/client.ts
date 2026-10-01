@@ -24,6 +24,17 @@ export interface SparkyUser {
   name: string | null;
 }
 
+export interface SparkyProvider {
+  id: string;
+  provider_type: string;
+  provider_name?: string;
+  is_active: boolean;
+  is_public?: boolean;
+  has_token?: boolean;
+  sync_frequency?: string | null;
+  last_sync_at?: string | null;
+}
+
 export interface GarminStatusInfo {
   linked: boolean;
   lastUpdated: string | null;
@@ -376,6 +387,51 @@ export class SparkyClient {
 
   async garminUnlink(token: string): Promise<void> {
     await this.request('POST', '/api/integrations/garmin/unlink', { token, body: {} });
+  }
+
+  // ---------------------------------------------------------------- linked apps and devices
+
+  /** The person's own provider records (SparkyFitness also lists shared ones; those are dropped). */
+  async providers(token: string): Promise<SparkyProvider[]> {
+    const all = asArray<SparkyProvider>(
+      await this.request('GET', '/api/external-providers', { token }),
+    );
+    return all.filter((p) => !p.is_public);
+  }
+
+  async createProvider(token: string, body: Record<string, unknown>): Promise<SparkyProvider> {
+    return this.request<SparkyProvider>('POST', '/api/external-providers', { token, body });
+  }
+
+  async updateProvider(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<SparkyProvider> {
+    return this.request<SparkyProvider>(
+      'PUT',
+      `/api/external-providers/${encodeURIComponent(id)}`,
+      { token, body },
+    );
+  }
+
+  async deleteProvider(token: string, id: string): Promise<void> {
+    await this.request('DELETE', `/api/external-providers/${encodeURIComponent(id)}`, { token });
+  }
+
+  /** One of SparkyFitness's /api/integrations/<name>/... endpoints, called with the person's key. */
+  async integration<T = Record<string, unknown>>(
+    method: 'GET' | 'POST',
+    token: string,
+    route: string,
+    path: string,
+    opts: { body?: unknown; timeoutMs?: number } = {},
+  ): Promise<T> {
+    return this.request<T>(method, `/api/integrations/${route}/${path}`, {
+      token,
+      body: method === 'POST' ? (opts.body ?? {}) : undefined,
+      timeoutMs: opts.timeoutMs,
+    });
   }
 
   // ---------------------------------------------------------------- writes
