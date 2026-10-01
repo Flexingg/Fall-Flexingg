@@ -1,0 +1,35 @@
+# Prints status, machines and recent logs for one of the Fly apps (read-only). Use it when a
+# deploy fails or a service misbehaves. Needs the same FLY_API_TOKEN / FLY_APP_PREFIX as setup.
+name: Fly diagnose
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app
+        type: choice
+        options: [gauntlet, sparky, sparky-api, sparky-garmin, db]
+        default: gauntlet
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      PREFIX: ${{ vars.FLY_APP_PREFIX }}
+      WHICH: ${{ inputs.app }}
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Status, machines and logs
+        run: |
+          [ -n "$FLY_API_TOKEN" ] && [ -n "$PREFIX" ] || { echo "::error::FLY_API_TOKEN and FLY_APP_PREFIX are required"; exit 1; }
+          app="$PREFIX"; [ "$WHICH" = gauntlet ] || app="$PREFIX-$WHICH"
+          echo "::group::fly status ($app)"; flyctl status --app "$app" || true; echo "::endgroup::"
+          echo "::group::machines"; flyctl machines list --app "$app" || true; echo "::endgroup::"
+          for id in $(flyctl machines list --app "$app" --json | jq -r '.[].id'); do
+            echo "::group::machine $id"; flyctl machine status "$id" --app "$app" || true; echo "::endgroup::"
+          done
+          echo "::group::recent logs"; flyctl logs --app "$app" --no-tail 2>&1 | tail -150 || true; echo "::endgroup::"
