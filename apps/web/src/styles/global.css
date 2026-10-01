@@ -630,6 +630,11 @@ svg {
   color: var(--muted);
   line-height: 1.45;
 }
+.notice a,
+.card p a {
+  color: var(--volt);
+  font-weight: 700;
+}
 .skeleton {
   background: linear-gradient(90deg, var(--card) 0%, var(--card-2) 50%, var(--card) 100%);
   background-size: 200% 100%;

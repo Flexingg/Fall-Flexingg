@@ -4,12 +4,14 @@ import type {
   ChallengeResult,
   ChallengeSummary,
   CustomMetricOption,
+  DiscoverResponse,
   FeedEvent,
   FriendsResponse,
   MetricKey,
   SourcesResponse,
   TodayResponse,
   TrendsResponse,
+  UserCard,
 } from '@gauntlet/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, get } from './api';
@@ -19,6 +21,8 @@ export const keys = {
   today: ['today'] as const,
   feed: ['feed'] as const,
   challenges: ['challenges'] as const,
+  discover: ['discover'] as const,
+  userSearch: (q: string) => ['user-search', q] as const,
   challenge: (id: string) => ['challenge', id] as const,
   result: (id: string) => ['result', id] as const,
   friends: ['friends'] as const,
@@ -52,6 +56,21 @@ export const useChallenges = () =>
     queryKey: keys.challenges,
     queryFn: () => get<ChallengeSummary[]>('/api/challenges'),
     ...live,
+  });
+export const useDiscover = (enabled = true) =>
+  useQuery({
+    queryKey: keys.discover,
+    queryFn: () => get<DiscoverResponse>('/api/challenges/discover'),
+    enabled: enabled && !session.direct,
+    staleTime: 30_000,
+  });
+/** Public people matching a name or @handle. Needs at least two characters. */
+export const useUserSearch = (q: string) =>
+  useQuery({
+    queryKey: keys.userSearch(q),
+    queryFn: () => get<UserCard[]>(`/api/users/search?q=${encodeURIComponent(q)}`),
+    enabled: q.trim().length >= 2 && !session.direct,
+    staleTime: 15_000,
   });
 export const useChallenge = (id: string) =>
   useQuery({

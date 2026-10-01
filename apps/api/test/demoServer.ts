@@ -29,6 +29,9 @@ const people: [string, string, string][] = [
   ['dre', 'Dre Thomas', 'dre@example.com'],
   ['sam', 'Sam Kim', 'sam@example.com'],
   ['jordan', 'Jordan Lee', 'jordan@example.com'],
+  // Strangers: Riley runs a public challenge; Casey is new and private (used by the browser tests).
+  ['riley', 'Riley Park', 'riley@example.com'],
+  ['casey', 'Casey Diaz', 'casey@example.com'],
 ];
 const users: Record<string, FakeUser> = {};
 for (const [id, name, email] of people)
@@ -67,6 +70,14 @@ const profile: Record<string, { km: number[]; steps: number[]; source: string }>
     km: [2.0, 3.5, 4.1, 2.2, 5.0, 3.3, 6.2, 2.9, 4.4, 3.1, 5.6, 2.4, 3.8, 4.0],
     steps: [5000, 6200, 7100, 4800, 8300, 6000, 9500, 5600, 7400, 5900, 8800, 5100, 6900, 7300],
     source: 'garmin',
+  },
+  riley: {
+    km: [7.2, 8.1, 6.4, 9.9, 8.2, 7.7, 10.4, 6.9, 8.8, 9.3, 7.5, 11.0, 8.4, 7.9],
+    steps: [
+      11200, 12800, 10100, 14900, 12600, 11900, 15800, 10600, 13400, 14100, 11500, 16600, 12900,
+      12100,
+    ],
+    source: 'polar',
   },
 };
 for (const [id, p] of Object.entries(profile)) {
@@ -128,6 +139,7 @@ const cfg = loadConfig({
   JWT_SECRET: process.env.JWT_SECRET ?? 'demo-secret-demo-secret-demo-secret-0000',
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY ?? Buffer.alloc(32, 3).toString('base64'),
   SYNC_INTERVAL_MINUTES: '0',
+  ADMIN_EMAILS: 'riley@example.com',
   // The browser tests sign in many times a minute.
   LOGIN_RATE_LIMIT_MAX: '1000',
 });
@@ -217,6 +229,21 @@ const cup = await call<{ id: string }>('dre', 'POST', '/api/challenges', {
   inviteUserIds: [ids.you, ids.maya],
 });
 await call('maya', 'POST', `/api/challenges/${cup.id}/respond`, { accept: true });
+
+// A featured public challenge anyone public can join from Discover.
+await call('riley', 'PATCH', '/api/me', { visibility: 'public', handle: 'riley' });
+await call('maya', 'PATCH', '/api/me', { visibility: 'public', handle: 'maya' });
+const open = await call<{ id: string }>('riley', 'POST', '/api/challenges', {
+  name: 'October Step Open',
+  metric: 'steps',
+  scoring: 'daily_avg',
+  startDate: d(-3),
+  endDate: d(20),
+  timezone: TZ,
+  visibility: 'public',
+});
+await call('riley', 'PATCH', `/api/challenges/${open.id}/featured`, { featured: true });
+await call('maya', 'POST', `/api/challenges/${open.id}/join`);
 
 // The API refuses past end dates, so end the old challenge directly.
 await ctx.db.execute(sql`update challenges set end_date = ${d(-6)} where id = ${past.id}`);

@@ -71,6 +71,7 @@ export function NewChallengePage() {
   const [goal, setGoal] = useState('');
   const [duration, setDuration] = useState<Duration>('7');
   const [invited, setInvited] = useState<Set<string>>(new Set());
+  const [isPublic, setIsPublic] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const customMetrics = useCustomMetrics(metric === CUSTOM);
@@ -127,6 +128,7 @@ export function NewChallengePage() {
         endDate: end,
         timezone,
         inviteUserIds: [...invited],
+        visibility: isPublic ? 'public' : 'private',
       };
       const created = await post<ChallengeDetail>('/api/challenges', body);
       await qc.invalidateQueries();
@@ -320,6 +322,31 @@ export function NewChallengePage() {
           {friends.data?.friends.length ? 'Tap friends to invite them. ' : ''}You can share a link
           to the challenge once it's created.
         </p>
+
+        <div className="lbl">Who can join</div>
+        <div className="card stack" style={{ gap: 8 }}>
+          <div className="row">
+            <div className="grow">
+              <div style={{ fontWeight: 700 }}>Public</div>
+              <small className="muted">
+                {isPublic
+                  ? 'Listed in Discover. Anyone with a public profile can join.'
+                  : 'Invite only: friends you pick and people with the link.'}
+              </small>
+            </div>
+            <Toggle
+              checked={isPublic}
+              onChange={setIsPublic}
+              label="Public challenge"
+              disabled={user?.visibility !== 'public'}
+            />
+          </div>
+          {user?.visibility !== 'public' && (
+            <small className="muted">
+              Make your profile public (Profile → Public profile) to start public challenges.
+            </small>
+          )}
+        </div>
 
         <div className="dock stack">
           <ErrorBox error={error ?? (ruleProblem ? new Error(ruleProblem) : null)} />

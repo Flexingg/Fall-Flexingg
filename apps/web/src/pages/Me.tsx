@@ -1,8 +1,8 @@
 import type { MeUser } from '@gauntlet/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Icon } from '../components/Icon';
-import { Avatar, ErrorBox, Header, Screen, toast } from '../components/ui';
+import { Avatar, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isNative } from '../lib/platform';
@@ -13,6 +13,8 @@ export function MePage() {
   const direct = mode === 'direct';
   const navigate = useNavigate();
   const [name, setName] = useState(user?.displayName ?? '');
+  const [handle, setHandle] = useState(user?.handle ?? '');
+  useEffect(() => setHandle(user?.handle ?? ''), [user?.handle]);
   const [error, setError] = useState<unknown>(null);
   const android = useAndroidRelease(!isNative);
   if (!user) return null;
@@ -25,6 +27,22 @@ export function MePage() {
     } catch (err) {
       setError(err);
     }
+  }
+
+  async function save(body: Record<string, unknown>, done = 'Saved') {
+    setError(null);
+    try {
+      setUser(await patch<MeUser>('/api/me', body));
+      toast(done);
+    } catch (err) {
+      setError(err);
+    }
+  }
+
+  async function saveHandle() {
+    const h = handle.trim().replace(/^@/, '').toLowerCase();
+    if (h === (user!.handle ?? '')) return;
+    await save({ handle: h });
   }
 
   async function deleteAccount() {
@@ -46,6 +64,7 @@ export function MePage() {
         <div className="grow">
           <div style={{ fontWeight: 800, fontSize: 20 }}>{user.displayName}</div>
           <div className="muted" style={{ fontSize: 14 }}>
+            {user.handle ? `@${user.handle} · ` : ''}
             {user.email}
           </div>
         </div>
@@ -73,6 +92,48 @@ export function MePage() {
             />
             <span>Shown to friends</span>
           </label>
+
+          <div className="lbl">Profile</div>
+          <div className="card stack" style={{ gap: 10 }}>
+            <div className="row">
+              <div className="grow">
+                <div style={{ fontWeight: 700 }}>Public profile</div>
+                <small className="muted">
+                  {user.visibility === 'public'
+                    ? 'Anyone on this server can find you and see your name and challenge record.'
+                    : 'Only friends and people in your challenges can see you.'}
+                </small>
+              </div>
+              <Toggle
+                checked={user.visibility === 'public'}
+                onChange={(on) =>
+                  save(
+                    { visibility: on ? 'public' : 'private' },
+                    on ? "You're public" : "You're private",
+                  )
+                }
+                label="Public profile"
+              />
+            </div>
+            <p className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              Going public lets people search for you by name and lets you join public challenges
+              from Discover. Your email and health data are never shown.
+            </p>
+            {user.visibility === 'public' && (
+              <label className="input">
+                <input
+                  value={handle}
+                  onChange={(e) => setHandle(e.target.value)}
+                  onBlur={saveHandle}
+                  placeholder="@handle"
+                  maxLength={21}
+                  autoCapitalize="none"
+                  aria-label="Handle"
+                />
+                <span>Optional, for search</span>
+              </label>
+            )}
+          </div>
         </>
       )}
 

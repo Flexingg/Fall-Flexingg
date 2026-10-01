@@ -1,12 +1,12 @@
 import { ordinal, type Invite } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { Avatar, Empty, ErrorBox, Header, Screen, Seg, Skeleton, toast } from '../components/ui';
 import { ApiError, del, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { timeAgo } from '../lib/format';
-import { useFriends } from '../lib/queries';
+import { useFriends, useUserSearch } from '../lib/queries';
 import { shareLink } from '../lib/share';
 
 export function FriendsPage() {
@@ -15,6 +15,9 @@ export function FriendsPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<'crew' | 'requests'>('crew');
   const [email, setEmail] = useState('');
+  const term = useDebounced(email.trim(), 250);
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(term);
+  const search = useUserSearch(isEmail ? '' : term);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
@@ -41,11 +44,23 @@ export function FriendsPage() {
     }
   }
 
-  async function add(e: FormEvent) {
-    e.preventDefault();
+  async function request(body: { email: string } | { userId: string }) {
     setError(null);
     try {
-      const r = await post<{ status: string }>('/api/friends/requests', { email });
+      const r = await post<{ status: string }>('/api/friends/requests', body);
+      toast(r.status === 'friends' ? "You're now friends" : 'Request sent');
+      await qc.invalidateQueries();
+    } catch (err) {
+      setError(err);
+    }
+  }
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!isEmail) return;
+    setError(null);
+    try {
+      const r = await post<{ status: string }>('/api/friends/requests', { email: term });
       toast(r.status === 'friends' ? "You're now friends" : 'Request sent');
       setEmail('');
       setAdding(false);
@@ -89,18 +104,64 @@ export function FriendsPage() {
         <form onSubmit={add} className="stack" style={{ marginBottom: 14 }}>
           <label className="input">
             <input
-              type="email"
-              placeholder="Friend's SparkyFitness email"
+              type="search"
+              placeholder="Name, @handle or email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
-              aria-label="Friend's email"
+              autoCapitalize="none"
+              aria-label="Find people"
             />
-            <button className="btn sm" style={{ width: 'auto' }}>
-              Add
-            </button>
+            {isEmail && (
+              <button className="btn sm" style={{ width: 'auto' }}>
+                Add
+              </button>
+            )}
           </label>
+          {!isEmail && term.length >= 2 && (
+            <div className="list" aria-label="Search results">
+              {search.isPending && <Skeleton height={56} />}
+              {search.data?.length === 0 && (
+                <Empty title="Nobody found">
+                  Only people with a public profile show up. Try their email, or share your invite
+                  link.
+                </Empty>
+              )}
+              {search.data?.map((p) => (
+                <div key={p.id} className="item">
+                  <Avatar user={p} size={42} />
+                  <div className="grow">
+                    <div className="t">{p.displayName}</div>
+                    <small className="ellipsis">
+                      {p.handle ? `@${p.handle} · ` : ''}
+                      {p.challenges.played
+                        ? `${p.challenges.won} won of ${p.challenges.played}`
+                        : 'No finished challenges yet'}
+                    </small>
+                  </div>
+                  {p.friendship === 'none' || p.friendship === 'incoming' ? (
+                    <button
+                      type="button"
+                      className="btn sm"
+                      style={{ width: 'auto' }}
+                      onClick={() => request({ userId: p.id })}
+                    >
+                      {p.friendship === 'incoming' ? 'Accept' : 'Add'}
+                    </button>
+                  ) : (
+                    <span className="pill plain">
+                      {p.friendship === 'friends'
+                        ? 'Friends'
+                        : p.friendship === 'me'
+                          ? 'You'
+                          : 'Requested'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </form>
       )}
       <Seg
@@ -195,4 +256,13 @@ export function FriendsPage() {
       </button>
     </Screen>
   );
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
 }

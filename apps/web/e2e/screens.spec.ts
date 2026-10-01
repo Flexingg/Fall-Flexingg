@@ -192,3 +192,68 @@ test('asks before finishing a connection this browser did not start', async ({ p
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect(page.getByRole('button', { name: /Fitbit.*Steps, activity/ })).toBeVisible();
 });
+
+test('goes public, joins a public challenge from Discover, and finds people by name', async ({
+  page,
+}) => {
+  await signIn(page, 'casey@example.com');
+
+  // Private by default: Discover shows the challenge but asks to go public first.
+  await page.goto('/challenges');
+  await page.getByRole('button', { name: 'Discover' }).click();
+  await expect(page.getByText('October Step Open')).toBeVisible();
+  await expect(page.getByText('Featured')).toBeVisible();
+  await expect(page.getByText('Your profile is private.')).toBeVisible();
+  await snap(page, '12-discover');
+
+  // Search finds only public people.
+  await page.goto('/friends');
+  await page.getByRole('button', { name: 'Add friend' }).click();
+  await page.getByLabel('Find people').fill('jordan');
+  await expect(page.getByText('Nobody found')).toBeVisible();
+  await page.getByLabel('Find people').fill('riley');
+  const results = page.getByLabel('Search results');
+  await expect(results.getByText('Riley Park')).toBeVisible();
+  await expect(results.getByText('@riley')).toBeVisible();
+  await results.getByRole('button', { name: 'Add' }).click();
+  await expect(results.getByText('Requested')).toBeVisible();
+  await snap(page, '13-people-search');
+
+  // Go public on the profile screen.
+  await page.goto('/me');
+  const toggle = page.getByRole('switch', { name: 'Public profile' });
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await page.getByLabel('Handle').fill('@Casey_D');
+  await page.getByLabel('Handle').blur();
+  await expect(page.getByText('@casey_d ·')).toBeVisible();
+  await snap(page, '14-public-profile');
+
+  // Now join from Discover.
+  await page.goto('/challenges');
+  await page.getByRole('button', { name: 'Discover' }).click();
+  await page.getByText('October Step Open').click();
+  await expect(page.getByText('Open to everyone')).toBeVisible();
+  await page.getByRole('button', { name: 'Join challenge' }).click();
+  await expect(page.getByRole('button', { name: 'Leave challenge' })).toBeVisible();
+  await expect(page.getByText('Riley P.')).toBeVisible();
+  await snap(page, '15-joined-public');
+
+  // Put things back so the test can run again.
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Leave challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+  await page.goto('/friends');
+  await page.getByRole('button', { name: /Requests/ }).click();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.goto('/me');
+  await page.getByLabel('Handle').fill('');
+  await page.getByLabel('Handle').blur();
+  await expect(page.getByText('@casey_d ·')).toHaveCount(0);
+  await page.getByRole('switch', { name: 'Public profile' }).click();
+  await expect(page.getByRole('switch', { name: 'Public profile' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
+});

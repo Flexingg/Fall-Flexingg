@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Podium, StandingsList } from '../components/Standings';
 import { ErrorBox, Header, Screen, Skeleton, toast } from '../components/ui';
-import { del, post } from '../lib/api';
+import { del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange, daysLeftText, fmt } from '../lib/format';
 import { keys, useChallenge } from '../lib/queries';
@@ -56,7 +56,31 @@ export function ChallengeDetailPage() {
             {c.metricLabel} · {SCORING_LABELS[c.scoring]}
             {c.goal ? ` · ${fmt(c.goal, c)}${c.scoring === 'streak' ? '/day' : ''}` : ''} ·{' '}
             {dateRange(c.startDate, c.endDate)} · {daysLeftText(c)}
+            {c.visibility === 'public' ? ' · Public' : ''}
+            {c.featured ? ' · Featured' : ''}
           </p>
+
+          {(c.myState == null || c.myState === 'declined') &&
+            c.visibility === 'public' &&
+            c.status !== 'completed' && (
+              <div className="card stack" style={{ marginBottom: 14 }}>
+                <b>Open to everyone</b>
+                {user?.visibility === 'public' ? (
+                  <button
+                    className="btn"
+                    disabled={busy}
+                    onClick={() => act(() => post(`/api/challenges/${id}/join`))}
+                  >
+                    Join challenge
+                  </button>
+                ) : (
+                  <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                    Your profile is private. <Link to="/me">Make it public</Link> to join, so others
+                    can see your name on the leaderboard.
+                  </p>
+                )}
+              </div>
+            )}
 
           {c.myState === 'invited' && (
             <div className="card stack" style={{ marginBottom: 14 }}>
@@ -145,6 +169,18 @@ export function ChallengeDetailPage() {
                 </button>
               )}
             </div>
+          )}
+          {user?.isAdmin && c.visibility === 'public' && c.status !== 'completed' && (
+            <button
+              className="btn ghost"
+              style={{ marginTop: 8 }}
+              disabled={busy}
+              onClick={() =>
+                act(() => patch(`/api/challenges/${id}/featured`, { featured: !c.featured }))
+              }
+            >
+              {c.featured ? 'Unfeature' : 'Feature in Discover'}
+            </button>
           )}
         </>
       )}

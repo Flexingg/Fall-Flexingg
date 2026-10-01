@@ -5,11 +5,12 @@ import { Link } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
 import { daysLeftText, fmt } from '../lib/format';
-import { useChallenges } from '../lib/queries';
+import { useChallenges, useDiscover } from '../lib/queries';
 
 export function ChallengesPage() {
   const q = useChallenges();
-  const [tab, setTab] = useState<'live' | 'done'>('live');
+  const [tab, setTab] = useState<'live' | 'discover' | 'done'>('live');
+  const discover = useDiscover(tab === 'discover');
   const list = (q.data ?? []).filter((c) =>
     tab === 'live' ? c.status !== 'completed' : c.status === 'completed',
   );
@@ -36,44 +37,78 @@ export function ChallengesPage() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'live', label: 'Active & upcoming' },
+          { value: 'live', label: 'Mine' },
+          { value: 'discover', label: 'Discover' },
           { value: 'done', label: 'Finished' },
         ]}
       />
       <div style={{ height: 14 }} />
+      {tab === 'discover' ? (
+        <Discover q={discover} />
+      ) : (
+        <>
+          <ErrorBox error={q.error} />
+          {q.isPending && <Skeleton height={200} />}
+          {invites.length > 0 && (
+            <>
+              <div className="lbl" style={{ marginTop: 0 }}>
+                Invites
+              </div>
+              <ChallengeList items={invites} />
+            </>
+          )}
+          {mine.length > 0 && (
+            <>
+              {invites.length > 0 && <div className="lbl">Yours</div>}
+              <ChallengeList items={mine} />
+            </>
+          )}
+          {q.isSuccess && list.length === 0 && (
+            <div className="list">
+              <Empty title={tab === 'live' ? 'No challenges yet' : 'Nothing finished yet'}>
+                {tab === 'live' && (
+                  <>
+                    Pick a metric, set the stakes, invite your crew.
+                    <div style={{ marginTop: 14 }}>
+                      <Link to="/c/new" className="btn sm" style={{ display: 'inline-flex' }}>
+                        New challenge
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </Empty>
+            </div>
+          )}
+        </>
+      )}
+    </Screen>
+  );
+}
+
+function Discover({ q }: { q: ReturnType<typeof useDiscover> }) {
+  return (
+    <>
       <ErrorBox error={q.error} />
       {q.isPending && <Skeleton height={200} />}
-      {invites.length > 0 && (
-        <>
-          <div className="lbl" style={{ marginTop: 0 }}>
-            Invites
-          </div>
-          <ChallengeList items={invites} />
-        </>
+      {q.data && !q.data.canJoin && (
+        <div className="notice" style={{ marginBottom: 12 }}>
+          Your profile is private. <Link to="/me">Go public</Link> to join these challenges.
+        </div>
       )}
-      {mine.length > 0 && (
-        <>
-          {invites.length > 0 && <div className="lbl">Yours</div>}
-          <ChallengeList items={mine} />
-        </>
-      )}
-      {q.isSuccess && list.length === 0 && (
+      {q.data && q.data.challenges.length === 0 && (
         <div className="list">
-          <Empty title={tab === 'live' ? 'No challenges yet' : 'Nothing finished yet'}>
-            {tab === 'live' && (
-              <>
-                Pick a metric, set the stakes, invite your crew.
-                <div style={{ marginTop: 14 }}>
-                  <Link to="/c/new" className="btn sm" style={{ display: 'inline-flex' }}>
-                    New challenge
-                  </Link>
-                </div>
-              </>
-            )}
+          <Empty title="No public challenges right now">
+            Start one and switch on “Public” so anyone can join.
+            <div style={{ marginTop: 14 }}>
+              <Link to="/c/new" className="btn sm" style={{ display: 'inline-flex' }}>
+                New challenge
+              </Link>
+            </div>
           </Empty>
         </div>
       )}
-    </Screen>
+      {q.data && q.data.challenges.length > 0 && <ChallengeList items={q.data.challenges} />}
+    </>
   );
 }
 
@@ -93,7 +128,10 @@ function ChallengeList({ items }: { items: ChallengeSummary[] }) {
               {c.participantCount === 1 ? 'person' : 'people'} · {daysLeftText(c)}
             </small>
           </div>
-          {c.myState === 'invited' ? (
+          {c.featured && <span className="pill">Featured</span>}
+          {c.myState == null || c.myState === 'declined' ? (
+            <span className="pill plain">Join</span>
+          ) : c.myState === 'invited' ? (
             <span className="pill">Invited</span>
           ) : (
             <>
