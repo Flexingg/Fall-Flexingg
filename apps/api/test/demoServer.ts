@@ -12,8 +12,8 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, runMigrations } from '../src/db/index.js';
 import { runSyncCycle } from '../src/scheduler.js';
-import { SparkyClient } from '../src/sparky/client.js';
-import { FakeSparky, type FakeUser } from './fakeSparky.js';
+import { SparkyClient } from '@gauntlet/sparky';
+import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
 
 const DB_URL = process.env.DATABASE_URL ?? 'postgres://postgres@127.0.0.1:5433/gauntlet';
 const TZ = process.env.DEMO_TZ ?? 'America/Los_Angeles';

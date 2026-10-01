@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db/index.js';
-import { SparkyClient } from '../src/sparky/client.js';
+import { SparkyClient } from '@gauntlet/sparky';
 
 const dir = mkdtempSync(join(tmpdir(), 'gauntlet-dl-'));
 const apk = Buffer.from('PK\x03\x04 not really an apk');

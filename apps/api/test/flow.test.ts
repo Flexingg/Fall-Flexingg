@@ -17,8 +17,8 @@ import type { AppContext } from '../src/context.js';
 import { createDb, runMigrations } from '../src/db/index.js';
 import { runSyncCycle } from '../src/scheduler.js';
 import { syncUser } from '../src/services/sync.js';
-import { SparkyClient } from '../src/sparky/client.js';
-import { FakeSparky } from './fakeSparky.js';
+import { SparkyClient } from '@gauntlet/sparky';
+import { FakeSparky } from '@gauntlet/sparky/testing';
 
 const DB_URL = process.env.TEST_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:5433/gauntlet_test';
 

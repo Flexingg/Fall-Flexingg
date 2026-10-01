@@ -10,7 +10,7 @@ import type {
   ExerciseDayBucket,
   ExerciseEntryRow,
   SleepRow,
-} from '../src/sparky/client.js';
+} from './client.js';
 
 export interface FakeUser {
   id: string;

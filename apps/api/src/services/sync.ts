@@ -13,8 +13,7 @@ import {
 import { and, eq, gte, lte } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics, feedEvents, users } from '../db/schema.js';
-import { SparkyError, type CustomMeasurementRow } from '../sparky/client.js';
-import { mergeDaily, wantedCategoryNames, type MergedValue } from '../sparky/merge.js';
+import { fetchMerged, SparkyError, type MergedValue } from '@gauntlet/sparky';
 import { openChallengesForUser, refreshChallenge, type ChallengeRow } from './challenges.js';
 import { getUser, markKeyInvalid, sparkyToken } from './users.js';
 
@@ -128,68 +127,9 @@ async function fetchAndMerge(
   end: string,
   customMetrics: Record<string, MetricAggregate>,
 ): Promise<{ merged: MergedValue[]; partial: boolean }> {
-  const s = ctx.sparky;
-  let partial = false;
-  // Fail fast on a revoked key before fanning out.
-  const categories = await s.customCategories(token);
-
-  const settle = async <T>(label: string, p: Promise<T>, fallback: T): Promise<T> => {
-    try {
-      return await p;
-    } catch (err) {
-      if (err instanceof SparkyError && err.status === 401) throw err;
-      ctx.log.warn(
-        { err: (err as Error).message, label },
-        'sparky read failed; continuing without it',
-      );
-      partial = true;
-      return fallback;
-    }
-  };
-
-  const wanted = new Set(wantedCategoryNames(customMetrics));
-  const matched = categories.filter((c) => wanted.has(c.name.toLowerCase()));
-  const [daily, checkIns, exerciseDays, exerciseEntries, sleep, customRows] = await Promise.all([
-    settle('daily', s.dailyHealthMetrics(token, start, end), []),
-    settle('checkins', s.checkIns(token, start, end), []),
-    settle('exercise-days', s.exerciseDays(token, start, end), []),
-    settle('exercise-entries', s.exerciseEntries(token, start, end), []),
-    settle('sleep', s.sleep(token, start, end), []),
-    Promise.all(
-      matched.map(
-        async (c) =>
-          [
-            c,
-            await settle(
-              `custom:${c.name}`,
-              s.customMeasurements(token, c.id, start, end),
-              [] as CustomMeasurementRow[],
-            ),
-          ] as const,
-      ),
-    ),
-  ]);
-
-  const custom: Parameters<typeof mergeDaily>[0]['custom'] = {};
-  for (const [category, rows] of customRows) {
-    const key = category.name.toLowerCase();
-    const existing = custom[key];
-    custom[key] = existing ? { category, rows: [...existing.rows, ...rows] } : { category, rows };
-  }
-  return {
-    merged: mergeDaily({
-      start,
-      end,
-      daily,
-      checkIns,
-      custom,
-      exerciseDays,
-      exerciseEntries,
-      sleep,
-      customMetrics,
-    }),
-    partial,
-  };
+  return fetchMerged(ctx.sparky, token, start, end, customMetrics, (label, err) =>
+    ctx.log.warn({ err: err.message, label }, 'sparky read failed; continuing without it'),
+  );
 }
 
 interface Change {

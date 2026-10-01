@@ -1,17 +1,18 @@
 import {
-  addDays,
+  buildToday,
+  buildTrends,
   isMetricKey,
-  listDates,
-  METRICS,
+  personalBests,
   todayIn,
+  trendsNeedFrom,
   trendsQuerySchema,
   updateMeSchema,
-  weekday,
   type CustomMetricOption,
+  type MetricRow,
   type TodayResponse,
   type TrendsResponse,
 } from '@gauntlet/shared';
-import { and, asc, desc, eq, gte, lte, max, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { requireUser, revokeAllRefreshTokens } from '../auth.js';
 import type { AppContext } from '../context.js';
@@ -20,9 +21,7 @@ import { challengeParticipants, dailyMetrics, rankSnapshots, users } from '../db
 import { listForUser } from '../services/challenges.js';
 import { syncUser } from '../services/sync.js';
 import { getUser, isValidTimeZone, sparkyToken, toMe } from '../services/users.js';
-import { DISTANCE_CATEGORIES, RESTING_HR_CATEGORIES } from '../sparky/merge.js';
-
-const DAILY_GOALS = { steps: 10_000, active_calories: 500, active_minutes: 30 } as const;
+import { DISTANCE_CATEGORIES, RESTING_HR_CATEGORIES } from '@gauntlet/sparky';
 
 export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
@@ -62,24 +61,16 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     const user = await getUser(ctx, req.userId);
     const date = todayIn(user.timezone, ctx.now());
     const rows = await ctx.db
-      .select()
+      .select({ date: dailyMetrics.date, metric: dailyMetrics.metric, value: dailyMetrics.value })
       .from(dailyMetrics)
       .where(and(eq(dailyMetrics.userId, user.id), eq(dailyMetrics.date, date)));
-    const val = (m: string) => rows.find((r) => r.metric === m)?.value ?? null;
     const featured =
       (await listForUser(ctx, user.id)).find(
         (c) => c.status === 'active' && c.myState === 'joined',
       ) ?? null;
     return {
-      date,
+      ...buildToday(rows, date),
       lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
-      metrics: (['steps', 'active_calories', 'active_minutes', 'distance'] as const).map((k) => ({
-        key: k,
-        label: k === 'active_calories' ? 'Active kcal' : METRICS[k].label,
-        value: val(k),
-        unit: METRICS[k].unit,
-        goal: k in DAILY_GOALS ? DAILY_GOALS[k as keyof typeof DAILY_GOALS] : null,
-      })),
       featured,
     };
   });
@@ -88,50 +79,16 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     const q = trendsQuerySchema.parse(req.query);
     const user = await getUser(ctx, req.userId);
     const today = todayIn(user.timezone, ctx.now());
-    let start: string;
-    let end: string;
-    if (q.range === 'week') {
-      start = addDays(today, -((weekday(today) + 6) % 7)); // Monday
-      end = addDays(start, 6);
-    } else if (q.range === 'month') {
-      start = addDays(today, -29);
-      end = today;
-    } else {
-      start = addDays(today, -6);
-      end = today;
-    }
-    const span = listDates(start, end).length;
-    const prevStart = addDays(start, -span);
     const rows = await ctx.db
-      .select({ date: dailyMetrics.date, value: dailyMetrics.value })
+      .select({ date: dailyMetrics.date, metric: dailyMetrics.metric, value: dailyMetrics.value })
       .from(dailyMetrics)
       .where(
         and(
           eq(dailyMetrics.userId, user.id),
           eq(dailyMetrics.metric, q.metric),
-          gte(dailyMetrics.date, prevStart),
-          lte(dailyMetrics.date, end),
+          gte(dailyMetrics.date, trendsNeedFrom(q.range, today)),
         ),
       );
-    const byDate = new Map(rows.map((r) => [r.date, r.value]));
-    const avg = q.metric === 'sleep' || q.metric === 'resting_hr';
-    const agg = (dates: string[]) => {
-      const vals = dates.map((d) => byDate.get(d)).filter((v): v is number => v != null);
-      if (!vals.length) return 0;
-      const sum = vals.reduce((a, b) => a + b, 0);
-      return avg ? sum / vals.length : sum;
-    };
-    // Compare like with like: only the elapsed part of the current period.
-    const elapsed = listDates(start, today < end ? today : end);
-    const total = agg(elapsed);
-    const previousTotal = agg(listDates(prevStart, addDays(prevStart, elapsed.length - 1)));
-    const letters = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    const bars = listDates(start, end).map((d) => ({
-      date: d,
-      label: q.range === 'month' ? String(Number(d.slice(8))) : letters[weekday(d)]!,
-      value: byDate.get(d) ?? 0,
-      isToday: d === today,
-    }));
 
     // Rank history from the most recent challenge with snapshots.
     const snaps = await ctx.db
@@ -156,14 +113,12 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     }
 
     return {
-      metric: q.metric,
-      range: q.range,
-      total,
-      previousTotal,
-      changePct: previousTotal > 0 ? ((total - previousTotal) / previousTotal) * 100 : null,
-      bars,
+      ...buildTrends({ rows, range: q.range, metric: q.metric, today }),
       rankHistory,
-      personalBests: await personalBests(ctx, user.id),
+      personalBests: personalBests(await bestsRows(ctx, user.id), {
+        today,
+        challengesWon: await challengesWon(ctx, user.id),
+      }),
     };
   });
 
@@ -196,51 +151,20 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 }
 
-async function personalBests(
-  ctx: AppContext,
-  userId: string,
-): Promise<{ label: string; value: string }[]> {
-  const best = async (metric: string) => {
-    const [r] = await ctx.db
-      .select({ v: max(dailyMetrics.value) })
-      .from(dailyMetrics)
-      .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.metric, metric)));
-    return r?.v ?? null;
-  };
-  const [steps, distance] = await Promise.all([best('steps'), best('distance')]);
-
-  // Longest run of consecutive days with 10k+ steps.
-  const days = await ctx.db
-    .select({ date: dailyMetrics.date })
+/** Rows the personal-bests tiles are computed from (steps and distance, all time). */
+function bestsRows(ctx: AppContext, userId: string): Promise<MetricRow[]> {
+  return ctx.db
+    .select({ date: dailyMetrics.date, metric: dailyMetrics.metric, value: dailyMetrics.value })
     .from(dailyMetrics)
     .where(
-      and(
-        eq(dailyMetrics.userId, userId),
-        eq(dailyMetrics.metric, 'steps'),
-        gte(dailyMetrics.value, 10_000),
-      ),
-    )
-    .orderBy(asc(dailyMetrics.date));
-  let streak = 0;
-  let run = 0;
-  let prev: string | null = null;
-  for (const { date } of days) {
-    run = prev && addDays(prev, 1) === date ? run + 1 : 1;
-    streak = Math.max(streak, run);
-    prev = date;
-  }
+      and(eq(dailyMetrics.userId, userId), inArray(dailyMetrics.metric, ['steps', 'distance'])),
+    );
+}
+
+async function challengesWon(ctx: AppContext, userId: string): Promise<number> {
   const [wins] = await ctx.db
     .select({ n: sql<number>`count(*)::int` })
     .from(challengeParticipants)
     .where(and(eq(challengeParticipants.userId, userId), eq(challengeParticipants.finalRank, 1)));
-
-  return [
-    { label: 'Best distance day', value: distance != null ? `${distance.toFixed(1)} km` : '–' },
-    {
-      label: 'Best step day',
-      value: steps != null ? Math.round(steps).toLocaleString('en-US') : '–',
-    },
-    { label: '10k-step streak', value: `${streak} ${streak === 1 ? 'day' : 'days'}` },
-    { label: 'Challenges won', value: `${wins?.n ?? 0} ${wins?.n === 1 ? 'win' : 'wins'}` },
-  ];
+  return wins?.n ?? 0;
 }

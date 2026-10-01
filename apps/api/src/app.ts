@@ -13,7 +13,7 @@ import { friendRoutes } from './routes/friends.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
 import { miscRoutes } from './routes/misc.js';
-import { SparkyError } from './sparky/client.js';
+import { SparkyError } from '@gauntlet/sparky';
 import { markKeyInvalid } from './services/users.js';
 
 export async function buildApp(

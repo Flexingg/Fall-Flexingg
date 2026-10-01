@@ -13,7 +13,7 @@ import type { AppContext } from '../context.js';
 import { HttpError } from '../context.js';
 import { decrypt, encrypt, randomToken, sha256 } from '../crypto.js';
 import { pendingLogins } from '../db/schema.js';
-import { SparkyError, type SparkyUser } from '../sparky/client.js';
+import { SparkyError, type SparkyUser } from '@gauntlet/sparky';
 import { syncUser } from '../services/sync.js';
 import { toMe, upsertFromSparky } from '../services/users.js';
 

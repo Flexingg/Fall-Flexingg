@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeDaily, type MergeInput } from '../src/sparky/merge.js';
+import { mergeDaily, type MergeInput } from '../src/merge.js';
 
 const empty: MergeInput = {
   start: '2026-10-01',

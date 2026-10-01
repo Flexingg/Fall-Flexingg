@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from './config.js';
 import type { Db } from './db/index.js';
-import type { SparkyClient } from './sparky/client.js';
+import type { SparkyClient } from '@gauntlet/sparky';
 
 export interface AppContext {
   db: Db;

@@ -7,8 +7,7 @@
  * Never commit the key; pass it in the environment.
  */
 import { addDays, todayIn } from '@gauntlet/shared';
-import { SparkyClient, type CustomMeasurementRow } from '../src/sparky/client.js';
-import { mergeDaily, wantedCategoryNames } from '../src/sparky/merge.js';
+import { SparkyClient, mergeDaily, wantedCategoryNames, type CustomMeasurementRow } from '@gauntlet/sparky';
 
 const key = process.env.SPARKY_TEST_KEY;
 if (!key) {

@@ -2,7 +2,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb, runMigrations } from './db/index.js';
 import { startScheduler } from './scheduler.js';
-import { SparkyClient } from './sparky/client.js';
+import { SparkyClient } from '@gauntlet/sparky';
 
 const cfg = loadConfig();
 const { db, client } = createDb(cfg.DATABASE_URL);

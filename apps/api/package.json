@@ -20,6 +20,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.3.0",
     "@gauntlet/shared": "workspace:*",
+    "@gauntlet/sparky": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
     "jose": "^6.2.12",

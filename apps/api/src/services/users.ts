@@ -4,7 +4,7 @@ import type { AppContext } from '../context.js';
 import { HttpError, notFound } from '../context.js';
 import { decrypt, encrypt } from '../crypto.js';
 import { users } from '../db/schema.js';
-import type { SparkyUser } from '../sparky/client.js';
+import type { SparkyUser } from '@gauntlet/sparky';
 
 export type UserRow = typeof users.$inferSelect;
 

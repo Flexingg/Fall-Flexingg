@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db/index.js';
-import { SparkyClient } from '../src/sparky/client.js';
+import { SparkyClient } from '@gauntlet/sparky';
 
 const dist = mkdtempSync(join(tmpdir(), 'gauntlet-web-'));
 writeFileSync(join(dist, 'index.html'), '<!doctype html><title>Gauntlet</title>');

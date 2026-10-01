@@ -9,8 +9,8 @@ import { createDb, runMigrations } from '../src/db/index.js';
 import { challenges } from '../src/db/schema.js';
 import { runSyncCycle } from '../src/scheduler.js';
 import { syncUser } from '../src/services/sync.js';
-import { SparkyClient } from '../src/sparky/client.js';
-import { FakeSparky } from './fakeSparky.js';
+import { SparkyClient } from '@gauntlet/sparky';
+import { FakeSparky } from '@gauntlet/sparky/testing';
 
 /**
  * Several people sync at once and their data arrives in an unlucky order. Whoever is
