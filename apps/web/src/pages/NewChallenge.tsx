@@ -15,12 +15,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Icon } from '../components/Icon';
-import { Avatar, ErrorBox, Header, Screen, Seg, Toggle } from '../components/ui';
+import { Avatar, ErrorBox, Header, Screen, Seg, Toggle, NoSourcesNote } from '../components/ui';
 import { post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange } from '../lib/format';
 import { timezone } from '../lib/platform';
-import { useCustomMetrics, useFriends } from '../lib/queries';
+import { useCustomMetrics, useFriends, useToday } from '../lib/queries';
 
 type Duration = '3' | 'weekend' | '7' | '30';
 const CUSTOM = 'custom' as const;
@@ -62,6 +62,7 @@ export function NewChallengePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const friends = useFriends();
+  const todayQ = useToday();
   const [name, setName] = useState('');
   const [metric, setMetric] = useState<MetricKey | typeof CUSTOM>('distance');
   const [customId, setCustomId] = useState('');
@@ -153,6 +154,7 @@ export function NewChallengePage() {
     <Screen>
       <Header title="New challenge" back="/challenges" />
       <form onSubmit={submit}>
+        {todayQ.data && !todayQ.data.hasSources && <NoSourcesNote />}
         <label className="input">
           <input
             value={name}

@@ -23,6 +23,7 @@ test('walks every screen', async ({ page }) => {
 
   await signIn(page);
   await expect(page.getByText('Weekend 100K', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText('Connect your first data source')).toHaveCount(0);
   await snap(page, '01-today');
 
   await page.getByRole('link', { name: 'Challenges' }).click();
@@ -197,6 +198,13 @@ test('goes public, joins a public challenge from Discover, and finds people by n
   page,
 }) => {
   await signIn(page, 'casey@example.com');
+
+  // Nothing feeds this new account yet, so Today points at data sources.
+  await expect(page.getByText('Connect your first data source')).toBeVisible();
+  await snap(page, '11-no-sources');
+  await page.getByRole('link', { name: 'Garmin', exact: true }).click();
+  await expect(page).toHaveURL(/\/sources#garmin$/);
+  await expect(page.getByLabel('Garmin email')).toBeVisible();
 
   // Private by default: Discover shows the challenge but asks to go public first.
   await page.goto('/challenges');

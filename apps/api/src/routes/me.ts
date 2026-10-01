@@ -1,4 +1,5 @@
 import {
+  addDays,
   buildToday,
   buildTrends,
   isMetricKey,
@@ -20,8 +21,15 @@ import { badRequest, HttpError } from '../context.js';
 import { challengeParticipants, dailyMetrics, rankSnapshots, users } from '../db/schema.js';
 import { listForUser } from '../services/challenges.js';
 import { syncUser } from '../services/sync.js';
-import { getUser, isValidTimeZone, sparkyToken, toMe } from '../services/users.js';
-import { DISTANCE_CATEGORIES, RESTING_HR_CATEGORIES } from '@gauntlet/sparky';
+import {
+  getUser,
+  isValidTimeZone,
+  sparkyToken,
+  toMe,
+  type UserRow,
+} from '../services/users.js';
+import { DISTANCE_CATEGORIES, listConnections, RESTING_HR_CATEGORIES } from '@gauntlet/sparky';
+import { connectionsEnv } from './connections.js';
 
 export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
@@ -81,6 +89,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       ...buildToday(rows, date),
       lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
       featured,
+      hasSources: await hasSources(ctx, user, date),
     };
   });
 
@@ -158,6 +167,26 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     await ctx.db.delete(users).where(eq(users.id, user.id));
     return { ok: true };
   });
+}
+
+/**
+ * Does anything feed this account? Recent data answers it cheaply; only people with none (new
+ * accounts, mostly) cost a look at their linked apps. If SparkyFitness can't say, don't nag.
+ */
+async function hasSources(ctx: AppContext, user: UserRow, today: string): Promise<boolean> {
+  if (user.healthConnectSync) return true;
+  const [recent] = await ctx.db
+    .select({ n: sql<number>`1` })
+    .from(dailyMetrics)
+    .where(and(eq(dailyMetrics.userId, user.id), gte(dailyMetrics.date, addDays(today, -30))))
+    .limit(1);
+  if (recent) return true;
+  try {
+    const apps = await listConnections(ctx.sparky, sparkyToken(ctx, user), connectionsEnv(ctx));
+    return apps.some((a) => a.state === 'connected');
+  } catch {
+    return true;
+  }
 }
 
 /** Rows the personal-bests tiles are computed from (steps and distance, all time). */

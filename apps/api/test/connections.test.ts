@@ -1,4 +1,4 @@
-import type { ConnectionsResponse, ConnectResult } from '@gauntlet/shared';
+import type { ConnectionsResponse, ConnectResult, TodayResponse } from '@gauntlet/shared';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky } from '@gauntlet/sparky/testing';
 import { sql } from 'drizzle-orm';
@@ -67,6 +67,11 @@ const list = async () =>
   );
 
 describe('linking apps through the Gauntlet API', () => {
+  it('flags a brand-new account with nothing connected', async () => {
+    const today = (await call('GET', '/api/me/today')).json() as TodayResponse;
+    expect(today.hasSources).toBe(false);
+  });
+
   it('lists all nine, marking those the server has no app keys for', async () => {
     const all = await list();
     expect(Object.keys(all)).toHaveLength(9);
@@ -98,6 +103,8 @@ describe('linking apps through the Gauntlet API', () => {
     const rec = fake.users.get('u-bo')!.providers.find((p) => p.provider_type === 'strava')!;
     await expect.poll(() => rec.syncs).toBeGreaterThan(0);
     expect(rec.sync_frequency).toBe('hourly');
+    // A linked app is enough to stop the "connect a source" nudge.
+    expect(((await call('GET', '/api/me/today')).json() as TodayResponse).hasSources).toBe(true);
   });
 
   it('syncs on demand and disconnects', async () => {

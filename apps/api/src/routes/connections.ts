@@ -26,6 +26,13 @@ import { getUser, sparkyToken } from '../services/users.js';
 const FIRST_SYNC_DAYS = 30;
 const REFRESH_SYNC_DAYS = 7;
 
+export const connectionsEnv = (ctx: AppContext): ConnectionsEnv => ({
+  sparkyUrl: ctx.cfg.SPARKY_PUBLIC_URL,
+  oauthAvailable: true,
+  oauth: ctx.cfg.oauthApps,
+  now: ctx.now,
+});
+
 /**
  * Link apps and devices (Strava, Fitbit, Oura, Polar, COROS, Hevy, Liftosaur, wger; Garmin has its
  * own sign-in form in routes/garmin.ts) through SparkyFitness, with the person's own key.
@@ -34,12 +41,7 @@ export function connectionRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
   const limit = (max: number) => ({ config: { rateLimit: { max, timeWindow: '10 minutes' } } });
 
-  const env = (): ConnectionsEnv => ({
-    sparkyUrl: ctx.cfg.SPARKY_PUBLIC_URL,
-    oauthAvailable: true,
-    oauth: ctx.cfg.oauthApps,
-    now: ctx.now,
-  });
+  const env = () => connectionsEnv(ctx);
   const tokenFor = async (userId: string) => sparkyToken(ctx, await getUser(ctx, userId));
 
   const providerId = (raw: string): ProviderId => {

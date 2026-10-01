@@ -62,6 +62,15 @@ function setup(opts: { fetch?: typeof fetch } = {}) {
 }
 
 describe('DirectBackend', () => {
+  it('nudges a new account with no data and nothing linked', async () => {
+    const { backend, user } = setup();
+    user.daily.length = 0;
+    user.checkIns.length = 0;
+    user.exerciseEntries.length = 0;
+    user.custom['cat-d'] = [];
+    expect((await backend.today()).hasSources).toBe(false);
+  });
+
   it('shows today and trends merged from every SparkyFitness source', async () => {
     const { backend } = setup();
     const today = await backend.today();
@@ -73,6 +82,7 @@ describe('DirectBackend', () => {
       ['distance', null],
     ]);
     expect(today.featured).toBeNull();
+    expect(today.hasSources).toBe(true);
 
     const week = await backend.trends('week', 'steps');
     // Mon 28 Sep .. Sun 4 Oct: Wed none, Wed-Thu steps from check-in / garmin

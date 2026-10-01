@@ -1,6 +1,7 @@
-import type { ConnectionInfo, ProviderId } from '@gauntlet/shared';
+import { isProviderId, type ConnectionInfo, type ProviderId } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useLocation } from 'react-router';
 import { timeAgo } from '../lib/format';
 import { openSignIn, rememberOAuthStart } from '../lib/oauth';
 import { keys, useConnections } from '../lib/queries';
@@ -23,9 +24,19 @@ type GarminStep = { kind: 'form' } | { kind: 'code'; clientState: string };
 export function Connections() {
   const q = useConnections();
   const qc = useQueryClient();
+  const { hash } = useLocation();
   const [open, setOpen] = useState<ProviderId | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+
+  // /sources#garmin (from the Today screen's "connect a source" card) opens that app's row.
+  const target = hash.slice(1);
+  const loaded = !!q.data;
+  useEffect(() => {
+    if (!loaded || !isProviderId(target)) return;
+    setOpen(target);
+    document.getElementById(`app-${target}`)?.scrollIntoView({ block: 'center' });
+  }, [loaded, target]);
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: keys.connections });
@@ -67,7 +78,7 @@ export function Connections() {
       ) : (
         <div className="list">
           {q.data?.map((c) => (
-            <div key={c.id}>
+            <div key={c.id} id={`app-${c.id}`}>
               <button
                 className="item"
                 style={{ width: '100%' }}

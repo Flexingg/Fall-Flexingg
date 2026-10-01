@@ -191,3 +191,13 @@ export function ToastHost() {
     </div>
   ) : null;
 }
+
+/** Shown where someone is about to compete without anything feeding their score. */
+export function NoSourcesNote() {
+  return (
+    <div className="notice" style={{ marginBottom: 12 }}>
+      Nothing is sending you data yet, so your score stays at 0.{' '}
+      <Link to="/sources">Connect a data source</Link> first.
+    </div>
+  );
+}

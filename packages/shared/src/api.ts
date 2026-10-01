@@ -296,6 +296,11 @@ export interface TodayResponse {
     goal: number | null;
   }[];
   featured: ChallengeSummary | null;
+  /**
+   * False when nothing feeds this account yet (no data in the last 30 days, no linked app, no
+   * Health Connect): the app nudges the person to connect a source.
+   */
+  hasSources: boolean;
 }
 
 export const trendsQuerySchema = z.object({

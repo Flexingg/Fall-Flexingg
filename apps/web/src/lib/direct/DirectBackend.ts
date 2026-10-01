@@ -221,7 +221,25 @@ export class DirectBackend {
 
   async today(): Promise<TodayResponse> {
     const { rows, savedAt } = await this.load();
-    return { ...buildToday(rows, this.today_()), lastSyncedAt: savedAt, featured: null };
+    const today = this.today_();
+    return {
+      ...buildToday(rows, today),
+      lastSyncedAt: savedAt,
+      featured: null,
+      hasSources: await this.hasSources(rows, today),
+    };
+  }
+
+  /** Same rule as the server: recent data, Health Connect, or a linked app. */
+  private async hasSources(rows: MetricRow[], today: string): Promise<boolean> {
+    const since = addDays(today, -30);
+    if (rows.some((r) => r.date >= since)) return true;
+    if ((await this.settings()).healthConnectSync) return true;
+    try {
+      return (await this.connections()).some((c) => c.state === 'connected');
+    } catch {
+      return true;
+    }
   }
 
   async trends(range: TrendRange, metric: MetricKey): Promise<TrendsResponse> {

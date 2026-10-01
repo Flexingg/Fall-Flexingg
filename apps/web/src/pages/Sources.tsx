@@ -112,7 +112,7 @@ export function SourcesPage() {
       )}
 
       <div className="lbl">On this phone</div>
-      <div className="list">
+      <div className="list" id="health-connect">
         <div className="item">
           <div
             className="av"

@@ -4,17 +4,18 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Podium, StandingsList } from '../components/Standings';
-import { ErrorBox, Header, Screen, Skeleton, toast } from '../components/ui';
+import { ErrorBox, Header, Screen, Skeleton, toast, NoSourcesNote } from '../components/ui';
 import { del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange, daysLeftText, fmt } from '../lib/format';
-import { keys, useChallenge } from '../lib/queries';
+import { keys, useChallenge, useToday } from '../lib/queries';
 import { shareLink } from '../lib/share';
 import type { Invite } from '@gauntlet/shared';
 
 export function ChallengeDetailPage() {
   const { id = '' } = useParams();
   const q = useChallenge(id);
+  const today = useToday();
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -65,6 +66,7 @@ export function ChallengeDetailPage() {
             c.status !== 'completed' && (
               <div className="card stack" style={{ marginBottom: 14 }}>
                 <b>Open to everyone</b>
+                {today.data && !today.data.hasSources && <NoSourcesNote />}
                 {user?.visibility === 'public' ? (
                   <button
                     className="btn"

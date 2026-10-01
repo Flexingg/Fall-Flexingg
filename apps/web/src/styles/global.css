@@ -236,6 +236,14 @@ svg {
   font-size: 18px;
   letter-spacing: -0.02em;
 }
+.hero .chip-dark {
+  background: var(--volt-ink);
+  color: var(--volt);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 800;
+}
 
 /* ---------- Controls ---------- */
 .btn {

@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { Rings } from '../components/Rings';
 import { Avatar, Empty, ErrorBox, Screen, Skeleton } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { isNative } from '../lib/platform';
 import { fmtInt, timeAgo } from '../lib/format';
 import { useFeed, useToday } from '../lib/queries';
 import { syncNow } from '../lib/session';
@@ -48,6 +49,7 @@ export function TodayPage() {
         </Link>
       </div>
       <ErrorBox error={today.error} />
+      {today.data && !today.data.hasSources && <ConnectSourceHero />}
       {today.isPending ? (
         <Skeleton height={142} />
       ) : (
@@ -80,7 +82,7 @@ export function TodayPage() {
           </Link>
         ) : today.data?.featured ? (
           <ChallengeHero c={today.data.featured} />
-        ) : today.isSuccess ? (
+        ) : today.isSuccess && today.data.hasSources ? (
           <Link to="/c/new" className="hero">
             <div className="badge">
               <Icon name="plus" />
@@ -147,5 +149,39 @@ export function TodayPage() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** New accounts have nothing feeding them yet: point them at the quickest ways to fix that. */
+function ConnectSourceHero() {
+  const quick = [
+    ...(isNative ? [{ label: 'Health Connect', to: '/sources#health-connect' }] : []),
+    { label: 'Garmin', to: '/sources#garmin' },
+    { label: 'Strava', to: '/sources#strava' },
+    { label: 'More apps', to: '/sources' },
+  ];
+  return (
+    <div className="hero stack" style={{ alignItems: 'stretch', marginBottom: 12 }}>
+      <Link to="/sources" className="row" style={{ gap: 14 }}>
+        <div className="badge">
+          <Icon name="link" />
+        </div>
+        <div className="grow">
+          <small>No data coming in yet</small>
+          <b>Connect your first data source</b>
+        </div>
+      </Link>
+      <p style={{ fontSize: 13, lineHeight: 1.45, opacity: 0.85 }}>
+        Gauntlet scores what your watch, phone or fitness app records. Link one and your steps,
+        workouts and more show up here within minutes.
+      </p>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        {quick.map((q) => (
+          <Link key={q.label} to={q.to} className="chip-dark">
+            {q.label}
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
