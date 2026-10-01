@@ -36,3 +36,28 @@ for (const [svg, out, size, round] of jobs) {
 }
 await browser.close();
 console.log(`wrote ${jobs.length} icons`);
+
+// Splash screens: Gauntlet mark centred on the app background, at the sizes Capacitor ships.
+import { readdirSync, existsSync } from 'node:fs';
+const splashBrowser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+const sp = await splashBrowser.newPage();
+const mark = readFileSync(join(icons, 'icon.svg'), 'utf8');
+let splashes = 0;
+if (existsSync(res)) {
+  for (const dir of readdirSync(res).filter((d) => d.startsWith('drawable'))) {
+    const file = join(res, dir, 'splash.png');
+    if (!existsSync(file)) continue;
+    const buf = readFileSync(file);
+    const w = buf.readUInt32BE(16);
+    const h = buf.readUInt32BE(20);
+    const size = Math.round(Math.min(w, h) * 0.28);
+    await sp.setViewportSize({ width: w, height: h });
+    await sp.setContent(
+      `<html><body style="margin:0;background:#0c0c0d;display:flex;align-items:center;justify-content:center;width:${w}px;height:${h}px"><div style="width:${size}px;height:${size}px;border-radius:${size * 0.22}px;overflow:hidden">${mark.replace('<svg ', `<svg width="${size}" height="${size}" `)}</div></body></html>`,
+    );
+    await sp.screenshot({ path: file, clip: { x: 0, y: 0, width: w, height: h } });
+    splashes++;
+  }
+}
+await splashBrowser.close();
+console.log(`wrote ${splashes} splash screens`);

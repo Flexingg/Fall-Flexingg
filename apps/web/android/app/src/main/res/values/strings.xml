@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gauntlet</string>
+    <string name="title_activity_main">Gauntlet</string>
+    <string name="package_name">cc.randalls.gauntlet</string>
+    <string name="custom_url_scheme">cc.randalls.gauntlet</string>
+    <!-- Shown by Health Connect when the user taps "Privacy policy" in the permission sheet. -->
+    <string name="health_connect_privacy_policy_url">https://gauntlet.randalls.cc/privacy.html</string>
+</resources>
