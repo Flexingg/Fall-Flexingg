@@ -7,8 +7,6 @@ primary_region = 'iad'
 
 [env]
   GARMIN_SERVICE_PORT = '8000'
-  # Fly's private network is IPv6.
-  GARMIN_SERVICE_HOST = '::'
   GARMIN_SERVICE_IS_CN = 'false'
 
 [checks]
