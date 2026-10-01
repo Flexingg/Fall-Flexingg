@@ -266,8 +266,13 @@ export async function refreshChallenge(ctx: AppContext, ch: ChallengeRow): Promi
   const top = ranked[0];
   const soleLeader = top && top.rank === 1 && ranked.filter((s) => s.rank === 1).length === 1 && (top.score ?? 0) > 0;
   if (soleLeader && top.userId !== ch.leaderId) {
-    await ctx.db.update(challenges).set({ leaderId: top.userId }).where(eq(challenges.id, ch.id));
-    if (ch.leaderId && ranked.length > 1) {
+    // Compare-and-set, so two syncs finishing together announce the change once.
+    const [changed] = await ctx.db
+      .update(challenges)
+      .set({ leaderId: top.userId })
+      .where(and(eq(challenges.id, ch.id), ch.leaderId ? eq(challenges.leaderId, ch.leaderId) : isNull(challenges.leaderId)))
+      .returning({ id: challenges.id });
+    if (changed && ch.leaderId && ranked.length > 1) {
       await ctx.db.insert(feedEvents).values({
         actorId: top.userId,
         challengeId: ch.id,

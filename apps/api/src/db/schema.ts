@@ -26,7 +26,7 @@ export const users = pgTable('users', {
   /** Id of the key in SparkyFitness, when Gauntlet created it (so it can be deleted). */
   sparkyKeyId: text('sparky_key_id'),
   keyStatus: text('key_status', { enum: ['active', 'invalid', 'revoked'] }).notNull().default('active'),
-  shareWorkoutDetails: boolean('share_workout_details').notNull().default(false),
+  shareWorkoutDetails: boolean('share_workout_details').notNull().default(true),
   healthConnectSync: boolean('health_connect_sync').notNull().default(false),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   createdAt: createdAt(),

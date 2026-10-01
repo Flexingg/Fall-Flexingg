@@ -101,7 +101,7 @@ CREATE TABLE "users" (
 	"sparky_key_enc" text,
 	"sparky_key_id" text,
 	"key_status" text DEFAULT 'active' NOT NULL,
-	"share_workout_details" boolean DEFAULT false NOT NULL,
+	"share_workout_details" boolean DEFAULT true NOT NULL,
 	"health_connect_sync" boolean DEFAULT false NOT NULL,
 	"last_synced_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

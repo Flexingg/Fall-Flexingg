@@ -1,5 +1,5 @@
 {
-  "id": "c0a53c84-6229-4fb3-867d-d9c3305fe6f8",
+  "id": "d06f3f7c-1f3c-4800-be30-3046901a2656",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -889,7 +889,7 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": false
+          "default": true
         },
         "health_connect_sync": {
           "name": "health_connect_sync",

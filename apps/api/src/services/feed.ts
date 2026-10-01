@@ -75,7 +75,8 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
         challenge,
         text,
         badge,
-        source: typeof p.source === 'string' ? p.source : null,
+        // Which app the data came from is only shown if the person allows it.
+        source: actor.shareWorkoutDetails && typeof p.source === 'string' ? p.source : null,
         createdAt: e.createdAt.toISOString(),
       },
     ];

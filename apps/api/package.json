@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "demo": "tsx test/demoServer.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
