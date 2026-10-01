@@ -8,6 +8,7 @@ import type { AppContext } from '../src/context.js';
 import { createDb, runMigrations } from '../src/db/index.js';
 import { challenges } from '../src/db/schema.js';
 import { runSyncCycle } from '../src/scheduler.js';
+import { syncUser } from '../src/services/sync.js';
 import { SparkyClient } from '../src/sparky/client.js';
 import { FakeSparky } from './fakeSparky.js';
 
@@ -114,6 +115,10 @@ describe('leader tracking under concurrent syncs', () => {
     challengeId = created.id;
     for (const n of names.slice(1))
       await call(n, 'POST', `/api/challenges/${challengeId}/respond`, { accept: true });
+
+    // Logging in, creating and accepting each start a background sync. Let them all finish so
+    // the only syncing that happens from here on is the cycle under test.
+    await Promise.all(names.map((n) => syncUser(ctx, ids[n]!)));
 
     day('ann', 30);
     day('ben', 12);
