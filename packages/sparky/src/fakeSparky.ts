@@ -26,6 +26,8 @@ export interface FakeUser {
   exerciseEntries: ExerciseEntryRow[];
   sleep: SleepRow[];
   ingested: unknown[];
+  /** Set once the person has linked Garmin Connect inside this SparkyFitness. */
+  garmin?: { linkedAt: string; syncs: number };
 }
 
 export class FakeSparky {
@@ -39,6 +41,11 @@ export class FakeSparky {
   /** X-Forwarded-For seen on auth calls (Gauntlet passes the end user's address). */
   forwardedFor: string[] = [];
   signupDisabled = false;
+  /** Garmin accounts the pretend Garmin service accepts; mfaCode makes sign-in ask for a code. */
+  garminAccounts = new Map<string, { password: string; mfaCode?: string }>();
+  private garminPending = new Map<string, string>();
+  /** Set to make the Garmin service answer like a refused connection. */
+  garminDown = false;
   /** Artificial response delay per user id (ms), to force sync interleavings in tests. */
   latencyMs: Record<string, number> = {};
   private seq = 0;
@@ -236,6 +243,69 @@ export class FakeSparky {
         200,
         user.sleep.filter((r) => inRange(r.entry_date, q.get('startDate')!, q.get('endDate')!)),
       );
+    if (path.startsWith('/api/integrations/garmin/')) {
+      const g = path.slice('/api/integrations/garmin/'.length);
+      if (g === 'status')
+        return json(
+          200,
+          user.garmin
+            ? {
+                isLinked: true,
+                lastUpdated: user.garmin.linkedAt,
+                tokenExpiresAt: null,
+                message: 'Garmin Connect is linked.',
+              }
+            : { isLinked: false, message: 'Garmin Connect is not linked.' },
+        );
+      if (g === 'login' || g === 'resume_login') {
+        if (this.garminDown)
+          return json(500, {
+            error: 'Failed to login to Garmin: connect ECONNREFUSED 127.0.0.1:8000',
+          });
+        if (g === 'login') {
+          const acct = this.garminAccounts.get(String(body.email));
+          if (!acct || acct.password !== body.password)
+            return json(500, {
+              error: 'Failed to login to Garmin: Garmin authentication failed: Invalid credentials',
+            });
+          if (acct.mfaCode) {
+            const state = `mfa${++this.seq}`;
+            this.garminPending.set(state, String(body.email));
+            return json(200, { status: 'needs_mfa', client_state: state });
+          }
+        } else {
+          const email = this.garminPending.get(String(body.client_state));
+          if (!email)
+            return json(500, {
+              error:
+                'Failed to login to Garmin: An unexpected error occurred: Invalid or expired mfa_token',
+            });
+          this.garminPending.delete(String(body.client_state));
+          if (this.garminAccounts.get(email)?.mfaCode !== String(body.mfa_code))
+            return json(500, {
+              error: 'Failed to login to Garmin: Garmin MFA failed: Invalid MFA code',
+            });
+        }
+        user.garmin = { linkedAt: new Date().toISOString(), syncs: 0 };
+        return json(200, { status: 'success', provider: { id: 'garmin-provider' } });
+      }
+      if (g === 'sync') {
+        if (!user.garmin) return json(400, { error: 'Garmin Connect is not linked.' });
+        user.garmin.syncs++;
+        const day = String(body.endDate);
+        user.daily = user.daily.filter(
+          (r) => !(r.entry_date === day && r.source_provider === 'garmin'),
+        );
+        user.daily.push({ entry_date: day, source_provider: 'garmin', total_steps: 4321 });
+        return json(200, { message: 'Garmin sync completed.' });
+      }
+      if (g === 'unlink') {
+        if (!user.garmin)
+          return json(400, { error: 'Garmin Connect account not found for this user.' });
+        user.garmin = undefined;
+        return json(200, { success: true });
+      }
+    }
     if (method === 'GET' && path === '/api/synced-data/sources')
       return json(200, [{ source: 'garmin', totalCount: 120, byTable: {} }]);
     if (method === 'POST' && path === '/api/health-data') {

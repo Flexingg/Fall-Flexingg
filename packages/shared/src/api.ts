@@ -281,6 +281,29 @@ export interface SourcesResponse {
   integrationsUrl: string;
 }
 
+// ---------- Garmin Connect (linked inside SparkyFitness) ----------
+
+export interface GarminStatus {
+  linked: boolean;
+  lastUpdated: string | null;
+  tokenExpiresAt: string | null;
+}
+
+export const garminLoginSchema = z.object({
+  email: z.string().trim().min(1, 'Enter your Garmin email').max(200),
+  password: z.string().min(1, 'Enter your Garmin password').max(200),
+});
+export type GarminLoginRequest = z.infer<typeof garminLoginSchema>;
+
+export const garminMfaSchema = z.object({
+  clientState: z.string().min(1).max(200),
+  code: z.string().trim().min(4, 'Enter the code Garmin sent you').max(10),
+});
+export type GarminMfaRequest = z.infer<typeof garminMfaSchema>;
+
+export type GarminLoginResult =
+  { status: 'connected' } | { status: 'needs_mfa'; clientState: string };
+
 export const ingestSchema = z.object({
   records: z.array(z.record(z.string(), z.unknown())).min(1).max(5000),
 });

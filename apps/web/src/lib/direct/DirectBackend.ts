@@ -12,6 +12,8 @@ import {
   personalBests,
   addDays,
   todayIn,
+  type GarminLoginResult,
+  type GarminStatus,
   type MeUser,
   type MetricKey,
   type MetricRow,
@@ -22,8 +24,10 @@ import {
   type UserSettings,
 } from '@gauntlet/shared';
 import {
+  describeGarminError,
   describeSources,
   fetchMerged,
+  type GarminErrorCode,
   SparkyClient,
   SparkyError,
   type SparkyUser,
@@ -43,7 +47,8 @@ export interface DirectOptions {
   now?: () => Date;
 }
 
-export type DirectErrorCode = 'sparky_key_invalid' | 'sparky_unreachable' | 'sparky_error';
+export type DirectErrorCode =
+  'sparky_key_invalid' | 'sparky_unreachable' | 'sparky_error' | GarminErrorCode;
 
 export class DirectError extends Error {
   constructor(
@@ -81,6 +86,13 @@ export function explain(err: unknown, sparkyUrl: string): DirectError {
     );
   }
   return new DirectError((err as Error)?.message ?? 'Something went wrong', 'sparky_error');
+}
+
+/** Like explain(), but a Garmin sign-in problem gets its own plain-words message. */
+function explainGarmin(err: unknown, sparkyUrl: string): DirectError {
+  const problem = describeGarminError(err);
+  if (problem) return new DirectError(problem.message, problem.code, problem.status);
+  return explain(err, sparkyUrl);
 }
 
 const HISTORY_DAYS = 62;
@@ -229,5 +241,61 @@ export class DirectBackend {
     }
     // Make the next screen reload pick the new data up.
     await this.o.kv.set(ROWS_KEY, null);
+  }
+
+  // ---------------------------------------------------------------- Garmin Connect
+  // SparkyFitness signs in to Garmin and holds the session; the phone only passes the request on.
+
+  async garminStatus(): Promise<GarminStatus> {
+    try {
+      return await this.client.garminStatus(this.o.apiKey);
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+  }
+
+  async garminLogin(email: string, password: string): Promise<GarminLoginResult> {
+    try {
+      const result = await this.client.garminLogin(this.o.apiKey, email, password);
+      if (result.status === 'connected') this.garminSyncInBackground(30);
+      return result;
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+  }
+
+  async garminMfa(clientState: string, code: string): Promise<GarminLoginResult> {
+    try {
+      const result = await this.client.garminResumeLogin(this.o.apiKey, clientState, code);
+      if (result.status === 'connected') this.garminSyncInBackground(30);
+      return result;
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+  }
+
+  async garminSync(): Promise<{ ok: true }> {
+    const status = await this.garminStatus();
+    if (!status.linked) throw new DirectError('Garmin is not connected.', 'garmin_error', 400);
+    this.garminSyncInBackground(7);
+    return { ok: true };
+  }
+
+  async garminDisconnect(): Promise<{ ok: true }> {
+    try {
+      await this.client.garminUnlink(this.o.apiKey);
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+    return { ok: true };
+  }
+
+  /** Garmin's pull can take a minute, so it runs on after the screen has moved on. */
+  private garminSyncInBackground(days: number) {
+    const today = this.today_();
+    void this.client
+      .garminSync(this.o.apiKey, addDays(today, -days), today)
+      .catch(() => undefined)
+      .then(() => this.o.kv.set(ROWS_KEY, null));
   }
 }

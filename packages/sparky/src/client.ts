@@ -24,6 +24,14 @@ export interface SparkyUser {
   name: string | null;
 }
 
+export interface GarminStatusInfo {
+  linked: boolean;
+  lastUpdated: string | null;
+  tokenExpiresAt: string | null;
+}
+export type GarminLoginOutcome =
+  { status: 'connected' } | { status: 'needs_mfa'; clientState: string };
+
 export type SignInResult =
   { kind: 'ok'; token: string; user: SparkyUser } | { kind: 'two_factor'; cookie: string };
 
@@ -313,6 +321,63 @@ export class SparkyClient {
     return asArray(await this.request('GET', '/api/synced-data/sources', { token }));
   }
 
+  // ---------------------------------------------------------------- Garmin Connect
+  // SparkyFitness does the Garmin sign-in (through its Garmin service), keeps the session token and
+  // syncs the data; these are its own endpoints, called with the person's API key.
+
+  async garminStatus(token: string): Promise<GarminStatusInfo> {
+    const body = await this.request<{
+      isLinked?: boolean;
+      lastUpdated?: string | null;
+      tokenExpiresAt?: string | null;
+    }>('GET', '/api/integrations/garmin/status', { token });
+    return {
+      linked: !!body.isLinked,
+      lastUpdated: body.lastUpdated ?? null,
+      tokenExpiresAt: body.tokenExpiresAt ?? null,
+    };
+  }
+
+  /** Signs in to Garmin. Either connected, or Garmin wants a code (then call garminResumeLogin). */
+  async garminLogin(token: string, email: string, password: string): Promise<GarminLoginOutcome> {
+    const body = await this.request<{ status?: string; client_state?: string }>(
+      'POST',
+      '/api/integrations/garmin/login',
+      { token, body: { email, password }, timeoutMs: 90_000 },
+    );
+    if (body.status === 'success') return { status: 'connected' };
+    if (body.status === 'needs_mfa' && body.client_state)
+      return { status: 'needs_mfa', clientState: body.client_state };
+    throw new SparkyError('Unexpected response from Garmin sign-in', 502, body);
+  }
+
+  async garminResumeLogin(
+    token: string,
+    clientState: string,
+    code: string,
+  ): Promise<GarminLoginOutcome> {
+    const body = await this.request<{ status?: string }>(
+      'POST',
+      '/api/integrations/garmin/resume_login',
+      { token, body: { client_state: clientState, mfa_code: code }, timeoutMs: 90_000 },
+    );
+    if (body.status === 'success') return { status: 'connected' };
+    throw new SparkyError('Unexpected response from Garmin sign-in', 502, body);
+  }
+
+  /** Pulls Garmin data into SparkyFitness for a date range (can take a minute). */
+  async garminSync(token: string, startDate: string, endDate: string): Promise<void> {
+    await this.request('POST', '/api/integrations/garmin/sync', {
+      token,
+      body: { startDate, endDate },
+      timeoutMs: 240_000,
+    });
+  }
+
+  async garminUnlink(token: string): Promise<void> {
+    await this.request('POST', '/api/integrations/garmin/unlink', { token, body: {} });
+  }
+
   // ---------------------------------------------------------------- writes
 
   async ingestHealthData(
@@ -336,7 +401,12 @@ export class SparkyClient {
   private async request<T = unknown>(
     method: string,
     path: string,
-    opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {},
+    opts: {
+      token?: string;
+      body?: unknown;
+      headers?: Record<string, string>;
+      timeoutMs?: number;
+    } = {},
   ): Promise<T> {
     let attempt = 0;
     for (;;) {
@@ -362,7 +432,12 @@ export class SparkyClient {
   private async raw(
     method: string,
     path: string,
-    opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {},
+    opts: {
+      token?: string;
+      body?: unknown;
+      headers?: Record<string, string>;
+      timeoutMs?: number;
+    } = {},
   ): Promise<Response> {
     const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
     if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
@@ -372,7 +447,7 @@ export class SparkyClient {
         method,
         headers,
         body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(opts.timeoutMs ?? this.timeoutMs),
         redirect: 'manual',
       });
     } catch (err) {

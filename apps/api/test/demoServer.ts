@@ -5,6 +5,7 @@
  *   DATABASE_URL=postgres://... pnpm --filter @gauntlet/api demo
  *
  * Sign in as you@example.com / demo (or maya@, dre@, sam@, jordan@ / demo).
+ * Garmin screen: runner@garmin.demo / demo, or mfa@garmin.demo / demo with code 123456.
  */
 import { addDays, todayIn } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
@@ -102,6 +103,10 @@ for (const [id, p] of Object.entries(profile)) {
     });
   });
 }
+
+// Pretend Garmin accounts for trying the Connect Garmin screen.
+fake.garminAccounts.set('runner@garmin.demo', { password: 'demo' });
+fake.garminAccounts.set('mfa@garmin.demo', { password: 'demo', mfaCode: '123456' });
 
 const { db, client } = createDb(DB_URL);
 await db.execute(

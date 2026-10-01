@@ -179,4 +179,40 @@ describe('DirectBackend', () => {
     // The fake stores steps as a check-in; Garmin's 9,412 still wins nothing: highest single source.
     expect((await backend.today()).metrics[0]!.value).toBe(15000);
   });
+
+  it('connects Garmin from the phone through SparkyFitness, with a code when Garmin asks', async () => {
+    const { backend, user, fake } = setup();
+    fake.garminAccounts.set('g@example.com', { password: 'pw', mfaCode: '123456' });
+    expect((await backend.garminStatus()).linked).toBe(false);
+
+    const step1 = await backend.garminLogin('g@example.com', 'pw');
+    if (step1.status !== 'needs_mfa') throw new Error('expected an MFA step');
+    await expect(backend.garminMfa(step1.clientState, '999999')).rejects.toMatchObject({
+      code: 'garmin_mfa',
+    });
+
+    const again = await backend.garminLogin('g@example.com', 'pw');
+    if (again.status !== 'needs_mfa') throw new Error('expected an MFA step');
+    expect(await backend.garminMfa(again.clientState, '123456')).toEqual({ status: 'connected' });
+    expect((await backend.garminStatus()).linked).toBe(true);
+    await expect.poll(() => user.garmin?.syncs ?? 0).toBeGreaterThan(0);
+
+    expect(await backend.garminSync()).toEqual({ ok: true });
+    expect(await backend.garminDisconnect()).toEqual({ ok: true });
+    expect((await backend.garminStatus()).linked).toBe(false);
+  });
+
+  it('says what went wrong with Garmin in plain words', async () => {
+    const { backend, fake } = setup();
+    fake.garminAccounts.set('g@example.com', { password: 'pw' });
+    await expect(backend.garminLogin('g@example.com', 'wrong')).rejects.toMatchObject({
+      code: 'garmin_credentials',
+      message: "Garmin didn't accept that email and password.",
+    });
+    fake.garminDown = true;
+    await expect(backend.garminLogin('g@example.com', 'pw')).rejects.toMatchObject({
+      code: 'garmin_unreachable',
+    });
+    await expect(backend.garminSync()).rejects.toBeInstanceOf(DirectError);
+  });
 });

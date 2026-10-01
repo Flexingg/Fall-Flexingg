@@ -9,6 +9,7 @@ import { HttpError } from './context.js';
 import { downloadRoutes } from './downloads.js';
 import { authRoutes } from './routes/auth.js';
 import { challengeRoutes } from './routes/challenges.js';
+import { garminRoutes } from './routes/garmin.js';
 import { friendRoutes } from './routes/friends.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
@@ -72,6 +73,7 @@ export async function buildApp(
   inviteRoutes(app, full);
   challengeRoutes(app, full);
   miscRoutes(app, full);
+  garminRoutes(app, full);
   downloadRoutes(app, full.cfg);
 
   if (full.cfg.WEB_DIST) await serveWeb(app, full.cfg.WEB_DIST);

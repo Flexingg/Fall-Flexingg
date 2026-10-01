@@ -3,10 +3,10 @@
  * Gauntlet server ("server", the web app and the full Android app). One place decides, so screens
  * just call these helpers.
  */
-import type { MeUser, UserSettings } from '@gauntlet/shared';
+import type { GarminLoginResult, GarminStatus, MeUser, UserSettings } from '@gauntlet/shared';
 import { DirectBackend } from './direct/DirectBackend';
 import { secret } from './direct/secret';
-import { post, patch } from './api';
+import { get, post, patch } from './api';
 import { timezone } from './platform';
 import { storage } from './storage';
 
@@ -76,3 +76,23 @@ export async function sendHealthRecords(records: Record<string, unknown>[]): Pro
   if (session.direct) await session.direct.ingest(records);
   else await post('/api/ingest/health-connect', { records });
 }
+
+/** Garmin Connect, linked inside SparkyFitness. Same calls whether or not a Gauntlet server is in between. */
+export const garmin = {
+  status: (): Promise<GarminStatus> =>
+    session.direct ? session.direct.garminStatus() : get<GarminStatus>('/api/garmin'),
+  login: (email: string, password: string): Promise<GarminLoginResult> =>
+    session.direct
+      ? session.direct.garminLogin(email, password)
+      : post<GarminLoginResult>('/api/garmin/login', { email, password }),
+  mfa: (clientState: string, code: string): Promise<GarminLoginResult> =>
+    session.direct
+      ? session.direct.garminMfa(clientState, code)
+      : post<GarminLoginResult>('/api/garmin/login/mfa', { clientState, code }),
+  sync: (): Promise<{ ok: true }> =>
+    session.direct ? session.direct.garminSync() : post<{ ok: true }>('/api/garmin/sync', {}),
+  disconnect: (): Promise<{ ok: true }> =>
+    session.direct
+      ? session.direct.garminDisconnect()
+      : post<{ ok: true }>('/api/garmin/disconnect', {}),
+};

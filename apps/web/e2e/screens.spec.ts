@@ -46,7 +46,7 @@ test('walks every screen', async ({ page }) => {
   await snap(page, '06-trends');
 
   await page.goto('/sources');
-  await expect(page.getByText('Garmin Connect')).toBeVisible();
+  await expect(page.getByText('Garmin Connect').first()).toBeVisible();
   await snap(page, '07-sources');
 
   await page.goto('/challenges');
@@ -93,4 +93,30 @@ test('creates an account from the sign-in screen', async ({ page }) => {
   await page.getByLabel('Password').fill('riley-password');
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+});
+
+test('connects Garmin from the data sources screen', async ({ page }) => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+  await signIn(page);
+  await page.goto('/sources');
+  await expect(page.getByRole('heading', { name: 'Data sources' })).toBeVisible();
+  await page.getByRole('button', { name: /Connect Garmin/ }).click();
+  await page.getByLabel('Garmin email').fill('mfa@garmin.demo');
+  await page.getByLabel('Garmin password').fill('wrong');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByText("Garmin didn't accept that email and password.")).toBeVisible();
+  await snap(page, '09-garmin-error');
+
+  await page.getByLabel('Garmin password').fill('demo');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByLabel('Garmin code')).toBeVisible();
+  await snap(page, '10-garmin-code');
+  await page.getByLabel('Garmin code').fill('123456');
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByText(/^Connected/)).toBeVisible();
+  await snap(page, '11-garmin-connected');
+
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: /Disconnect Garmin/ }).click();
+  await expect(page.getByRole('button', { name: /Connect Garmin/ })).toBeVisible();
 });
