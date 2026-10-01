@@ -13,6 +13,15 @@ export class ApiError extends Error {
 }
 
 const REFRESH_KEY = 'gauntlet.refresh';
+
+/** Where the Gauntlet API lives. Fixed for the web app; on Android the user can set it. */
+let apiBase = API_BASE;
+export const getApiBase = () => apiBase;
+export function setApiBase(url: string) {
+  apiBase = url.replace(/\/+$/, '');
+  accessToken = null;
+}
+
 let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
 const signedOutListeners = new Set<() => void>();
@@ -32,7 +41,7 @@ function headers(extra: Record<string, string> = {}): Record<string, string> {
 async function raw(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
   const { json, ...rest } = init;
   try {
-    return await fetch(`${API_BASE}${path}`, {
+    return await fetch(`${apiBase}${path}`, {
       ...rest,
       credentials: 'include',
       headers: headers(json !== undefined ? { 'Content-Type': 'application/json' } : {}),

@@ -103,8 +103,13 @@ pnpm --filter @gauntlet/web cap:sync      # builds with apps/web/.env.native (VI
 cd apps/web/android && ./gradlew assembleDebug
 ```
 
-- Releases are built by CI with `GAUNTLET_PUBLIC_URL` as the API address. `.env.native` is only for
-  local builds.
+- **One APK, two ways to use it, chosen at sign-in.** Enter your SparkyFitness address and an API key
+  (SparkyFitness → Settings → API keys) and leave "Gauntlet server" empty: the phone talks straight to
+  SparkyFitness (Today, Trends, Data sources, Health Connect sync; no web app needed). Fill in a Gauntlet
+  server too and you get friends, challenges and the feed. Switch later under Me. Direct mode signs in
+  with an API key only (the key is kept in Android Keystore-backed storage).
+- Releases are built by CI. Optional repo variables pre-fill the sign-in screen: `GAUNTLET_PUBLIC_URL`
+  (Gauntlet server) and `SPARKY_URL` (default `https://fit.randalls.cc`). `.env.native` is only for local builds.
 - Pushes and pull requests build a debug APK (artifact `gauntlet-android`).
 - Health Connect: the app asks for read access only (steps, distance, active calories, resting heart
   rate, sleep, exercise, history) and syncs when opened or resumed. Records use the same format and

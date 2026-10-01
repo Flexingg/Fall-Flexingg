@@ -2,8 +2,15 @@ import { useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ErrorBox, Seg } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { DIRECT_AVAILABLE } from '../lib/platform';
+import { DirectLoginPage } from './DirectLogin';
 
+/** Android (and the opt-in test build) can talk to SparkyFitness directly; the web app always uses a Gauntlet server. */
 export function LoginPage() {
+  return DIRECT_AVAILABLE ? <DirectLoginPage /> : <ServerLoginPage />;
+}
+
+function ServerLoginPage() {
   const { login, verify } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

@@ -2,7 +2,6 @@ import type { MeUser } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { ErrorBox, Header, Screen, Skeleton, toast, Toggle } from '../components/ui';
-import { patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   healthAvailable,
@@ -12,10 +11,11 @@ import {
 } from '../lib/health';
 import { isNative } from '../lib/platform';
 import { useSources } from '../lib/queries';
+import { updateSettings } from '../lib/session';
 
 export function SourcesPage() {
   const q = useSources();
-  const { user, setUser } = useAuth();
+  const { user, setUser, mode } = useAuth();
   const [error, setError] = useState<unknown>(null);
   const [hc, setHc] = useState<{ available: boolean; reason?: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -26,7 +26,7 @@ export function SourcesPage() {
 
   async function save(settings: Partial<MeUser['settings']>) {
     try {
-      setUser(await patch<MeUser>('/api/me', { settings }));
+      setUser(await updateSettings(settings));
     } catch (err) {
       setError(err);
     }
@@ -154,23 +154,27 @@ export function SourcesPage() {
         </p>
       )}
 
-      <div className="lbl">Privacy</div>
-      <div className="list">
-        <div className="item">
-          <div className="grow">
-            <div className="t">Show my data sources</div>
-            <small>
-              Friends see "Garmin" or "Strava" on your activity. Totals are always shared in
-              challenges.
-            </small>
+      {mode !== 'direct' && (
+        <>
+          <div className="lbl">Privacy</div>
+          <div className="list">
+            <div className="item">
+              <div className="grow">
+                <div className="t">Show my data sources</div>
+                <small>
+                  Friends see "Garmin" or "Strava" on your activity. Totals are always shared in
+                  challenges.
+                </small>
+              </div>
+              <Toggle
+                checked={!!user?.settings.shareWorkoutDetails}
+                onChange={(v) => save({ shareWorkoutDetails: v })}
+                label="Show my data sources"
+              />
+            </div>
           </div>
-          <Toggle
-            checked={!!user?.settings.shareWorkoutDetails}
-            onChange={(v) => save({ shareWorkoutDetails: v })}
-            label="Show my data sources"
-          />
-        </div>
-      </div>
+        </>
+      )}
     </Screen>
   );
 }

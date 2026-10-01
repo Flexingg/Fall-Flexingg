@@ -5,7 +5,7 @@
  */
 import { Health, type HealthDataType } from '@capgo/capacitor-health';
 import { localDate } from '@gauntlet/shared';
-import { post } from './api';
+import { sendHealthRecords } from './session';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
 
@@ -151,7 +151,7 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
   }
 
   for (let i = 0; i < records.length; i += CHUNK) {
-    await post('/api/ingest/health-connect', { records: records.slice(i, i + CHUNK) });
+    await sendHealthRecords(records.slice(i, i + CHUNK));
   }
   await storage.set(LAST_SYNC_KEY, end.toISOString());
   return records.length;

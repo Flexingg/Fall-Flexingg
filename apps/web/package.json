@@ -16,6 +16,7 @@
     "android:open": "cap open android"
   },
   "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.2",
@@ -24,6 +25,7 @@
     "@capgo/capacitor-health": "^8.11.4",
     "@fontsource-variable/inter": "^5.3.0",
     "@gauntlet/shared": "workspace:*",
+    "@gauntlet/sparky": "workspace:*",
     "@tanstack/react-query": "^5.104.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

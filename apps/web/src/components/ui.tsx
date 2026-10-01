@@ -139,7 +139,7 @@ export function ErrorBox({ error }: { error: unknown }) {
   if (!error) return null;
   const msg =
     error instanceof ApiError || error instanceof Error ? error.message : 'Something went wrong';
-  const reconnect = error instanceof ApiError && error.code === 'sparky_key_invalid';
+  const reconnect = (error as { code?: string }).code === 'sparky_key_invalid';
   return (
     <div className="error" role="alert">
       {msg}

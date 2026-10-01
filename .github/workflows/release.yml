@@ -77,7 +77,6 @@ jobs:
           KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           missing=()
-          [ -n "$PUBLIC_URL" ] || missing+=("variable GAUNTLET_PUBLIC_URL")
           [ -n "$KEYSTORE" ]   || missing+=("secret ANDROID_KEYSTORE_BASE64")
           [ -n "$STORE_PW" ]   || missing+=("secret ANDROID_KEYSTORE_PASSWORD")
           [ -n "$KEY_ALIAS" ]  || missing+=("secret ANDROID_KEY_ALIAS")
@@ -86,7 +85,11 @@ jobs:
             echo "::error::Missing: ${missing[*]}. A release APK must be signed with the same key every time, or phones can't update it in place. Run scripts/make-keystore.sh and see deploy/hermes/README.md."
             exit 1
           fi
-          case "$PUBLIC_URL" in https://*) ;; *) echo "::error::GAUNTLET_PUBLIC_URL must start with https://"; exit 1;; esac
+          # Optional: it only pre-fills the "Gauntlet server" field at sign-in. Without it the APK
+          # still works in direct mode (SparkyFitness only).
+          if [ -n "$PUBLIC_URL" ]; then
+            case "$PUBLIC_URL" in https://*) ;; *) echo "::error::GAUNTLET_PUBLIC_URL must start with https://"; exit 1;; esac
+          fi
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -103,6 +106,7 @@ jobs:
       - name: Build web assets for Android
         env:
           VITE_API_URL: ${{ vars.GAUNTLET_PUBLIC_URL }}
+          VITE_SPARKY_URL: ${{ vars.SPARKY_URL }}
         run: pnpm --filter @gauntlet/web cap:sync
 
       - name: Prepare signing key

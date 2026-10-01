@@ -2,8 +2,10 @@ import { BUILTIN_METRICS, METRICS, type BuiltinMetricKey } from '@gauntlet/share
 import { useState } from 'react';
 import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
 import { useTrends } from '../lib/queries';
+import { useAuth } from '../lib/auth';
 
 export function TrendsPage() {
+  const { mode } = useAuth();
   const [range, setRange] = useState<'day' | 'week' | 'month'>('week');
   const [metric, setMetric] = useState<BuiltinMetricKey>('steps');
   const q = useTrends(range, metric);
@@ -96,6 +98,11 @@ export function TrendsPage() {
       )}
 
       <div className="lbl">Personal bests</div>
+      {mode === 'direct' && (
+        <p className="muted" style={{ fontSize: 12, margin: '-4px 0 8px' }}>
+          Based on your last two months.
+        </p>
+      )}
       {t ? (
         <div className="pb">
           {t.personalBests.map((p) => (

@@ -26,7 +26,7 @@ four secrets to add under GitHub repo → Settings → Secrets and variables →
 
 ### 2. Public URL (GitHub repo variable)
 
-Same page, **Variables** tab: `GAUNTLET_PUBLIC_URL` = the https URL Cloudflare will serve (for example
+Same page, **Variables** tab (optional for the APK, which can run without a server; needed for the web deploy): `GAUNTLET_PUBLIC_URL` = the https URL Cloudflare will serve (for example
 `https://gauntlet.example.com`). It is baked into the APK as the API address, so it must be final.
 It cannot be changed without publishing a new release.
 

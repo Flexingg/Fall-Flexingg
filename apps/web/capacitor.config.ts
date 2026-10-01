@@ -10,7 +10,8 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
-    CapacitorHttp: { enabled: false },
+    // Native HTTP bypasses CORS, so direct mode can call SparkyFitness without any server-side change.
+    CapacitorHttp: { enabled: true },
   },
 };
 

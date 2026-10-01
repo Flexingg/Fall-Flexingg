@@ -1,0 +1,233 @@
+/**
+ * Direct mode: the Android app talks to SparkyFitness itself instead of going through a Gauntlet
+ * server. It reads the last couple of months, merges them with the same code the server uses, and
+ * derives Today and Trends on the phone.
+ *
+ * Deliberately free of browser/Capacitor imports so it can be unit-tested in Node with a fake server.
+ */
+import {
+  buildToday,
+  buildTrends,
+  initials,
+  personalBests,
+  addDays,
+  todayIn,
+  type MeUser,
+  type MetricKey,
+  type MetricRow,
+  type SourcesResponse,
+  type TodayResponse,
+  type TrendRange,
+  type TrendsResponse,
+  type UserSettings,
+} from '@gauntlet/shared';
+import {
+  describeSources,
+  fetchMerged,
+  SparkyClient,
+  SparkyError,
+  type SparkyUser,
+} from '@gauntlet/sparky';
+
+export interface KeyValue {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string | null): Promise<void>;
+}
+
+export interface DirectOptions {
+  sparkyUrl: string;
+  apiKey: string;
+  kv: KeyValue;
+  timezone: string;
+  fetch?: typeof fetch;
+  now?: () => Date;
+}
+
+export type DirectErrorCode = 'sparky_key_invalid' | 'sparky_unreachable' | 'sparky_error';
+
+export class DirectError extends Error {
+  constructor(
+    message: string,
+    readonly code: DirectErrorCode,
+    readonly status = 0,
+  ) {
+    super(message);
+    this.name = 'DirectError';
+  }
+}
+
+/** Turn a SparkyFitness failure into something the screens can show. */
+export function explain(err: unknown, sparkyUrl: string): DirectError {
+  if (err instanceof DirectError) return err;
+  if (err instanceof SparkyError) {
+    if (err.status === 401 || err.status === 403) {
+      return new DirectError(
+        'SparkyFitness rejected your API key. Create a new one in SparkyFitness under Settings → API keys and sign in again.',
+        'sparky_key_invalid',
+        err.status,
+      );
+    }
+    if (err.status === 0 || err.status === 503) {
+      return new DirectError(
+        `Can't reach SparkyFitness at ${sparkyUrl}. Check the address and your connection.`,
+        'sparky_unreachable',
+        err.status,
+      );
+    }
+    return new DirectError(
+      `SparkyFitness answered with an error (${err.status}): ${err.message}`,
+      'sparky_error',
+      err.status,
+    );
+  }
+  return new DirectError((err as Error)?.message ?? 'Something went wrong', 'sparky_error');
+}
+
+const HISTORY_DAYS = 62;
+const FRESH_MS = 2 * 60_000;
+const ROWS_KEY = 'gauntlet.direct.rows';
+const ME_KEY = 'gauntlet.direct.me';
+const SETTINGS_KEY = 'gauntlet.direct.settings';
+
+interface Cached {
+  savedAt: string;
+  rows: MetricRow[];
+}
+
+export class DirectBackend {
+  readonly kind = 'direct' as const;
+  private readonly client: SparkyClient;
+  private readonly now: () => Date;
+  private loading: Promise<Cached> | null = null;
+
+  constructor(private readonly o: DirectOptions) {
+    this.client = new SparkyClient({ baseUrl: o.sparkyUrl, fetch: o.fetch });
+    this.now = o.now ?? (() => new Date());
+  }
+
+  get sparkyUrl() {
+    return this.o.sparkyUrl;
+  }
+
+  /** Confirms the key works. Used by the sign-in screen's connection test. */
+  async check(): Promise<SparkyUser> {
+    try {
+      return await this.client.currentUser(this.o.apiKey);
+    } catch (err) {
+      throw explain(err, this.o.sparkyUrl);
+    }
+  }
+
+  async me(): Promise<MeUser> {
+    let user: SparkyUser | null = null;
+    try {
+      user = await this.client.currentUser(this.o.apiKey);
+    } catch (err) {
+      const e = explain(err, this.o.sparkyUrl);
+      if (e.code === 'sparky_key_invalid') throw e;
+      // Offline: fall back to the last profile we saw.
+      const cached = await this.o.kv.get(ME_KEY);
+      if (cached) return { ...(JSON.parse(cached) as MeUser), settings: await this.settings() };
+      throw e;
+    }
+    const displayName = (user.name?.trim() || user.email.split('@')[0] || 'Athlete').slice(0, 40);
+    const me: MeUser = {
+      id: user.id,
+      displayName,
+      initials: initials(displayName),
+      email: user.email,
+      timezone: this.o.timezone,
+      settings: await this.settings(),
+      sparkyKeyStatus: 'active',
+    };
+    await this.o.kv.set(ME_KEY, JSON.stringify(me));
+    return me;
+  }
+
+  async settings(): Promise<UserSettings> {
+    const raw = await this.o.kv.get(SETTINGS_KEY);
+    const saved = raw ? (JSON.parse(raw) as Partial<UserSettings>) : {};
+    return { shareWorkoutDetails: true, healthConnectSync: false, ...saved };
+  }
+
+  async updateSettings(patch: Partial<UserSettings>): Promise<MeUser> {
+    await this.o.kv.set(SETTINGS_KEY, JSON.stringify({ ...(await this.settings()), ...patch }));
+    return this.me();
+  }
+
+  private today_() {
+    return todayIn(this.o.timezone, this.now());
+  }
+
+  /** Daily values for the last ~2 months. Cached on the phone; falls back to the cache when offline. */
+  private async load(force = false): Promise<Cached> {
+    const raw = await this.o.kv.get(ROWS_KEY);
+    const cached = raw ? (JSON.parse(raw) as Cached) : null;
+    if (!force && cached && this.now().getTime() - Date.parse(cached.savedAt) < FRESH_MS)
+      return cached;
+    this.loading ??= this.refresh().finally(() => (this.loading = null));
+    try {
+      return await this.loading;
+    } catch (err) {
+      const e = explain(err, this.o.sparkyUrl);
+      if (cached && e.code !== 'sparky_key_invalid') return cached;
+      throw e;
+    }
+  }
+
+  private async refresh(): Promise<Cached> {
+    // One day ahead of UTC so people east of it get their "today".
+    const end = addDays(todayIn('UTC', this.now()), 1);
+    const start = addDays(this.today_(), -HISTORY_DAYS);
+    const { merged } = await fetchMerged(this.client, this.o.apiKey, start, end);
+    const fresh: Cached = {
+      savedAt: this.now().toISOString(),
+      rows: merged.map(({ date, metric, value }) => ({ date, metric, value })),
+    };
+    await this.o.kv.set(ROWS_KEY, JSON.stringify(fresh));
+    return fresh;
+  }
+
+  async sync(): Promise<{ ok: true; changed: number }> {
+    const before = (await this.o.kv.get(ROWS_KEY)) ?? '';
+    const after = await this.load(true);
+    return { ok: true, changed: JSON.stringify(after.rows) === before ? 0 : after.rows.length };
+  }
+
+  async today(): Promise<TodayResponse> {
+    const { rows, savedAt } = await this.load();
+    return { ...buildToday(rows, this.today_()), lastSyncedAt: savedAt, featured: null };
+  }
+
+  async trends(range: TrendRange, metric: MetricKey): Promise<TrendsResponse> {
+    const { rows } = await this.load();
+    const today = this.today_();
+    return {
+      ...buildTrends({ rows, range, metric, today }),
+      rankHistory: null,
+      personalBests: personalBests(rows, { today }),
+    };
+  }
+
+  async sources(): Promise<SourcesResponse> {
+    try {
+      return describeSources(this.o.sparkyUrl, await this.client.syncedSources(this.o.apiKey));
+    } catch (err) {
+      throw explain(err, this.o.sparkyUrl);
+    }
+  }
+
+  /** Health Connect records go straight into SparkyFitness, tagged the way its own app tags them. */
+  async ingest(records: Record<string, unknown>[]): Promise<void> {
+    try {
+      await this.client.ingestHealthData(
+        this.o.apiKey,
+        records.map((r) => ({ ...r, source: 'Health Connect' })),
+      );
+    } catch (err) {
+      throw explain(err, this.o.sparkyUrl);
+    }
+    // Make the next screen reload pick the new data up.
+    await this.o.kv.set(ROWS_KEY, null);
+  }
+}

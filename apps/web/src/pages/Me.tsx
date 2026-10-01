@@ -9,7 +9,8 @@ import { isNative } from '../lib/platform';
 import { useAndroidRelease } from '../lib/queries';
 
 export function MePage() {
-  const { user, setUser, logout } = useAuth();
+  const { user, setUser, logout, mode, disconnectServer } = useAuth();
+  const direct = mode === 'direct';
   const navigate = useNavigate();
   const [name, setName] = useState(user?.displayName ?? '');
   const [error, setError] = useState<unknown>(null);
@@ -55,17 +56,25 @@ export function MePage() {
           Gauntlet lost access to SparkyFitness. Sign out and sign in again to reconnect.
         </div>
       )}
-      <div className="lbl">Display name</div>
-      <label className="input">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={saveName}
-          maxLength={40}
-          aria-label="Display name"
-        />
-        <span>Shown to friends</span>
-      </label>
+      {direct ? (
+        <p className="muted" style={{ fontSize: 14, lineHeight: 1.5 }}>
+          Connected straight to SparkyFitness. Your name comes from your SparkyFitness account.
+        </p>
+      ) : (
+        <>
+          <div className="lbl">Display name</div>
+          <label className="input">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={saveName}
+              maxLength={40}
+              aria-label="Display name"
+            />
+            <span>Shown to friends</span>
+          </label>
+        </>
+      )}
 
       <div className="lbl">Settings</div>
       <div className="list">
@@ -118,6 +127,43 @@ export function MePage() {
         </>
       )}
 
+      {isNative && (
+        <>
+          <div className="lbl">Gauntlet server</div>
+          <div className="card stack" style={{ gap: 10 }}>
+            {direct ? (
+              <>
+                <b>Not connected</b>
+                <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                  Friends, challenges and the activity feed need a Gauntlet server.
+                </p>
+                <Link to="/challenges" className="btn secondary">
+                  Connect a server
+                </Link>
+              </>
+            ) : (
+              <>
+                <b>Connected</b>
+                <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                  Your data is read through your Gauntlet server. Disconnect to use SparkyFitness
+                  directly on this phone.
+                </p>
+                <button
+                  className="btn secondary"
+                  onClick={() =>
+                    disconnectServer()
+                      .then(() => navigate('/'))
+                      .catch(setError)
+                  }
+                >
+                  Disconnect server
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
       <div className="stack" style={{ marginTop: 24 }}>
         <button
           className="btn secondary"
@@ -128,9 +174,11 @@ export function MePage() {
         >
           Sign out
         </button>
-        <button className="btn danger" onClick={deleteAccount}>
-          Delete Gauntlet account
-        </button>
+        {!direct && (
+          <button className="btn danger" onClick={deleteAccount}>
+            Delete Gauntlet account
+          </button>
+        )}
       </div>
       <p className="muted center" style={{ fontSize: 12, marginTop: 18 }}>
         Gauntlet · powered by SparkyFitness

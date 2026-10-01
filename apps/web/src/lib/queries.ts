@@ -13,6 +13,7 @@ import type {
 } from '@gauntlet/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, get } from './api';
+import { session } from './session';
 
 export const keys = {
   today: ['today'] as const,
@@ -29,10 +30,21 @@ export const keys = {
 
 const live = { refetchInterval: 60_000, refetchOnWindowFocus: true };
 
+// In direct mode (Android talking straight to SparkyFitness) these read from the phone; otherwise
+// they ask the Gauntlet server. Switching modes clears the query cache, so the two never mix.
 export const useToday = () =>
-  useQuery({ queryKey: keys.today, queryFn: () => get<TodayResponse>('/api/me/today'), ...live });
+  useQuery({
+    queryKey: keys.today,
+    queryFn: () => (session.direct ? session.direct.today() : get<TodayResponse>('/api/me/today')),
+    ...live,
+  });
 export const useFeed = () =>
-  useQuery({ queryKey: keys.feed, queryFn: () => get<FeedEvent[]>('/api/feed?limit=20'), ...live });
+  useQuery({
+    queryKey: keys.feed,
+    queryFn: () => get<FeedEvent[]>('/api/feed?limit=20'),
+    enabled: !session.direct,
+    ...live,
+  });
 export const useChallenges = () =>
   useQuery({
     queryKey: keys.challenges,
@@ -60,15 +72,21 @@ export const useTrends = (range: 'day' | 'week' | 'month', metric: MetricKey) =>
   useQuery({
     queryKey: keys.trends(range, metric),
     queryFn: () =>
-      get<TrendsResponse>(`/api/me/trends?range=${range}&metric=${encodeURIComponent(metric)}`),
+      session.direct
+        ? session.direct.trends(range, metric)
+        : get<TrendsResponse>(`/api/me/trends?range=${range}&metric=${encodeURIComponent(metric)}`),
   });
 export const useSources = () =>
-  useQuery({ queryKey: keys.sources, queryFn: () => get<SourcesResponse>('/api/sources') });
+  useQuery({
+    queryKey: keys.sources,
+    queryFn: () =>
+      session.direct ? session.direct.sources() : get<SourcesResponse>('/api/sources'),
+  });
 export const useCustomMetrics = (enabled: boolean) =>
   useQuery({
     queryKey: keys.customMetrics,
     queryFn: () => get<CustomMetricOption[]>('/api/me/custom-metrics'),
-    enabled,
+    enabled: enabled && !session.direct,
     staleTime: 300_000,
   });
 

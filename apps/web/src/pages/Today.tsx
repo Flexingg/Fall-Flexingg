@@ -5,13 +5,14 @@ import { ChallengeHero, FeedList } from '../components/Feed';
 import { Icon } from '../components/Icon';
 import { Rings } from '../components/Rings';
 import { Avatar, Empty, ErrorBox, Screen, Skeleton } from '../components/ui';
-import { post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtInt, timeAgo } from '../lib/format';
 import { useFeed, useToday } from '../lib/queries';
+import { syncNow } from '../lib/session';
 
 export function TodayPage() {
-  const { user } = useAuth();
+  const { user, mode } = useAuth();
+  const direct = mode === 'direct';
   const today = useToday();
   const feed = useFeed();
   const qc = useQueryClient();
@@ -20,7 +21,7 @@ export function TodayPage() {
   async function refresh() {
     setSyncing(true);
     try {
-      await post('/api/me/sync');
+      await syncNow();
       await qc.invalidateQueries();
     } finally {
       setSyncing(false);
@@ -67,7 +68,17 @@ export function TodayPage() {
       )}
 
       <div style={{ marginTop: 12 }}>
-        {today.data?.featured ? (
+        {direct ? (
+          <Link to="/challenges" className="hero">
+            <div className="badge">
+              <Icon name="trophy" />
+            </div>
+            <div className="grow">
+              <small>Friends &amp; challenges</small>
+              <b>Connect a Gauntlet server</b>
+            </div>
+          </Link>
+        ) : today.data?.featured ? (
           <ChallengeHero c={today.data.featured} />
         ) : today.isSuccess ? (
           <Link to="/c/new" className="hero">
@@ -83,7 +94,7 @@ export function TodayPage() {
       </div>
 
       <div className="lbl">
-        <span>Recent from your crew</span>
+        <span>{direct ? 'Today' : 'Recent from your crew'}</span>
         <button
           onClick={refresh}
           disabled={syncing}
@@ -94,22 +105,46 @@ export function TodayPage() {
           {syncing ? 'Syncing…' : `Synced ${timeAgo(today.data?.lastSyncedAt)}`}
         </button>
       </div>
-      <ErrorBox error={feed.error} />
-      {feed.isPending ? (
-        <Skeleton height={180} />
-      ) : feed.data?.length ? (
-        <FeedList events={feed.data} />
-      ) : (
+      {direct ? (
         <div className="list">
-          <Empty title="Quiet in here">
-            Add friends and start a challenge. Their workouts show up here.
-            <div style={{ marginTop: 14 }}>
-              <Link to="/friends" className="btn secondary sm" style={{ display: 'inline-flex' }}>
-                Find friends
-              </Link>
+          {m.map((x) => (
+            <div key={x.key} className="item" style={{ minHeight: 52 }}>
+              <span className="grow t">{x.label}</span>
+              <span className="v num">
+                {x.value == null
+                  ? '–'
+                  : x.key === 'distance'
+                    ? x.value.toFixed(1)
+                    : fmtInt(x.value)}
+                {x.unit && x.value != null ? ` ${x.unit}` : ''}
+              </span>
             </div>
-          </Empty>
+          ))}
         </div>
+      ) : (
+        <>
+          <ErrorBox error={feed.error} />
+          {feed.isPending ? (
+            <Skeleton height={180} />
+          ) : feed.data?.length ? (
+            <FeedList events={feed.data} />
+          ) : (
+            <div className="list">
+              <Empty title="Quiet in here">
+                Add friends and start a challenge. Their workouts show up here.
+                <div style={{ marginTop: 14 }}>
+                  <Link
+                    to="/friends"
+                    className="btn secondary sm"
+                    style={{ display: 'inline-flex' }}
+                  >
+                    Find friends
+                  </Link>
+                </div>
+              </Empty>
+            </div>
+          )}
+        </>
       )}
     </Screen>
   );

@@ -1,4 +1,4 @@
-import type { MeUser, PublicUser } from '@gauntlet/shared';
+import { initials, type MeUser, type PublicUser } from '@gauntlet/shared';
 import { eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { HttpError, notFound } from '../context.js';
@@ -7,18 +7,6 @@ import { users } from '../db/schema.js';
 import type { SparkyUser } from '@gauntlet/sparky';
 
 export type UserRow = typeof users.$inferSelect;
-
-export function initials(name: string): string {
-  const parts = name
-    .trim()
-    .split(/[\s._-]+/)
-    .filter(Boolean);
-  const letters =
-    parts.length >= 2
-      ? `${parts[0]![0]}${parts[parts.length - 1]![0]}`
-      : (parts[0] ?? '?').slice(0, 2);
-  return letters.toUpperCase();
-}
 
 /** "Maya Rodriguez" -> "Maya R." for leaderboards. */
 export function shortName(name: string): string {

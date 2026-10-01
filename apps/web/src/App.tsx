@@ -2,6 +2,7 @@ import { App as CapApp } from '@capacitor/app';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { ConnectServer } from './components/ConnectServer';
 import { ToastHost } from './components/ui';
 import { useAuth } from './lib/auth';
 import { syncHealthConnect } from './lib/health';
@@ -25,6 +26,12 @@ function Private({ children }: { children: ReactNode }) {
   if (status === 'signedOut')
     return <Navigate to="/login" replace state={{ next: location.pathname }} />;
   return children;
+}
+
+/** Friends, challenges and invites live on a Gauntlet server; in direct mode offer to connect one. */
+function NeedsServer({ what, children }: { what: string; children: ReactNode }) {
+  const { mode } = useAuth();
+  return mode === 'direct' ? <ConnectServer what={what} /> : children;
 }
 
 function Splash() {
@@ -100,7 +107,14 @@ export function App() {
               )
             }
           />
-          <Route path="/j/:code" element={<JoinPage />} />
+          <Route
+            path="/j/:code"
+            element={
+              <NeedsServer what="Invite">
+                <JoinPage />
+              </NeedsServer>
+            }
+          />
           <Route
             path="/"
             element={
@@ -113,7 +127,9 @@ export function App() {
             path="/challenges"
             element={
               <Private>
-                <ChallengesPage />
+                <NeedsServer what="Challenges">
+                  <ChallengesPage />
+                </NeedsServer>
               </Private>
             }
           />
@@ -121,7 +137,9 @@ export function App() {
             path="/c/new"
             element={
               <Private>
-                <NewChallengePage />
+                <NeedsServer what="New challenge">
+                  <NewChallengePage />
+                </NeedsServer>
               </Private>
             }
           />
@@ -129,7 +147,9 @@ export function App() {
             path="/c/:id"
             element={
               <Private>
-                <ChallengeDetailPage />
+                <NeedsServer what="Challenge">
+                  <ChallengeDetailPage />
+                </NeedsServer>
               </Private>
             }
           />
@@ -137,7 +157,9 @@ export function App() {
             path="/c/:id/result"
             element={
               <Private>
-                <ResultPage />
+                <NeedsServer what="Result">
+                  <ResultPage />
+                </NeedsServer>
               </Private>
             }
           />
@@ -145,7 +167,9 @@ export function App() {
             path="/friends"
             element={
               <Private>
-                <FriendsPage />
+                <NeedsServer what="Friends">
+                  <FriendsPage />
+                </NeedsServer>
               </Private>
             }
           />
