@@ -1,6 +1,7 @@
 import type { PublicUser } from '@gauntlet/shared';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router';
+import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
 import { Icon } from './Icon';
 
@@ -53,7 +54,10 @@ export function TabBar() {
 export function Screen({ children, tabs = true }: { children: ReactNode; tabs?: boolean }) {
   return (
     <>
-      <main className={`screen${tabs ? '' : ' no-tabs'}`}>{children}</main>
+      <main className={`screen${tabs ? '' : ' no-tabs'}`}>
+        <DemoBanner />
+        {children}
+      </main>
       {tabs && <TabBar />}
     </>
   );
@@ -209,5 +213,27 @@ export function ShowEventsNotice() {
       Show Events is on: the workouts that count toward your score are visible to the other
       participants. Turn this off any time under Data sources → Privacy.
     </small>
+  );
+}
+
+/** Shown on every screen while signed in as the built-in demo account. */
+function DemoBanner() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  if (!user?.demo) return null;
+  return (
+    <div className="card" style={{ marginBottom: 12, padding: '10px 14px', fontSize: 13 }}>
+      <strong>Demo account.</strong> Sample data that resets every day, so you can look around.{' '}
+      <button
+        className="linkish"
+        style={{ color: 'var(--volt)', textDecoration: 'underline' }}
+        onClick={async () => {
+          await logout();
+          navigate('/signup');
+        }}
+      >
+        Create your own account
+      </button>
+    </div>
   );
 }

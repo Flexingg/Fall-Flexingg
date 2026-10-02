@@ -92,6 +92,7 @@ export function syncUser(
 
 async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promise<SyncResult> {
   const user = await getUser(ctx, userId);
+  if (user.isDemo) return { userId, ok: true, changed: 0 };
   if (user.keyStatus !== 'active' || !user.sparkyKeyEnc)
     return { userId, ok: false, changed: 0, error: 'sparky_key_invalid' };
   const token = sparkyToken(ctx, user);

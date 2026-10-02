@@ -166,6 +166,7 @@ export class DirectBackend {
       visibility: 'private',
       handle: null,
       isAdmin: false,
+      demo: false,
     };
     await this.o.kv.set(ME_KEY, JSON.stringify(me));
     return me;

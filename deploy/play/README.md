@@ -37,7 +37,7 @@ In-app account deletion: **Me → Delete Gauntlet account** (also on the web).
 - **Graphics you must supply:** 512×512 icon, 1024×500 feature graphic, 2–8 phone screenshots (take them from the demo server: `pnpm demo`, then `apps/web/e2e/screens.spec.ts` produces 390px screenshots).
 
 ## App content
-- **Target audience:** 13+ (not directed at children). **Ads:** none. **App access:** reviewers need a login — create a test account on your SparkyFitness and give its email/password in *App access*.
+- **Target audience:** 13+ (not directed at children). **Ads:** none. **App access:** tell reviewers to tap **Try the demo** on the sign-in screen (a built-in account with sample data, no password; turn it off with `DEMO_ACCOUNT=false`).
 - **Content rating (IARF):** no violence/sexual content; **user-generated content: yes** (challenge names, handles). Answer "users can interact" yes, "share location" no.
 - **UGC policy:** names are visible only to friends/challenge members unless the person goes public; the operator can remove challenges and people (see `ADMIN_EMAILS`). Consider adding in-app report/block before large public launch.
 - **Health apps declaration:** Health & fitness app, no medical device claims; links to disclaimer in the terms.

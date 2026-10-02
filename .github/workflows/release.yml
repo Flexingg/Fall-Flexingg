@@ -175,7 +175,10 @@ jobs:
           echo "fingerprint=$FP" >> "$GITHUB_OUTPUT"
 
       - name: Create the release
+        id: create
         if: needs.meta.outputs.publish == 'true' && needs.meta.outputs.create == 'true'
+        # A refused token must not stop the deploy of a build that already passed; it is reported below.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ needs.meta.outputs.sha }}
@@ -183,10 +186,17 @@ jobs:
         run: gh release create "$TAG" --target "$TARGET" --title "$TAG" --generate-notes
 
       - name: Attach to the release
-        if: needs.meta.outputs.publish == 'true'
+        id: attach
+        if: needs.meta.outputs.publish == 'true' && steps.create.outcome != 'failure'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "dist/${{ steps.name.outputs.file }}" "dist/${{ steps.name.outputs.file }}.sha256" "dist/gauntlet-${TAG}.aab" --clobber
+
+      - name: Warn when the GitHub release could not be written
+        if: steps.create.outcome == 'failure' || steps.attach.outcome == 'failure'
+        run: |
+          echo "::warning::The build is fine and will deploy, but GitHub refused to create or update release $TAG (HTTP 403 means the Actions token cannot write contents: Settings > Actions > General > Workflow permissions > Read and write). The APK and AAB are in this run's artifacts."
 
       - uses: actions/upload-artifact@v4
         with:

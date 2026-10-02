@@ -53,6 +53,8 @@ interface AuthValue {
   verify: (ticket: string, code: string) => Promise<LoginResponse>;
   /** Create a SparkyFitness account through the Gauntlet server and sign in. */
   signup: (req: SignupRequest) => Promise<LoginResponse>;
+  /** Sign in as the built-in demo account (sample data, no SparkyFitness needed). */
+  loginDemo: () => Promise<LoginResponse>;
   loginDirect: (input: DirectLogin) => Promise<void>;
   /** Direct mode only: sign in at a Gauntlet server with the key already on the phone. */
   connectServer: (serverUrl: string) => Promise<void>;
@@ -152,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await saveStored({ mode: 'server', serverUrl: getApiBase() });
         return finish(res);
       },
+      loginDemo: async () => finish(await apiLogin('/api/auth/demo', {})),
       signup: async (req) => {
         const res = await apiLogin('/api/auth/signup', req);
         if (res.status === 'ok' && DIRECT_AVAILABLE)

@@ -19,6 +19,15 @@ export function toPublicUser(u: Pick<UserRow, 'id' | 'displayName'>): PublicUser
   return { id: u.id, displayName: u.displayName, initials: initials(u.displayName) };
 }
 
+/** What the demo account gets instead of anything that needs a real SparkyFitness. */
+export function demoBlocked(): HttpError {
+  return new HttpError(
+    403,
+    'This is the demo account, so that is switched off. Sign up to use it with your own data.',
+    'demo_account',
+  );
+}
+
 export function isAdmin(ctx: Pick<AppContext, 'cfg'>, u: Pick<UserRow, 'email'>): boolean {
   return ctx.cfg.adminEmails.has(u.email.toLowerCase());
 }
@@ -37,6 +46,7 @@ export function toMe(u: UserRow, ctx: Pick<AppContext, 'cfg'>): MeUser {
     visibility: u.visibility,
     handle: u.handle,
     isAdmin: isAdmin(ctx, u),
+    demo: u.isDemo,
   };
 }
 
@@ -57,6 +67,7 @@ export async function getUsers(ctx: AppContext, ids: string[]): Promise<Map<stri
 
 /** The user's SparkyFitness API key, decrypted. */
 export function sparkyToken(ctx: AppContext, u: UserRow): string {
+  if (u.isDemo) throw demoBlocked();
   if (!u.sparkyKeyEnc || u.keyStatus !== 'active') {
     throw new HttpError(
       409,

@@ -14,6 +14,7 @@ import { HttpError } from '../context.js';
 import { decrypt, encrypt, randomToken, sha256 } from '../crypto.js';
 import { pendingLogins } from '../db/schema.js';
 import { SparkyError, type SparkyUser } from '@gauntlet/sparky';
+import { findDemoUser, refreshDemo } from '../services/demo.js';
 import { syncUser } from '../services/sync.js';
 import { toMe, upsertFromSparky } from '../services/users.js';
 
@@ -69,6 +70,29 @@ export function authRoutes(app: FastifyInstance, ctx: AppContext) {
         throw toSignupError(err);
       }
       return mintAndFinish(ctx, req, reply, created.token, created.user, timezoneHeader(req));
+    },
+  );
+
+  /** Sign in as the built-in demo account: sample data, no SparkyFitness account needed. */
+  app.post(
+    '/api/auth/demo',
+    { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } },
+    async (req, reply) => {
+      if (!ctx.cfg.DEMO_ACCOUNT) throw new HttpError(404, 'The demo is switched off', 'demo_off');
+      let user = await findDemoUser(ctx);
+      if (!user) {
+        await refreshDemo(ctx);
+        user = await findDemoUser(ctx);
+      }
+      if (!user)
+        throw new HttpError(
+          503,
+          'The demo is not ready yet. Try again in a moment.',
+          'demo_unavailable',
+        );
+      const refreshToken = await issueRefreshToken(ctx, user.id);
+      const tokens = await respondWithTokens(ctx, req, reply, user.id, refreshToken);
+      return { status: 'ok', ...tokens, user: toMe(user, ctx) } satisfies LoginResponse;
     },
   );
 

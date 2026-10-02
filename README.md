@@ -36,6 +36,8 @@ Profiles are **private by default** (only friends and challenge-mates see you). 
 found by name or @handle and to join **public challenges** from Discover; server admins
 (`ADMIN_EMAILS`) can feature them. Public profiles show name, handle and challenge record only.
 
+**Demo account:** the sign-in screen has a "Try the demo" button. It signs into a built-in account with five made-up friends, 70 days of sample stats and a few challenges (including solo ones), all rebuilt every day. It has no SparkyFitness behind it, so linking apps, fasting and Health Connect are switched off, and it can't add real friends, go public or be deleted. Switch it off with `DEMO_ACCOUNT=false`.
+
 - **PWA** (installable web app) and **Android app** from one React codebase (Capacitor).
 - **SparkyFitness holds all raw health data.** Gauntlet stores only users, friends, challenges and a
   per-day scoring cache that can be rebuilt at any time.

@@ -70,6 +70,8 @@ export interface MeUser extends PublicUser {
   handle: string | null;
   /** Server admin: can feature public challenges. */
   isAdmin: boolean;
+  /** The built-in demo account: sample data, nothing connected, can't be deleted. */
+  demo: boolean;
 }
 
 /** 3-20 lowercase letters, digits or underscores. */

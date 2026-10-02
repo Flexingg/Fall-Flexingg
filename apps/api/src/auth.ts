@@ -4,7 +4,8 @@ import { SignJWT, jwtVerify } from 'jose';
 import type { AppContext } from './context.js';
 import { HttpError } from './context.js';
 import { randomToken, sha256 } from './crypto.js';
-import { refreshTokens } from './db/schema.js';
+import { refreshTokens, users } from './db/schema.js';
+import { demoBlocked } from './services/users.js';
 
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_DAYS = 60;
@@ -13,6 +14,8 @@ export const REFRESH_COOKIE = 'g_refresh';
 declare module 'fastify' {
   interface FastifyRequest {
     userId: string;
+    /** Signed in as the built-in demo account. */
+    isDemo: boolean;
   }
 }
 
@@ -21,7 +24,8 @@ function key(ctx: AppContext) {
 }
 
 export async function signAccessToken(ctx: AppContext, userId: string): Promise<string> {
-  return new SignJWT({})
+  const [u] = await ctx.db.select({ d: users.isDemo }).from(users).where(eq(users.id, userId));
+  return new SignJWT(u?.d ? { demo: true } : {})
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(userId)
     .setIssuedAt(Math.floor(ctx.now().getTime() / 1000))
@@ -99,13 +103,30 @@ export function requireUser(ctx: AppContext) {
       });
       if (!payload.sub) throw new Error('no subject');
       req.userId = payload.sub;
+      req.isDemo = payload.demo === true;
     } catch {
       throw new HttpError(401, 'Session expired', 'token_expired');
     }
+    if (req.isDemo && demoRouteBlocked(req.method, req.url)) throw demoBlocked();
   };
 }
 
 /** Native (Capacitor) clients keep the refresh token themselves; browsers get an httpOnly cookie. */
 export function isNativeClient(req: FastifyRequest): boolean {
   return req.headers['x-gauntlet-client'] === 'native';
+}
+
+/**
+ * What the demo account may not do: anything that reaches outside the sample data (linking apps,
+ * fasting, Health Connect), anything that touches real people (friend requests, invites, joining
+ * someone else's challenge), and deleting itself.
+ */
+export function demoRouteBlocked(method: string, url: string): boolean {
+  const path = url.split('?')[0]!;
+  if (/^\/api\/(connections|garmin|ingest)(\/|$)/.test(path)) return true;
+  if (/^\/api\/(friends|invites)/.test(path)) return method !== 'GET';
+  if (/^\/api\/challenges\/[^/]+\/(join|invite)/.test(path)) return true;
+  if (path === '/api/me' && method === 'DELETE') return true;
+  if (/^\/api\/me\/fast\/(start|end)/.test(path)) return true;
+  return false;
 }

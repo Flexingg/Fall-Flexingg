@@ -16,7 +16,7 @@ export function LoginPage({ advanced = false }: { advanced?: boolean }) {
 }
 
 function ServerLoginPage() {
-  const { login, verify } = useAuth();
+  const { login, verify, loginDemo } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const next = (location.state as { next?: string } | null)?.next ?? '/';
@@ -145,6 +145,27 @@ function ServerLoginPage() {
           <Link to="/signup" state={location.state} className="btn secondary">
             Create an account
           </Link>
+        )}
+        {!ticket && (
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await loginDemo();
+                navigate(next, { replace: true });
+              } catch (err) {
+                setError(err);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Try the demo
+          </button>
         )}
         {DIRECT_AVAILABLE && !ticket && (
           <Link to="/login/advanced" className="muted center" style={{ fontSize: 13, padding: 6 }}>

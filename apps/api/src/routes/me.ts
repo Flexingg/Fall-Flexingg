@@ -26,7 +26,14 @@ import { badRequest, HttpError } from '../context.js';
 import { challengeParticipants, dailyMetrics, rankSnapshots, users } from '../db/schema.js';
 import { listForUser } from '../services/challenges.js';
 import { syncUser } from '../services/sync.js';
-import { getUser, isValidTimeZone, sparkyToken, toMe, type UserRow } from '../services/users.js';
+import {
+  demoBlocked,
+  getUser,
+  isValidTimeZone,
+  sparkyToken,
+  toMe,
+  type UserRow,
+} from '../services/users.js';
 import {
   DISTANCE_CATEGORIES,
   liftOptions,
@@ -43,6 +50,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/me', auth, async (req) => toMe(await getUser(ctx, req.userId), ctx));
 
   app.patch('/api/me', auth, async (req) => {
+    if (req.isDemo) throw demoBlocked();
     const body = updateMeSchema.parse(req.body);
     if (body.timezone && !isValidTimeZone(body.timezone)) throw badRequest('Unknown time zone');
     if (body.handle) {
@@ -167,6 +175,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/me/custom-metrics', auth, async (req): Promise<CustomMetricOption[]> => {
     const user = await getUser(ctx, req.userId);
+    if (user.isDemo) return [];
     const cats = await ctx.sparky.customCategories(sparkyToken(ctx, user));
     const builtin = new Set([...DISTANCE_CATEGORIES, ...RESTING_HR_CATEGORIES]);
     return cats
@@ -182,6 +191,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   /** Exercises with weighted sets in the last four months, for per-exercise strength challenges. */
   app.get('/api/me/lifts', auth, async (req): Promise<LiftOption[]> => {
     const user = await getUser(ctx, req.userId);
+    if (user.isDemo) return [];
     const today = todayIn(user.timezone, ctx.now());
     const { exerciseEntries } = await ctx.sparky.report(
       sparkyToken(ctx, user),
@@ -194,6 +204,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   /** SparkyFitness' fasting tracker: what's running, start one, end it. */
   app.get('/api/me/fast', auth, async (req): Promise<FastStatus> => {
     const user = await getUser(ctx, req.userId);
+    if (user.isDemo) return { active: null };
     return toFastStatus(await ctx.sparky.currentFast(sparkyToken(ctx, user)));
   });
 
@@ -245,7 +256,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
  * accounts, mostly) cost a look at their linked apps. If SparkyFitness can't say, don't nag.
  */
 async function hasSources(ctx: AppContext, user: UserRow, today: string): Promise<boolean> {
-  if (user.healthConnectSync) return true;
+  if (user.healthConnectSync || user.isDemo) return true;
   const [recent] = await ctx.db
     .select({ n: sql<number>`1` })
     .from(dailyMetrics)

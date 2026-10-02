@@ -241,7 +241,7 @@ export function MePage() {
         >
           Sign out
         </button>
-        {!direct && (
+        {!direct && !user?.demo && (
           <button className="btn danger" onClick={deleteAccount}>
             Delete Gauntlet account
           </button>

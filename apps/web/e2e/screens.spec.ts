@@ -515,3 +515,24 @@ test('solo challenges: pace against a goal, and beating your past self', async (
   await page.getByRole('button', { name: 'Delete this solo challenge' }).click();
   await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
 });
+
+test('the demo account: one tap in, sample data, nothing that needs SparkyFitness', async ({
+  page,
+}) => {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Try the demo' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await expect(page.getByText('Demo account.')).toBeVisible();
+  await snap(page, '30-demo-today');
+
+  await page.getByRole('link', { name: 'Challenges' }).first().click();
+  await expect(page.getByText('Steps this week').first()).toBeVisible();
+  await page.getByText('Steps this week').first().click();
+  await expect(page.getByRole('heading', { name: 'Steps this week' })).toBeVisible();
+
+  await page.goto('/me');
+  await expect(page.getByRole('button', { name: 'Delete Gauntlet account' })).toHaveCount(0);
+  await page.goto('/sources');
+  await expect(page.getByText('Demo account.')).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+});

@@ -32,6 +32,7 @@ export function miscRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/sources', auth, async (req): Promise<SourcesResponse> => {
     const user = await getUser(ctx, req.userId);
+    if (user.isDemo) return describeSources(ctx.cfg.SPARKY_PUBLIC_URL, []);
     const sources = await ctx.sparky.syncedSources(sparkyToken(ctx, user));
     return describeSources(ctx.cfg.SPARKY_PUBLIC_URL, sources);
   });

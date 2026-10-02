@@ -63,7 +63,7 @@ export function SourcesPage() {
       </p>
       <ErrorBox error={q.error ?? error} />
 
-      <Connections />
+      {!user?.demo && <Connections />}
 
       <div className="lbl">Synced into SparkyFitness</div>
       {q.isPending ? (

@@ -39,6 +39,8 @@ export const users = pgTable('users', {
     .default('private'),
   /** Optional unique @handle (lowercase) for search and profile links. */
   handle: text('handle').unique(),
+  /** The built-in demo account and its made-up friends: sample data, no SparkyFitness behind it. */
+  isDemo: boolean('is_demo').notNull().default(false),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   createdAt: createdAt(),
 });

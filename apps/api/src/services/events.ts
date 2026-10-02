@@ -55,7 +55,7 @@ export async function eventGroupFor(
   const isMe = user.id === viewerId;
   const base = { user: toPublicUser(user), isMe };
   // People can keep their workouts private; their totals still count.
-  if (!isMe && !user.shareEvents) return { ...base, status: 'hidden', events: [] };
+  if (user.isDemo || (!isMe && !user.shareEvents)) return { ...base, status: 'hidden', events: [] };
 
   const def = challengeMetricDef(ch);
   const kinds = eventKindsFor(ch.metric);

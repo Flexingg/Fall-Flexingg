@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppContext } from './context.js';
 import { challengeParticipants, challenges, users } from './db/schema.js';
+import { maintainDemo } from './services/demo.js';
 import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
 import { syncUser } from './services/sync.js';
 
@@ -27,6 +28,7 @@ export async function runSyncCycle(
 }
 
 async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: number }> {
+  await maintainDemo(ctx).catch((err) => ctx.log.warn({ err }, 'demo refresh failed'));
   const open = await ctx.db.select().from(challenges).where(isNull(challenges.finalizedAt));
   const ids = open.map((c) => c.id);
   const competitors = ids.length
@@ -39,6 +41,7 @@ async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: numb
             inArray(challengeParticipants.challengeId, ids),
             eq(challengeParticipants.state, 'joined'),
             eq(users.keyStatus, 'active'),
+            eq(users.isDemo, false),
           ),
         )
     : [];

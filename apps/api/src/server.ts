@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb, runMigrations } from './db/index.js';
+import { refreshDemo } from './services/demo.js';
 import { startScheduler } from './scheduler.js';
 import { SparkyClient } from '@gauntlet/sparky';
 
@@ -12,6 +13,7 @@ const { app, ctx } = await buildApp(
   { db, cfg, sparky: new SparkyClient({ baseUrl: cfg.SPARKY_URL }), now: () => new Date() },
   { logger: { level: cfg.LOG_LEVEL } },
 );
+void refreshDemo(ctx).catch((err) => ctx.log.warn({ err }, 'demo setup failed'));
 const stop = startScheduler(ctx, cfg.SYNC_INTERVAL_MINUTES);
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
