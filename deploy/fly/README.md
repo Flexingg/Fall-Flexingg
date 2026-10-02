@@ -26,7 +26,8 @@ SparkyFitness website costs next to nothing while it sleeps). Check [fly.io/pric
    - Variable `SPARKY_PUBLIC_URL`: e.g. `https://sparky.randalls.cc` (a new name, so your existing
      fit.randalls.cc keeps working).
    - Optional: `SPARKY_ADMIN_EMAIL` (that account becomes the SparkyFitness admin; otherwise the
-     first account created is), `FLY_ORG` (default `personal`).
+     first account created is), `ADMIN_EMAILS` (comma separated Gauntlet admins who can feature
+     public challenges in Discover; defaults to `SPARKY_ADMIN_EMAIL`), `FLY_ORG` (default `personal`).
    - The Android signing secrets, if not done yet: run `scripts/make-keystore.sh`.
 3. **Run _Actions → Fly setup_.** It creates the apps, generates every secret straight into Fly
    (none are printed or stored in GitHub), registers your two domains, validates the configs and

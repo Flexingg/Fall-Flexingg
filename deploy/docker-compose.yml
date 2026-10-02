@@ -95,6 +95,7 @@ services:
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
       EXTRA_ORIGINS: ${EXTRA_ORIGINS:-https://localhost,capacitor://localhost}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-${SPARKY_ADMIN_EMAIL:-}}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
       SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-15}
     ports:

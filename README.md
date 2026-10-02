@@ -1,8 +1,23 @@
 # Gauntlet
 
-Fitness challenges with your friends, on top of [SparkyFitness](https://github.com/CodeWithCJ/SparkyFitness).
-Pick any metric (steps, distance, active minutes, calories, workouts, sleep, resting heart rate, or any
-SparkyFitness custom measurement), set the rules, invite your crew, and race.
+Fitness challenges with your friends (or anyone), on top of [SparkyFitness](https://github.com/CodeWithCJ/SparkyFitness).
+Pick a metric, set the rules, invite your crew, and race:
+
+- **Activity:** steps, distance, active minutes, calories, workouts, sleep, resting heart rate.
+- **Strength** (sets from Liftosaur, Hevy or SparkyFitness): volume lifted, working sets, or one
+  exercise: heaviest set, or estimated 1RM gain % so beginners and veterans compete on improvement.
+- **Nutrition:** calorie and macro goals scored as closeness to *each person's own* goal (100 on
+  target, 2 points off per 1% over or under), so someone bulking can race someone cutting; water
+  goal %, water, calories eaten, protein, carbs, fat.
+- **Body:** weight goal: everyone picks lose or gain and their own target; scored on % of it
+  reached. Raw weights never leave the server.
+- **Fasting:** hours fasted and fasts completed, from SparkyFitness' fasting tracker (start and end
+  fasts from Gauntlet's Today screen).
+- **Custom:** any SparkyFitness custom measurement.
+
+Profiles are **private by default** (only friends and challenge-mates see you). Go public to be
+found by name or @handle and to join **public challenges** from Discover; server admins
+(`ADMIN_EMAILS`) can feature them. Public profiles show name, handle and challenge record only.
 
 - **PWA** (installable web app) and **Android app** from one React codebase (Capacitor).
 - **SparkyFitness holds all raw health data.** Gauntlet stores only users, friends, challenges and a
@@ -134,6 +149,10 @@ apps, and cap sleep at time in bed.
 
 Verified against the bundled SparkyFitness (v1.7.3, real container): creating an account through
 Gauntlet, password sign-in, pushing Health Connect-style records and reading them back on Today.
+The new metrics were checked the same way: food, water, goals, a fast and a squat session with a
+warm-up logged in the real container come out as calorie/macro/water adherence, hours fasted, volume
+(warm-ups excluded), heaviest set and estimated 1RM. Liftosaur and Hevy imports label warm-ups and
+store kilograms the way these rules expect. Not yet verified: a live Liftosaur account's synced sets.
 Not yet verified: the live Fly.io deploy (needs your Fly account), 2FA against a real server, and
 Health Connect on a physical device. Push notifications and background Health Connect sync
 (WorkManager) are planned follow-ups.

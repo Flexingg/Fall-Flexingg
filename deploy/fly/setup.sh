@@ -87,6 +87,13 @@ if ! has "$g_s" JWT_SECRET; then
   echo "  set Gauntlet JWT and encryption keys"
 fi
 
+# Server admins can feature public challenges in Discover (defaults to the SparkyFitness admin).
+admins="${ADMIN_EMAILS:-${SPARKY_ADMIN_EMAIL:-}}"
+if [ -n "$admins" ]; then
+  "$FLY" secrets set --app "$APP_GAUNTLET" --stage ADMIN_EMAILS="$admins" >/dev/null
+  echo "  set ADMIN_EMAILS"
+fi
+
 log "Custom domains"
 dns_note=()
 add_cert() { # app url
