@@ -174,9 +174,25 @@ describe('Gauntlet end to end', () => {
       '/api/auth/refresh',
       { refreshToken: tokens.sam!.refresh },
     );
+    // A reload can cut off the response carrying the new token, so the old one works briefly...
+    const again = await call<{ refreshToken: string }>(null, 'POST', '/api/auth/refresh', {
+      refreshToken: tokens.sam!.refresh,
+    });
+    expect(again.refreshToken).not.toBe(r.refreshToken);
+    // ...and not after the grace period.
+    const realClock = clock;
+    clock = new Date(clock.getTime() + 31_000);
     await call(null, 'POST', '/api/auth/refresh', { refreshToken: tokens.sam!.refresh }, 401);
+    clock = realClock;
     tokens.sam = { ...tokens.sam!, access: r.accessToken, refresh: r.refreshToken };
     await call('sam', 'GET', '/api/me');
+
+    // Signing out ends a token at once.
+    const tmp = await call<{ refreshToken: string }>(null, 'POST', '/api/auth/refresh', {
+      refreshToken: again.refreshToken,
+    });
+    await call(null, 'POST', '/api/auth/logout', { refreshToken: tmp.refreshToken });
+    await call(null, 'POST', '/api/auth/refresh', { refreshToken: tmp.refreshToken }, 401);
   });
 
   it('makes friends by request and by invite link', async () => {

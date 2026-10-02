@@ -15,6 +15,13 @@
       "when": 1790894559181,
       "tag": "0001_public_and_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790899376843,
+      "tag": "0002_refresh_grace",
+      "breakpoints": true
     }
   ]
 }

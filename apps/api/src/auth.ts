@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import type { AppContext } from './context.js';
@@ -40,19 +40,32 @@ export async function issueRefreshToken(ctx: AppContext, userId: string): Promis
   return token;
 }
 
-/** Exchange a refresh token for a new pair. The old token is revoked (rotation). */
+/** How long a rotated refresh token still works (a reload can drop the response with its successor). */
+const ROTATION_GRACE_MS = 30_000;
+
+/**
+ * Exchange a refresh token for a new pair. The old token is retired (rotation), with a short grace
+ * period so two quick page loads don't sign the person out.
+ */
 export async function rotateRefreshToken(
   ctx: AppContext,
   token: string,
 ): Promise<{ userId: string; refreshToken: string } | null> {
+  const now = ctx.now();
   const [row] = await ctx.db
     .update(refreshTokens)
-    .set({ revokedAt: ctx.now() })
+    .set({
+      rotatedAt: sql`coalesce(${refreshTokens.rotatedAt}, ${now.toISOString()}::timestamptz)`,
+    })
     .where(
       and(
         eq(refreshTokens.tokenHash, sha256(token)),
         isNull(refreshTokens.revokedAt),
-        gt(refreshTokens.expiresAt, ctx.now()),
+        gt(refreshTokens.expiresAt, now),
+        or(
+          isNull(refreshTokens.rotatedAt),
+          gt(refreshTokens.rotatedAt, new Date(now.getTime() - ROTATION_GRACE_MS)),
+        ),
       ),
     )
     .returning({ userId: refreshTokens.userId });

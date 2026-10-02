@@ -50,6 +50,11 @@ export const refreshTokens = pgTable(
     tokenHash: text('token_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    /**
+     * When it was exchanged for a new one. It stays usable for a few seconds after, because a page
+     * reload can cut off the response carrying its replacement.
+     */
+    rotatedAt: timestamp('rotated_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [index('refresh_tokens_user_idx').on(t.userId)],
