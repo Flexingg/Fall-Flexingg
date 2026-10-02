@@ -11,6 +11,7 @@ import {
   initials,
   personalBests,
   addDays,
+  buildOverview,
   todayIn,
   type ConnectionInfo,
   type ConnectResult,
@@ -23,6 +24,7 @@ import {
   type SourcesResponse,
   type TodayResponse,
   type TrendRange,
+  type TrendsOverview,
   type TrendsResponse,
   type UserSettings,
 } from '@gauntlet/shared';
@@ -206,6 +208,11 @@ export class DirectBackend {
     const start = addDays(this.today_(), -HISTORY_DAYS);
     const { merged } = await fetchMerged(this.client, this.o.apiKey, start, end, {
       timezone: this.o.timezone,
+      // Everything a challenge can be scored on is on Trends too; goals only for recent days to
+      // keep the phone's refresh quick.
+      goals: { maxFetches: 14 },
+      allCustom: true,
+      allLifts: true,
     });
     const fresh: Cached = {
       savedAt: this.now().toISOString(),
@@ -244,7 +251,12 @@ export class DirectBackend {
     }
   }
 
-  async trends(range: TrendRange, metric: MetricKey): Promise<TrendsResponse> {
+  async trendsOverview(range: TrendRange): Promise<TrendsOverview> {
+    const { rows } = await this.load();
+    return buildOverview({ rows, range, today: this.today_() });
+  }
+
+  async trends(range: TrendRange, metric: string): Promise<TrendsResponse> {
     const { rows } = await this.load();
     const today = this.today_();
     return {

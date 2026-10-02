@@ -1,9 +1,12 @@
-import { addDays, type ChallengeEvent, type MetricAggregate } from '@gauntlet/shared';
+import { addDays, isMetricKey, type ChallengeEvent, type MetricAggregate } from '@gauntlet/shared';
 import type { CustomMeasurementRow, GoalsRow, SparkyClient } from './client.js';
 import { SparkyError } from './client.js';
 import {
   buildEvents,
+  DISTANCE_CATEGORIES,
+  liftOptions,
   mergeDaily,
+  RESTING_HR_CATEGORIES,
   wantedCategoryNames,
   type MergedValue,
   type MergeInput,
@@ -27,12 +30,22 @@ export interface FetchOptions {
    * Read the person's goals for days with food or water logged (one call per day), for adherence
    * metrics. `known` holds goals already stored, which aren't fetched again.
    */
-  goals?: { known?: Record<string, GoalsRow> };
+  goals?: { known?: Record<string, GoalsRow>; maxFetches?: number };
+  /**
+   * Also read the person's other numeric custom measurements (up to a handful), as daily averages,
+   * so they can be charted on Trends. Challenge metrics keep their own aggregate.
+   */
+  allCustom?: boolean;
+  /** Track the heaviest set and estimated 1RM of every exercise with weighted sets (most trained first). */
+  allLifts?: boolean;
   onSkip?: (label: string, err: Error) => void;
 }
 
 /** At most this many goal look-ups per sync; the rest come on later syncs. */
 const MAX_GOAL_FETCHES = 40;
+/** Custom measurements and exercises tracked beyond what challenges ask for. */
+const MAX_EXTRA_CUSTOM = 8;
+const MAX_LIFTS = 30;
 
 export async function fetchMerged(
   sparky: SparkyClient,
@@ -59,7 +72,22 @@ export async function fetchMerged(
   };
 
   const wanted = new Set(wantedCategoryNames(customMetrics));
-  const matched = categories.filter((c) => wanted.has(c.name.toLowerCase()));
+  // Other numeric categories, for Trends only: never the ones built-in metrics already read.
+  const builtin = new Set([...DISTANCE_CATEGORIES, ...RESTING_HR_CATEGORIES]);
+  const extra = opts.allCustom
+    ? categories
+        .filter(
+          (c) =>
+            (c.data_type ?? 'numeric') === 'numeric' &&
+            !wanted.has(c.name.toLowerCase()) &&
+            !builtin.has(c.name.toLowerCase()) &&
+            isMetricKey(`custom:${c.name.toLowerCase()}`),
+        )
+        .slice(0, MAX_EXTRA_CUSTOM)
+    : [];
+  const effectiveCustom: Record<string, MetricAggregate> = { ...customMetrics };
+  for (const c of extra) effectiveCustom[c.name.toLowerCase()] ??= 'avg';
+  const matched = categories.filter((c) => wanted.has(c.name.toLowerCase()) || extra.includes(c));
   const [daily, checkIns, exerciseDays, report, sleep, water, fasts, customRows] =
     await Promise.all([
       settle('daily', sparky.dailyHealthMetrics(token, start, end), []),
@@ -98,11 +126,12 @@ export async function fetchMerged(
     const logged = new Set<string>();
     for (const r of report.nutrition) if (r.date) logged.add(String(r.date).slice(0, 10));
     for (const r of water) if (r.entry_date) logged.add(String(r.entry_date).slice(0, 10));
+    const cap = opts.goals.maxFetches ?? MAX_GOAL_FETCHES;
     const missing = [...logged]
       .filter((d) => d >= start && d <= end && !goals![d])
       .sort()
       .reverse()
-      .slice(0, MAX_GOAL_FETCHES);
+      .slice(0, cap);
     for (let i = 0; i < missing.length; i += 4) {
       const batch = missing.slice(i, i + 4);
       const got = await Promise.all(
@@ -124,12 +153,21 @@ export async function fetchMerged(
       exerciseDays,
       exerciseEntries: report.exerciseEntries,
       sleep,
-      customMetrics,
+      customMetrics: effectiveCustom,
       nutrition: report.nutrition,
       water,
       goals,
       fasts,
-      lifts: opts.lifts,
+      lifts: [
+        ...new Set([
+          ...(opts.lifts ?? []),
+          ...(opts.allLifts
+            ? liftOptions(report.exerciseEntries)
+                .slice(0, MAX_LIFTS)
+                .map((l) => l.key)
+            : []),
+        ]),
+      ],
       timezone: opts.timezone,
     }),
     partial,

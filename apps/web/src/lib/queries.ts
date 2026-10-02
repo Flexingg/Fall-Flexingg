@@ -14,6 +14,7 @@ import type {
   MetricKey,
   SourcesResponse,
   TodayResponse,
+  TrendsOverview,
   TrendsResponse,
   UserCard,
 } from '@gauntlet/shared';
@@ -116,7 +117,15 @@ export const useFriends = () =>
     queryFn: () => get<FriendsResponse>('/api/friends'),
     ...live,
   });
-export const useTrends = (range: 'day' | 'week' | 'month', metric: MetricKey) =>
+export const useTrendsOverview = (range: 'day' | 'week' | 'month') =>
+  useQuery({
+    queryKey: ['trends-overview', range] as const,
+    queryFn: () =>
+      session.direct
+        ? session.direct.trendsOverview(range)
+        : get<TrendsOverview>(`/api/me/trends/overview?range=${range}`),
+  });
+export const useTrends = (range: 'day' | 'week' | 'month', metric: string) =>
   useQuery({
     queryKey: keys.trends(range, metric),
     queryFn: () =>

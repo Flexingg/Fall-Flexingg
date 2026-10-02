@@ -15,6 +15,10 @@ Pick a metric, set the rules, invite your crew, and race:
   fasts from Gauntlet's Today screen).
 - **Custom:** any SparkyFitness custom measurement.
 
+**Trends** covers every stat a challenge can be scored on (activity, strength including each exercise's
+heaviest set and estimated 1RM, calorie/macro/water goals, fasting) plus weight and your custom
+measurements, with an all-stats overview for the range you pick.
+
 Every challenge page has a **progress graph** (everyone's score day by day, with hover or arrow-key
 scrubbing and a table view). Dates are chosen when a challenge is created, in the past or future, and then
 stay fixed (Rematch runs it again); the creator can still rename it, make it public or private, and turn

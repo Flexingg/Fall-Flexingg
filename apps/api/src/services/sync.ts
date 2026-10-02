@@ -7,6 +7,7 @@ import {
   BUILTIN_METRICS,
   HIDDEN_METRICS,
   isCustomMetric,
+  isLiftMetric,
   liftExercise,
   minDate,
   todayIn,
@@ -38,8 +39,6 @@ const PROGRESS_THRESHOLD: Record<string, number> = {
   fasts_completed: 1,
 };
 
-/** Metrics scored against the person's own goals, which cost a goal look-up per day. */
-const GOAL_METRICS = new Set(['calorie_adherence', 'macro_adherence', 'water_goal']);
 const GOAL_ROWS = ['goal_calories', 'goal_protein', 'goal_carbs', 'goal_fat', 'goal_water'];
 /** Goals can still change for recent days, so these are always looked up again. */
 const GOALS_SETTLED_AFTER_DAYS = 2;
@@ -113,15 +112,14 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
     const lift = liftExercise(ch.metric);
     if (lift) lifts.add(lift.exercise);
   }
-  const wantsGoals = open.some((ch) => GOAL_METRICS.has(ch.metric));
-  const knownGoals = wantsGoals
-    ? await storedGoals(
-        ctx,
-        userId,
-        start,
-        addDays(todayIn(user.timezone, ctx.now()), -GOALS_SETTLED_AFTER_DAYS),
-      )
-    : undefined;
+  // Goals are read for every day with food or water logged (it is one call each, only for days that
+  // have something, and settled days are remembered), so adherence is on Trends as well as in challenges.
+  const knownGoals = await storedGoals(
+    ctx,
+    userId,
+    start,
+    addDays(todayIn(user.timezone, ctx.now()), -GOALS_SETTLED_AFTER_DAYS),
+  );
 
   let merged: MergedValue[];
   let partial: boolean;
@@ -130,7 +128,10 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
       customMetrics,
       lifts: [...lifts],
       timezone: user.timezone,
-      goals: wantsGoals ? { known: knownGoals } : undefined,
+      goals: { known: knownGoals },
+      // Everything a challenge can be scored on is also kept for the Trends screen.
+      allCustom: true,
+      allLifts: true,
       onSkip: (label, err) =>
         ctx.log.warn({ err: err.message, label }, 'sparky read failed; continuing without it'),
     }));
@@ -150,8 +151,8 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
     ...Object.keys(customMetrics).map((n) => `custom:${n}`),
     ...[...lifts].flatMap((l) => [`lift_max:${l}`, `lift_e1rm:${l}`]),
   ]);
-  if (!wantsGoals) for (const m of [...GOAL_METRICS, ...GOAL_ROWS]) managed.delete(m);
-  const changes = await store(ctx, userId, start, end, merged, managed, partial);
+  const isManaged = (m: string) => managed.has(m) || m.startsWith('custom:') || isLiftMetric(m);
+  const changes = await store(ctx, userId, start, end, merged, isManaged, partial);
   await ctx.db.update(users).set({ lastSyncedAt: ctx.now() }).where(eq(users.id, userId));
 
   // First sync pulls weeks of history at once; don't post that as "progress".
@@ -205,7 +206,7 @@ async function store(
   start: string,
   end: string,
   merged: MergedValue[],
-  managed: Set<string>,
+  isManaged: (metric: string) => boolean,
   /** A source failed to load: keep existing values rather than treating them as deleted. */
   partial: boolean,
 ): Promise<Change[]> {
@@ -238,7 +239,7 @@ async function store(
   }
   const removed = partial
     ? []
-    : existing.filter((r) => managed.has(r.metric) && !seen.has(`${r.date}|${r.metric}`));
+    : existing.filter((r) => isManaged(r.metric) && !seen.has(`${r.date}|${r.metric}`));
 
   await ctx.db.transaction(async (tx) => {
     for (const c of changes) {

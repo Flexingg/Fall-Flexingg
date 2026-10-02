@@ -4,7 +4,8 @@
  */
 import { z } from 'zod';
 import { isDateString } from './dates.js';
-import { isMetricKey, type MetricAggregate, type MetricKey } from './metrics.js';
+import { isMetricKey, type MetricAggregate, type MetricGroup, type MetricKey } from './metrics.js';
+import { isTrendMetric } from './derive.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
 
 const dateString = z.string().refine(isDateString, 'Expected a YYYY-MM-DD date');
@@ -403,11 +404,37 @@ export interface TodayResponse {
 
 export const trendsQuerySchema = z.object({
   range: z.enum(['day', 'week', 'month']).default('week'),
-  metric: metricKey.default('steps' as MetricKey),
+  metric: z.string().refine(isTrendMetric, 'Unknown metric').default('steps'),
 });
 
+/** How a metric is shown on Trends: label, unit and how days combine over the range. */
+export interface TrendDefInfo {
+  key: string;
+  label: string;
+  unit: string;
+  decimals: number;
+  /** sum: added up. avg: average of days. max: best day. last: latest value (weight). */
+  aggregate: 'sum' | 'avg' | 'max' | 'last';
+  group: MetricGroup;
+}
+
+export interface TrendOverviewItem extends TrendDefInfo {
+  total: number;
+  previousTotal: number;
+  changePct: number | null;
+}
+
+export interface TrendsOverview {
+  range: 'day' | 'week' | 'month';
+  /** Stats with data in this range or the one before it. */
+  items: TrendOverviewItem[];
+  /** Every stat the person has any data for (to pick from). */
+  available: Pick<TrendDefInfo, 'key' | 'label' | 'unit' | 'group'>[];
+}
+
 export interface TrendsResponse {
-  metric: MetricKey;
+  metric: string;
+  def: TrendDefInfo;
   range: 'day' | 'week' | 'month';
   total: number;
   previousTotal: number;

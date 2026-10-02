@@ -4,6 +4,8 @@ import type {
   FastStatus,
   LiftOption,
   MeUser,
+  TrendsOverview,
+  TrendsResponse,
 } from '@gauntlet/shared';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
@@ -282,5 +284,60 @@ describe('progress graph data', () => {
       scoring: 'total',
     });
     await call('cut', 'GET', `/api/challenges/${ch.id}/progress`, undefined, 403);
+  });
+});
+
+describe('Trends covers every stat', () => {
+  it('stores goals, weight, every exercise and custom measurements without any challenge asking', async () => {
+    const u = sparkyUser.bulk;
+    u.categories.push({ id: 'c-mood', name: 'Mood', frequency: 'Daily', data_type: 'numeric' });
+    u.custom['c-mood'] = [
+      { date: '2026-10-01', value: '6', timestamp: '2026-10-01T10:00:00Z' },
+      { date: '2026-10-02', value: '8', timestamp: '2026-10-02T10:00:00Z' },
+    ];
+    u.exerciseEntries.push({
+      entry_date: '2026-10-02',
+      exercise_name: 'Deadlift',
+      sets: [{ reps: 3, weight: 150 }],
+    });
+    await syncUser(ctx, ids.bulk);
+
+    const o = await call<TrendsOverview>('bulk', 'GET', '/api/me/trends/overview?range=day');
+    const keys = o.available.map((a) => a.key);
+    for (const k of [
+      'calorie_adherence',
+      'macro_adherence',
+      'calories_in',
+      'weight',
+      'lift_max:squat',
+      'lift_e1rm:deadlift',
+      'custom:mood',
+    ])
+      expect(keys, k).toContain(k);
+    // Stored goals and per-challenge scores aren't offered.
+    expect(keys.filter((k) => k.startsWith('goal_') || k === 'weight_goal')).toEqual([]);
+    expect(o.items.find((i) => i.key === 'weight')).toMatchObject({
+      total: 71.75,
+      aggregate: 'last',
+    });
+    expect(o.items.find((i) => i.key === 'lift_max:squat')).toMatchObject({
+      total: 140,
+      aggregate: 'max',
+    });
+    expect(o.items.find((i) => i.key === 'custom:mood')).toMatchObject({ total: 7, label: 'Mood' });
+  });
+
+  it('charts any of them', async () => {
+    const w = await call<TrendsResponse>('bulk', 'GET', '/api/me/trends?range=day&metric=weight');
+    expect(w.def).toMatchObject({ label: 'Weight', unit: 'kg', aggregate: 'last' });
+    expect(w.total).toBe(71.75);
+    const lift = await call<TrendsResponse>(
+      'bulk',
+      'GET',
+      `/api/me/trends?range=day&metric=${encodeURIComponent('lift_max:squat')}`,
+    );
+    expect(lift.def.label).toBe('Squat heaviest set');
+    await call('bulk', 'GET', '/api/me/trends?range=day&metric=goal_calories', undefined, 400);
+    await call('bulk', 'GET', '/api/me/trends?range=day&metric=nonsense', undefined, 400);
   });
 });

@@ -1,18 +1,34 @@
-import { BUILTIN_METRICS, METRIC_GROUPS, METRICS, type BuiltinMetricKey } from '@gauntlet/shared';
+import {
+  BUILTIN_METRICS,
+  METRIC_GROUPS,
+  trendDef,
+  type TrendDefInfo,
+  type TrendOverviewItem,
+} from '@gauntlet/shared';
 import { useState } from 'react';
 import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
-import { useTrends } from '../lib/queries';
+import { useTrends, useTrendsOverview } from '../lib/queries';
 import { useAuth } from '../lib/auth';
 
 export function TrendsPage() {
   const { mode } = useAuth();
   const [range, setRange] = useState<'day' | 'week' | 'month'>('week');
-  const [metric, setMetric] = useState<BuiltinMetricKey>('steps');
+  const [metric, setMetric] = useState<string>('steps');
   const q = useTrends(range, metric);
-  const def = METRICS[metric];
+  const overview = useTrendsOverview(range);
   const t = q.data;
+  const def: TrendDefInfo = t?.def ?? trendDef(metric) ?? trendDef('steps')!;
   const max = Math.max(...(t?.bars.map((b) => b.value) ?? [0]), 1);
-  const avg = def.aggregate === 'avg';
+  // Every stat a challenge can use, then whatever else the person has data for (each exercise,
+  // custom measurements, weight).
+  const options = new Map<string, { key: string; label: string; group: TrendDefInfo['group'] }>();
+  for (const k of BUILTIN_METRICS) {
+    const d = trendDef(k);
+    if (d) options.set(k, d);
+  }
+  for (const a of overview.data?.available ?? []) options.set(a.key, a);
+  if (!options.has(metric))
+    options.set(metric, { key: metric, label: def.label, group: def.group });
   const rangeName =
     range === 'week' ? 'this week' : range === 'month' ? 'last 30 days' : 'last 7 days';
 
@@ -39,7 +55,7 @@ export function TrendsPage() {
             <label className="lbl" style={{ margin: 0 }}>
               <select
                 value={metric}
-                onChange={(e) => setMetric(e.target.value as BuiltinMetricKey)}
+                onChange={(e) => setMetric(e.target.value)}
                 aria-label="Metric"
                 style={{
                   background: 'none',
@@ -52,15 +68,12 @@ export function TrendsPage() {
                 }}
               >
                 {METRIC_GROUPS.map((g) => {
-                  // Scores worked out per challenge (e.g. weight goal) have no daily trend.
-                  const keys = BUILTIN_METRICS.filter(
-                    (k) => METRICS[k].group === g.key && !METRICS[k].transform,
-                  );
-                  return keys.length ? (
+                  const list = [...options.values()].filter((o) => o.group === g.key);
+                  return list.length ? (
                     <optgroup key={g.key} label={g.label} style={{ background: 'var(--card)' }}>
-                      {keys.map((k) => (
-                        <option key={k} value={k} style={{ background: 'var(--card)' }}>
-                          {METRICS[k].label} {rangeName}
+                      {list.map((o) => (
+                        <option key={o.key} value={o.key} style={{ background: 'var(--card)' }}>
+                          {o.label} {rangeName}
                         </option>
                       ))}
                     </optgroup>
@@ -73,7 +86,7 @@ export function TrendsPage() {
                 ? t.total.toFixed(def.decimals)
                 : Math.round(t.total).toLocaleString('en-US')}
               <small>
-                {avg ? `${def.unit} avg` : def.unit}
+                {suffix(def)}
                 {t.changePct != null &&
                   ` ${t.changePct >= 0 ? '+' : ''}${Math.round(t.changePct)}% vs last`}
               </small>
@@ -96,6 +109,39 @@ export function TrendsPage() {
             </div>
           </div>
         )
+      )}
+
+      {overview.data && overview.data.items.length > 0 && (
+        <>
+          <div className="lbl">All stats · {rangeName}</div>
+          <div className="list" aria-label="All stats">
+            {overview.data.items.map((i) => (
+              <button
+                key={i.key}
+                className={`item${i.key === metric ? ' me' : ''}`}
+                aria-pressed={i.key === metric}
+                onClick={() => {
+                  setMetric(i.key);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                <div className="grow" style={{ textAlign: 'left' }}>
+                  <div className="t ellipsis">{i.label}</div>
+                  <small>{GROUP_LABEL.get(i.group)}</small>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="v num">{overviewValue(i)}</div>
+                  {i.changePct != null && (
+                    <small className="muted num">
+                      {i.changePct >= 0 ? '+' : ''}
+                      {Math.round(i.changePct)}%
+                    </small>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {t?.rankHistory && t.rankHistory.points.length > 0 && (
@@ -132,6 +178,21 @@ export function TrendsPage() {
       )}
     </Screen>
   );
+}
+
+const GROUP_LABEL = new Map(METRIC_GROUPS.map((g) => [g.key, g.label]));
+
+const fmtValue = (v: number, d: Pick<TrendDefInfo, 'decimals'>) =>
+  d.decimals ? v.toFixed(d.decimals) : Math.round(v).toLocaleString('en-US');
+
+/** "km", "bpm avg", "kg best" … how the headline number is combined over the range. */
+function suffix(d: Pick<TrendDefInfo, 'unit' | 'aggregate'>): string {
+  const word = { sum: '', avg: 'avg', max: 'best', last: 'latest' }[d.aggregate];
+  return [d.unit, word].filter(Boolean).join(' ');
+}
+
+function overviewValue(i: TrendOverviewItem): string {
+  return `${fmtValue(i.total, i)} ${suffix(i)}`.trim();
 }
 
 function RankLine({ points }: { points: { date: string; rank: number }[] }) {

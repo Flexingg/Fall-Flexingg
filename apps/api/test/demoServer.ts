@@ -166,6 +166,24 @@ for (let i = 0; i < 14; i += 2) {
     ],
   });
 }
+// A custom measurement and weigh-ins, so Trends has more than the built-ins to show.
+users.you!.categories.push({
+  id: 'cat-mood',
+  name: 'Mood',
+  frequency: 'Daily',
+  data_type: 'numeric',
+});
+users.you!.custom['cat-mood'] = Array.from({ length: 14 }, (_, i) => ({
+  date: d(i - 13),
+  value: String(5 + ((i * 3) % 5)),
+  timestamp: `${d(i - 13)}T20:00:00Z`,
+}));
+for (let i = 0; i < 14; i += 3)
+  users.you!.checkIns.push({
+    entry_date: d(i - 13),
+    weight: 82 - i * 0.1,
+    updated_at: `${d(i - 13)}T07:00:00Z`,
+  });
 users.you!.fasts.push({
   id: 'demo-fast-1',
   start_time: `${d(-2)}T03:00:00Z`,

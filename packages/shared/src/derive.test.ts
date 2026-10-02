@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildOverview,
   buildToday,
   buildTrends,
   personalBests,
+  trendDef,
   trendsNeedFrom,
   trendWindow,
   type MetricRow,
@@ -117,6 +119,70 @@ describe('personalBests', () => {
       { label: 'Best step day', value: '–' },
       { label: '10k-step streak', value: '0 days' },
       { label: 'Challenges won', value: '1 win' },
+    ]);
+  });
+});
+
+describe('every stat on Trends', () => {
+  const today = '2026-10-02'; // a Friday
+  const rows = [
+    { date: '2026-10-01', metric: 'steps', value: 9000 },
+    { date: '2026-10-02', metric: 'steps', value: 11000 },
+    { date: '2026-09-24', metric: 'steps', value: 8000 },
+    { date: '2026-10-01', metric: 'weight', value: 82 },
+    { date: '2026-10-02', metric: 'weight', value: 81.4 },
+    { date: '2026-10-01', metric: 'lift_max:bench press', value: 80 },
+    { date: '2026-10-02', metric: 'lift_max:bench press', value: 85 },
+    { date: '2026-10-01', metric: 'custom:mood', value: 6 },
+    { date: '2026-10-02', metric: 'custom:mood', value: 8 },
+    { date: '2026-10-02', metric: 'calorie_adherence', value: 90 },
+    // Stored goals and per-challenge scores are not stats.
+    { date: '2026-10-02', metric: 'goal_calories', value: 2000 },
+    { date: '2026-10-02', metric: 'weight_goal', value: 40 },
+  ];
+
+  it('knows how each kind of stat combines over a range', () => {
+    expect(trendDef('steps')).toMatchObject({ aggregate: 'sum', group: 'activity' });
+    expect(trendDef('sleep')).toMatchObject({ aggregate: 'avg' });
+    expect(trendDef('weight')).toMatchObject({ aggregate: 'last', unit: 'kg', group: 'body' });
+    expect(trendDef('lift_max:bench press')).toMatchObject({
+      label: 'Bench Press heaviest set',
+      aggregate: 'max',
+      unit: 'kg',
+    });
+    expect(trendDef('lift_e1rm:squat')!.label).toBe('Squat est. 1RM');
+    expect(trendDef('custom:mood')).toMatchObject({ label: 'Mood', group: 'custom' });
+    expect(trendDef('goal_calories')).toBeNull();
+    expect(trendDef('weight_goal')).toBeNull();
+    expect(trendDef('nonsense')).toBeNull();
+  });
+
+  it('totals weight as the latest weigh-in and lifts as the best day', () => {
+    const w = buildTrends({ rows, range: 'day', metric: 'weight', today });
+    expect(w.total).toBe(81.4);
+    expect(w.def.label).toBe('Weight');
+    expect(buildTrends({ rows, range: 'day', metric: 'lift_max:bench press', today }).total).toBe(
+      85,
+    );
+    expect(buildTrends({ rows, range: 'day', metric: 'custom:mood', today }).total).toBe(7);
+    expect(buildTrends({ rows, range: 'day', metric: 'steps', today }).total).toBe(20000);
+  });
+
+  it('summarises every stat with data, and lists all that can be picked', () => {
+    const o = buildOverview({ rows, range: 'day', today });
+    expect(o.items.map((i) => i.key).sort()).toEqual(
+      ['calorie_adherence', 'custom:mood', 'lift_max:bench press', 'steps', 'weight'].sort(),
+    );
+    expect(o.items.find((i) => i.key === 'steps')).toMatchObject({ total: 20000 });
+    expect(o.available.map((a) => a.key)).toContain('lift_max:bench press');
+    expect(o.available.some((a) => a.key.startsWith('goal_'))).toBe(false);
+    // Grouped in the same order as the new-challenge picker.
+    expect(o.items.map((i) => i.group)).toEqual([
+      'activity',
+      'strength',
+      'nutrition',
+      'body',
+      'custom',
     ]);
   });
 });

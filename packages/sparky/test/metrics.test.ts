@@ -316,3 +316,63 @@ describe('events behind the scores', () => {
     expect(fake.calls.some((c) => c.includes('/api/fasting'))).toBe(false);
   });
 });
+
+describe('stats kept for Trends beyond what challenges ask for', () => {
+  function setup() {
+    const fake = new FakeSparky();
+    const user = fake.addUser({ id: 'u', email: 'u@x.test', password: 'p', name: 'U' });
+    user.categories.push(
+      { id: 'c-mood', name: 'Mood', frequency: 'Daily', data_type: 'numeric' },
+      { id: 'c-note', name: 'Note', frequency: 'Daily', data_type: 'text' },
+      { id: 'c-dist', name: 'distance', frequency: 'Daily', data_type: 'numeric' },
+    );
+    user.custom['c-mood'] = [
+      { date: '2026-10-01', value: '6', timestamp: '2026-10-01T10:00:00Z' },
+      { date: '2026-10-02', value: '8', timestamp: '2026-10-02T10:00:00Z' },
+    ];
+    user.exerciseEntries.push(
+      { entry_date: '2026-10-01', exercise_name: 'Squat', sets: [{ reps: 5, weight: 100 }] },
+      { entry_date: '2026-10-02', exercise_name: 'Squat', sets: [{ reps: 5, weight: 105 }] },
+      { entry_date: '2026-10-02', exercise_name: 'Deadlift', sets: [{ reps: 3, weight: 150 }] },
+    );
+    const key = fake.mintKey('u');
+    return { fake, key, client: new SparkyClient({ baseUrl: fake.baseUrl, fetch: fake.fetch }) };
+  }
+
+  it('reads nothing extra unless asked', async () => {
+    const { fake, key, client } = setup();
+    const { merged } = await fetchMerged(client, key, '2026-10-01', '2026-10-03');
+    expect(merged.some((m) => m.metric === 'custom:mood')).toBe(false);
+    expect(merged.some((m) => m.metric.startsWith('lift_max:'))).toBe(false);
+    expect(fake.calls.some((c) => c.includes('custom-measurements-range/c-mood'))).toBe(false);
+  });
+
+  it('also tracks custom measurements and every exercise, without text or built-in ones', async () => {
+    const { fake, key, client } = setup();
+    const { merged } = await fetchMerged(client, key, '2026-10-01', '2026-10-03', {
+      allCustom: true,
+      allLifts: true,
+    });
+    const v = (d: string, m: string) => merged.find((r) => r.date === d && r.metric === m)?.value;
+    expect(v('2026-10-02', 'custom:mood')).toBe(8);
+    expect(v('2026-10-02', 'lift_max:squat')).toBe(105);
+    expect(v('2026-10-02', 'lift_max:deadlift')).toBe(150);
+    expect(v('2026-10-02', 'lift_e1rm:deadlift')).toBe(165);
+    // The text category was not read, and 'distance' keeps feeding the built-in distance metric.
+    expect(fake.calls.filter((c) => c.includes('custom-measurements-range')).length).toBe(2);
+    expect(merged.some((m) => m.metric === 'custom:note' || m.metric === 'custom:distance')).toBe(
+      false,
+    );
+  });
+
+  it('lets a challenge keep its own aggregate for the same measurement', async () => {
+    const { key, client } = setup();
+    const { merged } = await fetchMerged(client, key, '2026-10-01', '2026-10-03', {
+      allCustom: true,
+      customMetrics: { mood: 'sum' },
+    });
+    expect(merged.find((r) => r.metric === 'custom:mood' && r.date === '2026-10-02')?.value).toBe(
+      8,
+    );
+  });
+});

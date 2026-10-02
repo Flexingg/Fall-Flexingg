@@ -1,5 +1,6 @@
 import {
   addDays,
+  buildOverview,
   buildToday,
   buildTrends,
   isMetricKey,
@@ -14,6 +15,7 @@ import {
   type LiftOption,
   type MetricRow,
   type TodayResponse,
+  type TrendsOverview,
   type TrendsResponse,
 } from '@gauntlet/shared';
 import { and, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
@@ -143,6 +145,24 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
         challengesWon: await challengesWon(ctx, user.id),
       }),
     };
+  });
+
+  /** Every stat the person has data for, summarised for a range (the Trends overview). */
+  app.get('/api/me/trends/overview', auth, async (req): Promise<TrendsOverview> => {
+    const { range } = trendsQuerySchema.pick({ range: true }).parse(req.query);
+    const user = await getUser(ctx, req.userId);
+    const today = todayIn(user.timezone, ctx.now());
+    // Two months of rows cover every range plus its comparison period, and the list to pick from.
+    const rows = await ctx.db
+      .select({ date: dailyMetrics.date, metric: dailyMetrics.metric, value: dailyMetrics.value })
+      .from(dailyMetrics)
+      .where(
+        and(
+          eq(dailyMetrics.userId, user.id),
+          gte(dailyMetrics.date, trendsNeedFrom('month', today)),
+        ),
+      );
+    return buildOverview({ rows, range, today });
   });
 
   app.get('/api/me/custom-metrics', auth, async (req): Promise<CustomMetricOption[]> => {

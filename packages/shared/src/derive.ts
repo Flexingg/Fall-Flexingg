@@ -4,8 +4,23 @@
  * the phone), so both always agree.
  */
 import { addDays, listDates, weekday } from './dates.js';
-import { METRICS, metricDef, type MetricKey } from './metrics.js';
-import type { TodayResponse, TrendsResponse } from './api.js';
+import {
+  isBuiltinMetric,
+  isCustomMetric,
+  isLiftMetric,
+  liftExercise,
+  METRIC_GROUPS,
+  METRICS,
+  metricDef,
+  type MetricGroup,
+} from './metrics.js';
+import type {
+  TodayResponse,
+  TrendDefInfo,
+  TrendOverviewItem,
+  TrendsOverview,
+  TrendsResponse,
+} from './api.js';
 
 export interface MetricRow {
   date: string;
@@ -53,13 +68,68 @@ export function trendsNeedFrom(range: TrendRange, today: string): string {
   return addDays(start, -listDates(start, end).length);
 }
 
+const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+
+/**
+ * How a metric looks on the Trends screen: every stat a challenge can be scored on, plus weight
+ * (shown only to its owner), each exercise's heaviest set and estimated 1RM, and custom measurements.
+ * Null for values that only exist per challenge (weight goal) or aren't a stat (stored goals).
+ */
+export function trendDef(key: string): TrendDefInfo | null {
+  if (key === 'weight')
+    return {
+      key,
+      label: 'Weight',
+      unit: 'kg',
+      decimals: 1,
+      aggregate: 'last',
+      group: 'body',
+    };
+  if (isBuiltinMetric(key)) {
+    const d = METRICS[key];
+    if (d.transform) return null;
+    return {
+      key,
+      label: d.label,
+      unit: d.unit,
+      decimals: d.decimals,
+      aggregate: d.aggregate === 'sum' ? 'sum' : 'avg',
+      group: d.group,
+    };
+  }
+  const lift = liftExercise(key);
+  if (lift) {
+    return {
+      key,
+      label: `${titleCase(lift.exercise)} ${lift.prefix === 'lift_max:' ? 'heaviest set' : 'est. 1RM'}`,
+      unit: 'kg',
+      decimals: 1,
+      aggregate: 'max',
+      group: 'strength',
+    };
+  }
+  if (isCustomMetric(key))
+    return {
+      key,
+      label: titleCase(key.slice('custom:'.length)),
+      unit: '',
+      decimals: 1,
+      aggregate: 'avg',
+      group: 'custom',
+    };
+  return null;
+}
+
+export const isTrendMetric = (key: string): boolean => trendDef(key) != null;
+
 export function buildTrends(opts: {
   rows: MetricRow[];
   range: TrendRange;
-  metric: MetricKey;
+  metric: string;
   today: string;
 }): Omit<TrendsResponse, 'rankHistory' | 'personalBests'> {
   const { rows, range, metric, today } = opts;
+  const def = trendDef(metric) ?? trendDef('steps')!;
   const { start, end } = trendWindow(range, today);
   const span = listDates(start, end).length;
   const prevStart = addDays(start, -span);
@@ -68,12 +138,13 @@ export function buildTrends(opts: {
       .filter((r) => r.metric === metric && r.date >= prevStart && r.date <= end)
       .map((r) => [r.date, r.value]),
   );
-  const avg = metricDef(metric).aggregate !== 'sum';
   const agg = (dates: string[]) => {
     const vals = dates.map((d) => byDate.get(d)).filter((v): v is number => v != null);
     if (!vals.length) return 0;
+    if (def.aggregate === 'max') return Math.max(...vals);
+    if (def.aggregate === 'last') return vals[vals.length - 1]!;
     const sum = vals.reduce((a, b) => a + b, 0);
-    return avg ? sum / vals.length : sum;
+    return def.aggregate === 'avg' ? sum / vals.length : sum;
   };
   // Compare like with like: only the elapsed part of the current period.
   const elapsed = listDates(start, today < end ? today : end);
@@ -83,6 +154,7 @@ export function buildTrends(opts: {
   return {
     metric,
     range,
+    def,
     total,
     previousTotal,
     changePct: previousTotal > 0 ? ((total - previousTotal) / previousTotal) * 100 : null,
@@ -92,6 +164,41 @@ export function buildTrends(opts: {
       value: byDate.get(d) ?? 0,
       isToday: d === today,
     })),
+  };
+}
+
+/**
+ * Every stat the person has data for, summarised for one range (for the Trends overview), and the
+ * full list of stats available to pick from.
+ */
+export function buildOverview(opts: {
+  rows: MetricRow[];
+  range: TrendRange;
+  today: string;
+}): TrendsOverview {
+  const { rows, range, today } = opts;
+  const keys = [...new Set(rows.map((r) => r.metric))].filter(isTrendMetric);
+  const groupOrder = new Map<MetricGroup, number>(METRIC_GROUPS.map((g, i) => [g.key, i]));
+  const all = keys
+    .map((key) => {
+      const t = buildTrends({ rows, range, metric: key, today });
+      const item: TrendOverviewItem = {
+        ...t.def,
+        total: t.total,
+        previousTotal: t.previousTotal,
+        changePct: t.changePct,
+      };
+      return item;
+    })
+    .sort(
+      (a, b) =>
+        (groupOrder.get(a.group) ?? 99) - (groupOrder.get(b.group) ?? 99) ||
+        a.label.localeCompare(b.label),
+    );
+  return {
+    range,
+    items: all.filter((i) => i.total > 0 || i.previousTotal > 0),
+    available: all.map(({ key, label, unit, group }) => ({ key, label, unit, group })),
   };
 }
 

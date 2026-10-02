@@ -404,3 +404,31 @@ test('Show Events lists the workouts that counted, and respects opt-outs', async
   await page.getByText('Active Minutes Cup').click();
   await expect(page.getByLabel('What counted')).toHaveCount(0);
 });
+
+test('Trends covers every stat, not just the built-in activity ones', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Trends' }).click();
+  const metric = page.getByLabel('Metric');
+  // Groups mirror the new-challenge picker, with each exercise, weight and custom measurements.
+  for (const label of ['Strength', 'Nutrition', 'Body', 'Fasting', 'Custom'])
+    await expect(metric.locator(`optgroup[label="${label}"]`)).toHaveCount(1);
+  await expect(metric.locator('option', { hasText: 'Squat heaviest set' })).toHaveCount(1);
+  await expect(metric.locator('option', { hasText: 'Squat est. 1RM' })).toHaveCount(1);
+  await expect(metric.locator('option', { hasText: 'Calorie goal' })).toHaveCount(1);
+  await expect(metric.locator('option', { hasText: /^Weight/ })).toHaveCount(1);
+  await expect(metric.locator('option', { hasText: /^Mood/ })).toHaveCount(1);
+
+  // The overview lists every stat with data; tapping one charts it.
+  const all = page.getByLabel('All stats');
+  await expect(all.getByText('Squat heaviest set')).toBeVisible();
+  await expect(all.getByText('Mood')).toBeVisible();
+  await expect(all.getByText('Calorie goal')).toBeVisible();
+  await snap(page, '24-trends-overview');
+  await all.getByRole('button', { name: /Mood/ }).click();
+  await expect(page.getByRole('img', { name: 'Mood per day' })).toBeVisible();
+  await metric.selectOption('weight');
+  await expect(page.getByText(/kg latest/).first()).toBeVisible();
+  await metric.selectOption('lift_max:squat');
+  await expect(page.getByText(/kg best/).first()).toBeVisible();
+  await snap(page, '25-trends-lift');
+});
