@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import { legalRoutes } from './routes/legal.js';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
@@ -37,7 +38,11 @@ export async function buildApp(
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Timezone', 'X-Gauntlet-Client'],
   });
-  await app.register(rateLimit, { global: true, max: full.cfg.RATE_LIMIT_MAX, timeWindow: '1 minute' });
+  await app.register(rateLimit, {
+    global: true,
+    max: full.cfg.RATE_LIMIT_MAX,
+    timeWindow: '1 minute',
+  });
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ZodError) {
@@ -79,6 +84,7 @@ export async function buildApp(
   garminRoutes(app, full);
   connectionRoutes(app, full);
   downloadRoutes(app, full.cfg);
+  legalRoutes(app, full);
 
   if (full.cfg.WEB_DIST) await serveWeb(app, full.cfg.WEB_DIST);
 

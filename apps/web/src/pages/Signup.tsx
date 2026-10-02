@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { LegalLinks } from '../components/LegalLinks';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ErrorBox } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -89,6 +90,10 @@ export function SignupPage() {
           I already have an account
         </Link>
       </form>
+      <p className="muted center" style={{ fontSize: 12, marginTop: 18 }}>
+        By creating an account you agree to the terms and privacy policy.
+      </p>
+      <LegalLinks />
     </main>
   );
 }

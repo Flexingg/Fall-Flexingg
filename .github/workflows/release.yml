@@ -152,7 +152,7 @@ jobs:
           GAUNTLET_VERSION_CODE: ${{ github.run_number }}
         run: |
           export GAUNTLET_VERSION_NAME="${TAG#v}"
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease bundleRelease --no-daemon
 
       - name: Verify signature and version
         id: name
@@ -163,6 +163,10 @@ jobs:
           "$BT/aapt" dump badging "$SRC" | grep -E "^package:"
           FILE="gauntlet-${TAG}.apk"
           mkdir -p dist && cp "$SRC" "dist/$FILE"
+          # The Play Store takes the App Bundle (same code and signing key, same run).
+          AAB=apps/web/android/app/build/outputs/bundle/release/app-release.aab
+          [ -f "$AAB" ] || { echo "::error::No app bundle was built"; exit 1; }
+          cp "$AAB" "dist/gauntlet-${TAG}.aab"
           (cd dist && sha256sum "$FILE" > "$FILE.sha256")
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
           # Signing-certificate fingerprint for Android App Links (AB:CD:... form).
@@ -182,12 +186,14 @@ jobs:
         if: needs.meta.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" "dist/${{ steps.name.outputs.file }}" "dist/${{ steps.name.outputs.file }}.sha256" --clobber
+        run: gh release upload "$TAG" "dist/${{ steps.name.outputs.file }}" "dist/${{ steps.name.outputs.file }}.sha256" "dist/gauntlet-${TAG}.aab" --clobber
 
       - uses: actions/upload-artifact@v4
         with:
           name: gauntlet-apk
-          path: dist/*.apk
+          path: |
+            dist/*.apk
+            dist/*.aab
           if-no-files-found: error
 
   deploy:

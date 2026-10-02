@@ -6,6 +6,7 @@ import { Avatar, ErrorBox, Header, Screen, toast, Toggle } from '../components/u
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isNative } from '../lib/platform';
+import { LegalLinks } from '../components/LegalLinks';
 import { useAndroidRelease } from '../lib/queries';
 
 export function MePage() {
@@ -46,7 +47,12 @@ export function MePage() {
   }
 
   async function deleteAccount() {
-    if (!confirm('Delete your Gauntlet account? Your SparkyFitness data is not touched.')) return;
+    if (
+      !confirm(
+        'Delete your Gauntlet account? This removes your profile, scores and friends, and deletes challenges you created for everyone in them. Your SparkyFitness data is not touched. This cannot be undone.',
+      )
+    )
+      return;
     try {
       await del('/api/me');
       await logout();
@@ -241,7 +247,8 @@ export function MePage() {
           </button>
         )}
       </div>
-      <p className="muted center" style={{ fontSize: 12, marginTop: 18 }}>
+      <LegalLinks />
+      <p className="muted center" style={{ fontSize: 12 }}>
         Gauntlet · powered by SparkyFitness
       </p>
     </Screen>

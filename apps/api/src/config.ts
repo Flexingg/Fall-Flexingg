@@ -35,6 +35,8 @@ const envSchema = z.object({
   OAUTH_POLAR_CLIENT_SECRET: z.string().optional(),
   /** Comma-separated emails of server admins (can feature public challenges). */
   ADMIN_EMAILS: z.string().default(''),
+  /** Where privacy and account-deletion requests go (shown on /privacy). Defaults to the first admin email. */
+  CONTACT_EMAIL: z.string().default(''),
   /** Release key SHA-256 fingerprint(s), comma separated, for Android App Links (invite links open the app). */
   ASSETLINKS_SHA256: z.string().default(''),
 });

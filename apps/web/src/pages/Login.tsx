@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { LegalLinks } from '../components/LegalLinks';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ErrorBox, Seg } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -158,6 +159,7 @@ function ServerLoginPage() {
         Gauntlet reads your SparkyFitness data to score challenges. Your friends only see challenge
         totals.
       </p>
+      <LegalLinks />
     </main>
   );
 }

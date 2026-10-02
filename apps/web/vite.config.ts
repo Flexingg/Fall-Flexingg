@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => ({
         },
         workbox: {
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//],
+          navigateFallbackDenylist: [/^\/api\//, /^\/(privacy|terms|delete-account|downloads)/],
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
           // API responses are live data; never serve them from cache.
           runtimeCaching: [{ urlPattern: /\/api\//, handler: 'NetworkOnly' }],
