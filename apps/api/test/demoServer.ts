@@ -106,6 +106,7 @@ for (const [id, p] of Object.entries(profile)) {
         exercise_name: 'Running',
         duration_minutes: Math.round(km * 6),
         calories_burned: Math.round(km * 60),
+        exercise_source: p.source,
       });
     }
     u.sleep.push({
@@ -275,6 +276,9 @@ const live = await call<{ id: string }>('you', 'POST', '/api/challenges', {
 });
 for (const id of ['maya', 'dre', 'sam'])
   await call(id, 'POST', `/api/challenges/${live.id}/respond`, { accept: true });
+// Show Events on the main challenge; Dre keeps his workouts private.
+await call('you', 'PATCH', `/api/challenges/${live.id}`, { showEvents: true });
+await call('dre', 'PATCH', '/api/me', { settings: { shareEvents: false } });
 const cup = await call<{ id: string }>('dre', 'POST', '/api/challenges', {
   name: 'Active Minutes Cup',
   metric: 'active_minutes',

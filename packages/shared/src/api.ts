@@ -316,6 +316,41 @@ export interface ChallengeProgress {
   total: number;
 }
 
+// ---------- Show Events ("what counted") ----------
+
+export type ChallengeEventKind = 'workout' | 'lift' | 'fast' | 'day';
+
+/** One thing that counted toward a score, read from SparkyFitness when someone looks. */
+export interface ChallengeEvent {
+  id: string;
+  kind: ChallengeEventKind;
+  /** "Run", "Squat", "Fast", or the metric for a day total. */
+  title: string;
+  /** "40 min · 450 kcal". */
+  detail: string;
+  source: string | null;
+}
+
+export interface EventGroup {
+  user: PublicUser;
+  isMe: boolean;
+  /** hidden: they keep their workouts private. unavailable: SparkyFitness couldn't be reached. */
+  status: 'ok' | 'hidden' | 'unavailable';
+  events: ChallengeEvent[];
+}
+
+export interface ChallengeEventsResponse {
+  date: string;
+  groups: EventGroup[];
+  /** Participants not included because the request was capped (ask for them by userId). */
+  more: number;
+}
+
+export const eventsQuerySchema = z.object({
+  date: dateString,
+  userId: z.string().uuid().optional(),
+});
+
 export const respondChallengeSchema = z.object({
   accept: z.boolean(),
   params: participantParamsSchema.optional(),

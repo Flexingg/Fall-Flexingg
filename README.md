@@ -6,7 +6,7 @@ Pick a metric, set the rules, invite your crew, and race:
 - **Activity:** steps, distance, active minutes, calories, workouts, sleep, resting heart rate.
 - **Strength** (sets from Liftosaur, Hevy or SparkyFitness): volume lifted, working sets, or one
   exercise: heaviest set, or estimated 1RM gain % so beginners and veterans compete on improvement.
-- **Nutrition:** calorie and macro goals scored as closeness to *each person's own* goal (100 on
+- **Nutrition:** calorie and macro goals scored as closeness to _each person's own_ goal (100 on
   target, 2 points off per 1% over or under), so someone bulking can race someone cutting; water
   goal %, water, calories eaten, protein, carbs, fat.
 - **Body:** weight goal: everyone picks lose or gain and their own target; scored on % of it
@@ -14,6 +14,14 @@ Pick a metric, set the rules, invite your crew, and race:
 - **Fasting:** hours fasted and fasts completed, from SparkyFitness' fasting tracker (start and end
   fasts from Gauntlet's Today screen).
 - **Custom:** any SparkyFitness custom measurement.
+
+Every challenge page has a **progress graph** (everyone's score day by day, with hover or arrow-key
+scrubbing and a table view). Dates are chosen when a challenge is created, in the past or future, and then
+stay fixed (Rematch runs it again); the creator can still rename it, make it public or private, and turn
+**Show Events** on. With Show Events, participants can open the workouts, lift sessions and fasts behind
+each score. Those are read live from each person's SparkyFitness when someone looks (nothing is copied
+into Gauntlet), only for people in the challenge, and anyone can opt out under Data sources → Privacy
+("Show my workouts in challenges"). Weight is never listed.
 
 Profiles are **private by default** (only friends and challenge-mates see you). Go public to be
 found by name or @handle and to join **public challenges** from Discover; server admins

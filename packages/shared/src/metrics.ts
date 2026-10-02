@@ -459,3 +459,17 @@ export function formatCompact(value: number, decimals = 1): string {
 export function needsWeightGoal(key: MetricKey): boolean {
   return isMetricKey(key) && metricDef(key).transform === 'weight_goal';
 }
+
+/**
+ * Which kinds of events explain a metric's score. Workouts, lift sessions and fasts are read from
+ * SparkyFitness; "day" is the day's total as Gauntlet stored it. Weight is never listed.
+ */
+export function eventKindsFor(key: string): ('workout' | 'lift' | 'fast' | 'day')[] {
+  if (key === 'weight_goal') return [];
+  if (key === 'workouts') return ['workout'];
+  if (key === 'active_minutes' || key === 'active_calories' || key === 'distance')
+    return ['workout', 'day'];
+  if (key === 'lift_volume' || key === 'lift_sets' || isLiftMetric(key)) return ['lift'];
+  if (key === 'fast_hours' || key === 'fasts_completed') return ['fast'];
+  return ['day'];
+}

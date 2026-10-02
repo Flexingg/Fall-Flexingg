@@ -1,4 +1,5 @@
 import { needsWeightGoal, scoringLabel, type WeightGoalParams } from '@gauntlet/shared';
+import { ChallengeEvents } from '../components/ChallengeEvents';
 import { EditChallenge } from '../components/EditChallenge';
 import { WeightGoalFields } from '../components/WeightGoal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -182,6 +183,8 @@ export function ChallengeDetailPage() {
               </div>
             </>
           )}
+
+          {c.showEvents && c.myState === 'joined' && <ChallengeEvents c={c} />}
 
           {c.invited.length > 0 && (
             <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>

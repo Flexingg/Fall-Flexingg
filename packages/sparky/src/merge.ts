@@ -12,7 +12,13 @@
  * - Sleep takes the source with the most sleep that night.
  * - Resting heart rate prefers wearable daily summaries, then measurements.
  */
-import { adherenceScore, epley1rm, todayIn, type MetricAggregate } from '@gauntlet/shared';
+import {
+  adherenceScore,
+  epley1rm,
+  todayIn,
+  type ChallengeEvent,
+  type MetricAggregate,
+} from '@gauntlet/shared';
 import type {
   CheckInRow,
   CustomCategory,
@@ -355,8 +361,11 @@ const MIN_WORKOUT_MINUTES = 3;
  */
 export function cleanWorkouts(
   entries: ExerciseEntryRow[],
-): Map<string, { name: string; minutes: number; kcal: number }[]> {
-  const byDay = new Map<string, { name: string; minutes: number; kcal: number }[]>();
+): Map<string, { name: string; minutes: number; kcal: number; source: string | null }[]> {
+  const byDay = new Map<
+    string,
+    { name: string; minutes: number; kcal: number; source: string | null }[]
+  >();
   for (const e of entries) {
     const name = (e.exercise_name ?? '').trim().toLowerCase();
     if (name === ACTIVE_CALORIES_ENTRY) continue;
@@ -369,7 +378,7 @@ export function cleanWorkouts(
       (w) =>
         Math.abs(w.minutes - minutes) <= 2 && Math.abs(w.kcal - kcal) <= Math.max(5, kcal * 0.05),
     );
-    if (!dup) list.push({ name, minutes, kcal });
+    if (!dup) list.push({ name, minutes, kcal, source: e.exercise_source ?? null });
     byDay.set(d, list);
   }
   for (const [d, list] of byDay) if (!list.length) byDay.delete(d);
@@ -442,4 +451,102 @@ export function liftOptions(
   return [...seen]
     .map(([key, v]) => ({ key, ...v }))
     .sort((a, b) => b.sessions - a.sessions || a.label.localeCompare(b.label));
+}
+
+// ---------------------------------------------------------------- events ("what counted")
+
+const nf = (n: number, digits = 0) =>
+  n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+
+/**
+ * The workouts, lift sessions and finished fasts behind the daily values, built from the same
+ * cleaned data (duplicates and stuck sessions removed, warm-ups left out), so what is listed is
+ * exactly what scored.
+ */
+export function buildEvents(input: {
+  start: string;
+  end: string;
+  exerciseEntries: ExerciseEntryRow[];
+  fasts?: FastRow[];
+  timezone?: string;
+}): { date: string; event: ChallengeEvent }[] {
+  const out: { date: string; event: ChallengeEvent }[] = [];
+  const inWindow = (d: string) => d >= input.start && d <= input.end;
+
+  for (const [date, list] of cleanWorkouts(input.exerciseEntries)) {
+    if (!inWindow(date)) continue;
+    list.forEach((w, i) => {
+      const bits = [`${nf(w.minutes)} min`, w.kcal > 0 ? `${nf(w.kcal)} kcal` : ''].filter(Boolean);
+      out.push({
+        date,
+        event: {
+          id: `workout:${date}:${i}`,
+          kind: 'workout',
+          title: titleCase(w.name),
+          detail: bits.join(' · '),
+          source: w.source,
+        },
+      });
+    });
+  }
+
+  let li = 0;
+  for (const e of input.exerciseEntries) {
+    const date = normDate(e.entry_date);
+    if (!date || !inWindow(date)) continue;
+    const sets = (e.sets ?? []).filter(isWorkingSet);
+    if (!sets.length) continue;
+    let top: { kg: number; reps: number } | null = null;
+    let volume = 0;
+    for (const s of sets) {
+      const kg = num(s.weight) ?? 0;
+      const reps = num(s.reps) ?? 0;
+      volume += kg * reps;
+      if (kg > 0 && (!top || kg > top.kg)) top = { kg, reps };
+    }
+    const bits = [
+      `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}`,
+      top ? `top ${nf(top.kg, 1)} kg × ${nf(top.reps)}` : '',
+      volume > 0 ? `${nf(volume)} kg volume` : '',
+    ].filter(Boolean);
+    out.push({
+      date,
+      event: {
+        id: `lift:${date}:${li++}`,
+        kind: 'lift',
+        title: titleCase((e.exercise_name ?? 'Lift').trim()),
+        detail: bits.join(' · '),
+        source: e.exercise_source ?? null,
+      },
+    });
+  }
+
+  const tz = input.timezone ?? 'UTC';
+  for (const f of input.fasts ?? []) {
+    if ((f.status ?? '').toUpperCase() !== 'COMPLETED' || !f.end_time) continue;
+    const end = new Date(f.end_time);
+    const start = new Date(f.start_time);
+    if (Number.isNaN(end.getTime()) || Number.isNaN(start.getTime())) continue;
+    const date = todayIn(tz, end);
+    if (!inWindow(date)) continue;
+    const mins = num(f.duration_minutes) ?? (end.getTime() - start.getTime()) / 60_000;
+    if (!(mins > 0)) continue;
+    const target = f.target_end_time ? new Date(f.target_end_time) : null;
+    const hit = !target || end.getTime() >= target.getTime() - 60_000;
+    const targetH = target ? (target.getTime() - start.getTime()) / 3_600_000 : null;
+    out.push({
+      date,
+      event: {
+        id: `fast:${f.id}`,
+        kind: 'fast',
+        title: f.fasting_type ? `${f.fasting_type} fast` : 'Fast',
+        detail: `${nf(mins / 60, 1)} h fasted${
+          targetH ? ` · target ${nf(targetH, 1)} h${hit ? '' : ', ended early'}` : ''
+        }`,
+        source: null,
+      },
+    });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }

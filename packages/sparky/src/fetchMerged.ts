@@ -1,7 +1,13 @@
-import { addDays, type MetricAggregate } from '@gauntlet/shared';
+import { addDays, type ChallengeEvent, type MetricAggregate } from '@gauntlet/shared';
 import type { CustomMeasurementRow, GoalsRow, SparkyClient } from './client.js';
 import { SparkyError } from './client.js';
-import { mergeDaily, wantedCategoryNames, type MergedValue, type MergeInput } from './merge.js';
+import {
+  buildEvents,
+  mergeDaily,
+  wantedCategoryNames,
+  type MergedValue,
+  type MergeInput,
+} from './merge.js';
 
 /**
  * Read everything Gauntlet scores from SparkyFitness for a date range and merge it into one value
@@ -128,4 +134,29 @@ export async function fetchMerged(
     }),
     partial,
   };
+}
+
+/**
+ * The workouts, lift sessions and finished fasts SparkyFitness has for a date range, ready to
+ * list. Asks only for what the kinds need (one report call, and the fasting log for fasts).
+ */
+export async function fetchEvents(
+  sparky: SparkyClient,
+  token: string,
+  start: string,
+  end: string,
+  opts: { kinds: ('workout' | 'lift' | 'fast')[]; timezone?: string },
+): Promise<{ date: string; event: ChallengeEvent }[]> {
+  const needsReport = opts.kinds.includes('workout') || opts.kinds.includes('lift');
+  const [report, fasts] = await Promise.all([
+    needsReport ? sparky.report(token, start, end) : { exerciseEntries: [], nutrition: [] },
+    opts.kinds.includes('fast') ? sparky.fasts(token, addDays(start, -1), addDays(end, 1)) : [],
+  ]);
+  return buildEvents({
+    start,
+    end,
+    exerciseEntries: report.exerciseEntries,
+    fasts,
+    timezone: opts.timezone,
+  }).filter((e) => opts.kinds.includes(e.event.kind as 'workout' | 'lift' | 'fast'));
 }

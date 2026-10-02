@@ -1,6 +1,7 @@
 import type {
   AndroidRelease,
   ChallengeDetail,
+  ChallengeEventsResponse,
   ChallengeProgress,
   ChallengeResult,
   ChallengeSummary,
@@ -91,6 +92,18 @@ export const useProgress = (id: string) =>
     queryFn: () => get<ChallengeProgress>(`/api/challenges/${id}/progress`),
     enabled: !session.direct,
     ...live,
+  });
+/** What counted on one day (Show Events), read live from SparkyFitness. */
+export const useEvents = (id: string, date: string, userId: string | null, enabled: boolean) =>
+  useQuery({
+    queryKey: ['events', id, date, userId] as const,
+    queryFn: () =>
+      get<ChallengeEventsResponse>(
+        `/api/challenges/${id}/events?date=${date}${userId ? `&userId=${userId}` : ''}`,
+      ),
+    enabled: enabled && !session.direct,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
   });
 export const useResult = (id: string) =>
   useQuery({

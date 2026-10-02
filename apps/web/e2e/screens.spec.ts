@@ -382,3 +382,25 @@ test('challenge page graphs everyone day by day', async ({ page }) => {
   await expect(page.getByRole('status')).toContainText('You');
   await snap(page, '22-progress-graph');
 });
+
+test('Show Events lists the workouts that counted, and respects opt-outs', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  const section = page.getByLabel('What counted');
+  await expect(section).toBeVisible();
+  // Yesterday had real runs for Alex and Maya; Dre keeps his workouts private.
+  await section.getByRole('button', { name: 'Previous day' }).click();
+  await expect(section.getByText('Running').first()).toBeVisible();
+  await expect(section.getByText(/\d+ min · \d+ kcal/).first()).toBeVisible();
+  await expect(section.getByText('Keeps workouts private')).toBeVisible();
+  await snap(page, '23-what-counted');
+  // One person at a time.
+  await section.getByRole('button', { name: 'Maya', exact: true }).click();
+  await expect(section.getByText('Maya R.')).toBeVisible();
+  await expect(section.getByText('Dre T.')).toHaveCount(0);
+  // A challenge without Show Events has no such section.
+  await page.goto('/challenges');
+  await page.getByText('Active Minutes Cup').click();
+  await expect(page.getByLabel('What counted')).toHaveCount(0);
+});

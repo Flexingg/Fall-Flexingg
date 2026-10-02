@@ -3,6 +3,7 @@ import {
   computeStandings,
   createChallengeSchema,
   DATES_FIXED_MESSAGE,
+  eventsQuerySchema,
   featureChallengeSchema,
   joinChallengeSchema,
   needsWeightGoal,
@@ -10,12 +11,15 @@ import {
   daysBetween,
   isCustomMetric,
   metricDef,
+  minDate,
   progressSeries,
   respondChallengeSchema,
   updateChallengeSchema,
   todayIn,
   validateRules,
+  type ChallengeEventsResponse,
   type ChallengeProgress,
+  type EventGroup,
   type ChallengeResult,
   type ChallengeStatus,
   type DiscoverResponse,
@@ -32,6 +36,7 @@ import { challengeParticipants, challenges, feedEvents } from '../db/schema.js';
 import {
   assertCanView,
   challengeStatus,
+  challengeToday,
   computeChallengeStandings,
   loadSeries,
   scoringRules,
@@ -42,6 +47,7 @@ import {
   paramsOf,
   summarize,
 } from '../services/challenges.js';
+import { eventGroupFor } from '../services/events.js';
 import { friendIds } from '../services/friends.js';
 import { syncUser } from '../services/sync.js';
 import {
@@ -57,6 +63,8 @@ const MAX_DAYS = 366;
 const DISCOVER_LIMIT = 30;
 /** Lines drawn on the progress graph besides the viewer's. */
 const PROGRESS_LINES = 7;
+/** People whose events one request reads from SparkyFitness (4 at a time). */
+const EVENTS_PER_REQUEST = 12;
 
 export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
@@ -292,6 +300,50 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         truncated: everyone.length > shown.size,
         total: everyone.length,
       };
+    },
+  );
+
+  /**
+   * What counted on one day, for challenges with Show Events on. Joined participants only, and
+   * read live from each person's SparkyFitness (people who keep workouts private come back hidden).
+   */
+  app.get<{ Params: { id: string } }>(
+    '/api/challenges/:id/events',
+    { ...auth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (req): Promise<ChallengeEventsResponse> => {
+      const { date, userId } = eventsQuerySchema.parse(req.query);
+      const ch = await getChallenge(ctx, uuid(req.params.id));
+      const parts = await assertCanView(ctx, ch, req.userId, { allowPublic: true });
+      if (parts.find((p) => p.userId === req.userId)?.state !== 'joined')
+        throw forbidden('Join the challenge to see what counted');
+      if (!ch.showEvents) throw forbidden('This challenge does not show events');
+      if (date < ch.startDate || date > minDate(ch.endDate, challengeToday(ctx, ch)))
+        throw badRequest('Pick a day the challenge has covered so far');
+
+      const joined = new Set(parts.filter((p) => p.state === 'joined').map((p) => p.userId));
+      let order: string[];
+      if (userId) {
+        if (!joined.has(userId)) throw notFound('That person is not in this challenge');
+        order = [userId];
+      } else {
+        const { standings } = await computeChallengeStandings(ctx, ch, parts);
+        order = standings.map((s) => s.userId).filter((id) => joined.has(id));
+        // You first, then everyone in rank order.
+        order = [req.userId, ...order.filter((id) => id !== req.userId)];
+      }
+      const chosen = order.slice(0, EVENTS_PER_REQUEST);
+      const usersById = await getUsers(ctx, chosen);
+      const groups: EventGroup[] = [];
+      for (let i = 0; i < chosen.length; i += 4) {
+        const batch = await Promise.all(
+          chosen.slice(i, i + 4).flatMap((id) => {
+            const u = usersById.get(id);
+            return u ? [eventGroupFor(ctx, ch, u, date, req.userId)] : [];
+          }),
+        );
+        groups.push(...batch);
+      }
+      return { date, groups, more: Math.max(order.length - chosen.length, 0) };
     },
   );
 

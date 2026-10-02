@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SparkyClient } from '../src/client.js';
 import { FakeSparky } from '../src/fakeSparky.js';
-import { fetchMerged } from '../src/fetchMerged.js';
-import { mergeDaily, type MergeInput } from '../src/merge.js';
+import { fetchEvents, fetchMerged } from '../src/fetchMerged.js';
+import { buildEvents, mergeDaily, type MergeInput } from '../src/merge.js';
 
 const empty: MergeInput = {
   start: '2026-10-01',
@@ -181,5 +181,138 @@ describe('fetchMerged', () => {
       date: '2026-10-02',
       value: 17,
     });
+  });
+});
+
+describe('events behind the scores', () => {
+  const entries: MergeInput['exerciseEntries'] = [
+    {
+      entry_date: '2026-10-01',
+      exercise_name: 'running',
+      duration_minutes: 40,
+      calories_burned: 450,
+      exercise_source: 'garmin',
+    },
+    // The same session written by a second app: counted once.
+    {
+      entry_date: '2026-10-01',
+      exercise_name: 'Run',
+      duration_minutes: 41,
+      calories_burned: 452,
+      exercise_source: 'strava',
+    },
+    { entry_date: '2026-10-01', exercise_name: 'Yoga', duration_minutes: 30, calories_burned: 100 },
+    // A forgotten session and the synthetic whole-day entry never count.
+    {
+      entry_date: '2026-10-02',
+      exercise_name: 'Cycling',
+      duration_minutes: 600,
+      calories_burned: 3000,
+    },
+    {
+      entry_date: '2026-10-02',
+      exercise_name: 'Active Calories',
+      duration_minutes: 0,
+      calories_burned: 900,
+    },
+    {
+      entry_date: '2026-10-02',
+      exercise_name: 'Squat',
+      exercise_source: 'liftosaur',
+      sets: [
+        { set_type: 'Warm-up', reps: 5, weight: 60 },
+        { set_type: 'Working Set', reps: 5, weight: 100 },
+        { set_type: 'Working Set', reps: 3, weight: 110 },
+      ],
+    },
+  ];
+  const fasts: MergeInput['fasts'] = [
+    {
+      id: 'f1',
+      start_time: '2026-10-01T03:00:00Z',
+      end_time: '2026-10-01T20:00:00Z',
+      target_end_time: '2026-10-01T19:00:00Z',
+      duration_minutes: 1020,
+      fasting_type: '16:8',
+      status: 'COMPLETED',
+    },
+    {
+      id: 'f2',
+      start_time: '2026-10-02T03:00:00Z',
+      end_time: '2026-10-02T09:00:00Z',
+      target_end_time: '2026-10-02T19:00:00Z',
+      status: 'COMPLETED',
+    },
+    { id: 'f3', start_time: '2026-10-03T03:00:00Z', status: 'ACTIVE' },
+  ];
+  const input = {
+    start: '2026-10-01',
+    end: '2026-10-03',
+    exerciseEntries: entries,
+    fasts,
+    timezone: 'UTC',
+  };
+
+  it('lists the cleaned workouts, lift sessions and finished fasts', () => {
+    const events = buildEvents(input);
+    const w = events.filter((e) => e.event.kind === 'workout');
+    expect(w.map((e) => [e.date, e.event.title, e.event.detail, e.event.source])).toEqual([
+      ['2026-10-01', 'Running', '40 min · 450 kcal', 'garmin'],
+      ['2026-10-01', 'Yoga', '30 min · 100 kcal', null],
+    ]);
+    const l = events.find((e) => e.event.kind === 'lift')!;
+    expect(l).toMatchObject({ date: '2026-10-02' });
+    expect(l.event.title).toBe('Squat');
+    expect(l.event.detail).toBe('2 sets · top 110 kg × 3 · 830 kg volume');
+    const f = events.filter((e) => e.event.kind === 'fast');
+    expect(f.map((e) => [e.date, e.event.detail])).toEqual([
+      ['2026-10-01', '17 h fasted · target 16 h'],
+      ['2026-10-02', '6 h fasted · target 16 h, ended early'],
+    ]);
+  });
+
+  it('adds up to exactly what was scored', () => {
+    const merged = mergeDaily({ ...empty, exerciseEntries: entries, fasts, timezone: 'UTC' });
+    const events = buildEvents(input);
+    const sum = (kind: string, pick: (d: string) => number) =>
+      events.filter((e) => e.event.kind === kind).reduce((a, e) => a + pick(e.event.detail), 0);
+    // workouts: count and calories match the daily values
+    expect(val(merged, '2026-10-01', 'workouts')).toBe(
+      events.filter((e) => e.event.kind === 'workout' && e.date === '2026-10-01').length,
+    );
+    expect(sum('workout', (d) => Number(/(\d+) kcal/.exec(d)?.[1] ?? 0))).toBe(
+      val(merged, '2026-10-01', 'active_calories'),
+    );
+    // lift volume matches
+    expect(
+      sum('lift', (d) => Number(/([\d,]+) kg volume/.exec(d)?.[1]?.replace(',', '') ?? 0)),
+    ).toBe(val(merged, '2026-10-02', 'lift_volume'));
+    // fast hours match to the displayed precision
+    expect(val(merged, '2026-10-01', 'fast_hours')).toBe(17);
+  });
+
+  it('stays inside the window and never emits weight', () => {
+    const events = buildEvents({ ...input, start: '2026-10-02' });
+    expect(events.every((e) => e.date >= '2026-10-02')).toBe(true);
+    expect(events.some((e) => /weight/i.test(e.event.title))).toBe(false);
+  });
+
+  it('fetchEvents asks SparkyFitness only for what the kinds need', async () => {
+    const fake = new FakeSparky();
+    const user = fake.addUser({ id: 'u', email: 'u@x.test', password: 'p', name: 'U' });
+    user.exerciseEntries.push(...entries);
+    user.fasts.push(...(fasts as never[]));
+    const key = fake.mintKey('u');
+    const client = new SparkyClient({ baseUrl: fake.baseUrl, fetch: fake.fetch });
+    const fastOnly = await fetchEvents(client, key, '2026-10-01', '2026-10-03', {
+      kinds: ['fast'],
+      timezone: 'UTC',
+    });
+    expect(fastOnly.map((e) => e.event.kind)).toEqual(['fast', 'fast']);
+    expect(fake.calls.some((c) => c.includes('/api/reports'))).toBe(false);
+    fake.calls.length = 0;
+    const lifts = await fetchEvents(client, key, '2026-10-02', '2026-10-02', { kinds: ['lift'] });
+    expect(lifts).toHaveLength(1);
+    expect(fake.calls.some((c) => c.includes('/api/fasting'))).toBe(false);
   });
 });
