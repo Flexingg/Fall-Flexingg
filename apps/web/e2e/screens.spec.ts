@@ -16,6 +16,22 @@ async function signIn(page: Page, email = 'you@example.com') {
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 }
 
+// When a test fails, keep a picture and the on-screen error text: CI only uploads the screenshots folder.
+test.afterEach(async ({ page }, info) => {
+  if (info.status === info.expectedStatus) return;
+  const errors = await page
+    .locator('.error')
+    .allTextContents()
+    .catch(() => []);
+  console.log(
+    `FAILED: ${info.title}\n  url: ${page.url()}\n  on-screen errors: ${JSON.stringify(errors)}`,
+  );
+  if (shots)
+    await page
+      .screenshot({ path: `${shots}/FAIL-${info.title.replace(/\W+/g, '-').slice(0, 50)}.png` })
+      .catch(() => undefined);
+});
+
 test('walks every screen', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Gauntlet' })).toBeVisible();
@@ -491,6 +507,7 @@ test('solo challenges: pace against a goal, and beating your past self', async (
   await page.getByRole('textbox', { name: 'Goal' }).fill('9000');
   await snap(page, '42-new-solo');
   await page.getByRole('button', { name: 'Start solo challenge' }).click();
+  await page.waitForURL(/\/c\/[0-9a-f-]{36}$/, { timeout: 20_000 });
   await expect(page.getByRole('heading', { name: `Steady ${stamp}` })).toBeVisible();
   await expect(page.getByLabel('Your progress').getByText(/a day/).first()).toBeVisible();
   // Delete it again so the demo stays tidy.
