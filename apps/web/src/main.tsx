@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ApiError } from './lib/api';
 import { AuthProvider } from './lib/auth';
+import '@fontsource-variable/archivo/wdth.css';
 import './styles/global.css';
 
 const queryClient = new QueryClient({

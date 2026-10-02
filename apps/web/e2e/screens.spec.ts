@@ -432,3 +432,19 @@ test('Trends covers every stat, not just the built-in activity ones', async ({ p
   await expect(page.getByText(/kg best/).first()).toBeVisible();
   await snap(page, '25-trends-lift');
 });
+
+test('plays the launch splash, then hands off to the app', async ({ page }) => {
+  await page.goto('/login?splash=1');
+  const splash = page.getByRole('img', { name: /^Gauntlet\. Throw it down/ });
+  await expect(splash).toBeVisible();
+  await page.waitForTimeout(900);
+  await snap(page, '30-splash-early');
+  await page.waitForTimeout(700);
+  await snap(page, '31-splash-landed');
+  // It gets out of the way by itself, and the sign-in screen is there underneath.
+  await expect(splash).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('heading', { name: 'Gauntlet' })).toBeVisible();
+  // Played once per app start: no splash again in this page session.
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await expect(splash).toHaveCount(0);
+});

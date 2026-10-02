@@ -1,8 +1,9 @@
 import { App as CapApp } from '@capacitor/app';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { ConnectServer } from './components/ConnectServer';
+import { LaunchSplash, shouldShowSplash } from './components/LaunchSplash';
 import { ToastHost } from './components/ui';
 import { useAuth } from './lib/auth';
 import { syncHealthConnect } from './lib/health';
@@ -95,8 +96,10 @@ function NativeBridge() {
 
 export function App() {
   const { status } = useAuth();
+  const [splash, setSplash] = useState(shouldShowSplash);
   return (
     <BrowserRouter>
+      {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
         <Routes>

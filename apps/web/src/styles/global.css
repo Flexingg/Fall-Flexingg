@@ -723,3 +723,401 @@ svg {
 .pchart-tip b {
   font-size: 13px;
 }
+
+/* ---------- Launch splash (from the Gauntlet Splash design) ---------- */
+.splash {
+  --lime: #c6ff00;
+  --olive: #8aab00;
+  --ink: #0b0b0a;
+  --muted: #8b8f82;
+  --line: #2a2c26;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #0a0a09;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  transition: opacity var(--fade, 280ms) ease-out;
+  font-family: 'Archivo Variable', 'Arial Black', system-ui, sans-serif;
+}
+.splash.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+/* A phone-sized column, so it also looks right in a wide browser window. */
+.splash-stage {
+  position: relative;
+  width: min(100vw, 480px);
+  height: 100%;
+  container-type: size;
+}
+.splash-glow {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 140cqw;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(198, 255, 0, 0.16), rgba(198, 255, 0, 0) 70%);
+  opacity: 0;
+}
+.splash-startline {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  height: 3px;
+  width: 64cqw;
+  background: var(--lime);
+  border-radius: 3px;
+  transform: translate(-50%, -50%) scaleX(0);
+}
+.splash-ghost {
+  position: absolute;
+  top: 100%;
+  width: 26cqw;
+  opacity: 0;
+}
+.splash-ghost polygon {
+  fill: none;
+  stroke: var(--lime);
+  stroke-width: 14;
+}
+.splash-ghost.g1 {
+  left: 10%;
+}
+.splash-ghost.g2 {
+  left: 62%;
+  width: 18cqw;
+}
+.splash-ghost.g3 {
+  left: 38%;
+  width: 34cqw;
+}
+.splash-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 26cqh;
+}
+.splash-icon {
+  position: relative;
+  width: 42cqw;
+  max-width: 220px;
+  aspect-ratio: 1;
+}
+.splash-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+.splash-pulse {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--lime);
+  border-radius: 22%;
+  opacity: 0;
+}
+.splash .tile {
+  fill: var(--lime);
+}
+.splash .chev-t {
+  fill: var(--olive);
+}
+.splash .chev-b {
+  fill: var(--ink);
+}
+.splash .tile,
+.splash .chev-t,
+.splash .chev-b {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transform: scale(0);
+}
+.splash-wordmark {
+  margin-top: 7cqh;
+  font-stretch: 125%;
+  font-weight: 900;
+  font-size: min(10.4cqw, 52px);
+  letter-spacing: 0.015em;
+  line-height: 1;
+  display: flex;
+  overflow: hidden;
+  padding-block: 0.06em;
+  color: #f2f4ec;
+}
+.splash-wordmark span {
+  display: inline-block;
+  transform: translateY(110%);
+}
+.splash-tagline {
+  margin-top: 1.8cqh;
+  font-size: min(4.2cqw, 21px);
+  font-weight: 500;
+  color: var(--muted);
+  opacity: 0;
+  text-align: center;
+}
+.splash-tagline b {
+  color: var(--lime);
+  font-weight: 600;
+}
+.splash-loader {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 9cqh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  opacity: 0;
+}
+.splash-track {
+  width: 100%;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.splash-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--lime);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.splash-sync {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: min(2.9cqw, 13px);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  height: 1.3em;
+  position: relative;
+  width: 100%;
+  text-align: center;
+}
+.splash-sync i {
+  position: absolute;
+  inset: 0;
+  font-style: normal;
+  opacity: 0;
+}
+
+/* Timeline (seconds x --s) */
+.play .splash-startline {
+  animation: sp-startline calc(0.5s * var(--s)) cubic-bezier(0.6, 0, 0.3, 1) calc(0.1s * var(--s))
+    both;
+}
+.play .tile {
+  animation: sp-tile calc(0.6s * var(--s)) cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.48s * var(--s))
+    both;
+}
+.play .chev-b {
+  animation: sp-punch calc(0.5s * var(--s)) cubic-bezier(0.2, 0.9, 0.25, 1.2) calc(0.8s * var(--s))
+    both;
+}
+.play .chev-t {
+  animation: sp-punch calc(0.5s * var(--s)) cubic-bezier(0.2, 0.9, 0.25, 1.2) calc(0.94s * var(--s))
+    both;
+}
+.play .splash-icon {
+  animation: sp-bump calc(0.42s * var(--s)) cubic-bezier(0.3, 0, 0.3, 1) calc(1.38s * var(--s)) both;
+}
+.play .splash-pulse {
+  animation: sp-pulse calc(0.8s * var(--s)) cubic-bezier(0.1, 0.6, 0.3, 1) calc(1.42s * var(--s))
+    both;
+}
+.play .splash-glow {
+  animation: sp-glow calc(1.2s * var(--s)) ease-out calc(1.4s * var(--s)) both;
+}
+.play .splash-ghost.g1 {
+  animation: sp-rise calc(1.4s * var(--s)) cubic-bezier(0.3, 0.2, 0.2, 1) calc(1.4s * var(--s)) both;
+}
+.play .splash-ghost.g2 {
+  animation: sp-rise calc(1.2s * var(--s)) cubic-bezier(0.3, 0.2, 0.2, 1) calc(1.55s * var(--s))
+    both;
+}
+.play .splash-ghost.g3 {
+  animation: sp-rise calc(1.6s * var(--s)) cubic-bezier(0.3, 0.2, 0.2, 1) calc(1.7s * var(--s)) both;
+}
+.play .splash-wordmark span {
+  animation: sp-letter calc(0.5s * var(--s)) cubic-bezier(0.2, 0.8, 0.2, 1)
+    calc((1.5s + var(--i) * 0.045s) * var(--s)) both;
+}
+.play .splash-tagline {
+  animation: sp-fadeup calc(0.5s * var(--s)) ease-out calc(2s * var(--s)) both;
+}
+.play .splash-loader {
+  animation: sp-fade calc(0.3s * var(--s)) ease-out calc(2.25s * var(--s)) both;
+}
+.play .splash-bar {
+  animation: sp-bar calc(1.5s * var(--s)) cubic-bezier(0.5, 0, 0.2, 1) calc(2.35s * var(--s)) both;
+}
+.play .splash-sync i:nth-child(1) {
+  animation: sp-ticker calc(0.5s * var(--s)) linear calc(2.35s * var(--s)) both;
+}
+.play .splash-sync i:nth-child(2) {
+  animation: sp-ticker calc(0.5s * var(--s)) linear calc(2.85s * var(--s)) both;
+}
+.play .splash-sync i:nth-child(3) {
+  animation: sp-ticker-last calc(0.5s * var(--s)) linear calc(3.35s * var(--s)) both;
+}
+@keyframes sp-startline {
+  0% {
+    transform: translate(-50%, -50%) scaleX(0);
+    opacity: 1;
+  }
+  55% {
+    transform: translate(-50%, -50%) scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scaleX(0.02);
+    opacity: 0;
+  }
+}
+@keyframes sp-tile {
+  0% {
+    transform: scale(0) rotate(-14deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes sp-punch {
+  0% {
+    transform: translateY(420px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes sp-bump {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-5%) scale(1.04);
+  }
+}
+@keyframes sp-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@keyframes sp-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sp-rise {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.28;
+  }
+  100% {
+    transform: translateY(-120cqh);
+    opacity: 0;
+  }
+}
+@keyframes sp-letter {
+  from {
+    transform: translateY(110%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes sp-fadeup {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sp-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sp-bar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes sp-ticker {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes sp-ticker-last {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  100% {
+    opacity: 1;
+  }
+}
+/* Reduced motion: the final frame, no movement. */
+@media (prefers-reduced-motion: reduce) {
+  .splash *,
+  .splash *::before {
+    animation: none !important;
+  }
+  .splash .tile,
+  .splash .chev-t,
+  .splash .chev-b,
+  .splash-wordmark span {
+    transform: none;
+  }
+  .splash-glow,
+  .splash-tagline,
+  .splash-loader {
+    opacity: 1;
+  }
+  .splash-bar {
+    transform: scaleX(1);
+  }
+  .splash-sync i:nth-child(3) {
+    opacity: 1;
+  }
+}
