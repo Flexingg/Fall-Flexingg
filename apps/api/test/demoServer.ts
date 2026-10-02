@@ -217,6 +217,8 @@ const cfg = loadConfig({
   ADMIN_EMAILS: 'riley@example.com',
   // The browser tests sign in many times a minute.
   LOGIN_RATE_LIMIT_MAX: '1000',
+  // All the browser tests share one address.
+  RATE_LIMIT_MAX: '20000',
 });
 const { app, ctx } = await buildApp(
   {

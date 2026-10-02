@@ -37,7 +37,7 @@ export async function buildApp(
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Timezone', 'X-Gauntlet-Client'],
   });
-  await app.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
+  await app.register(rateLimit, { global: true, max: full.cfg.RATE_LIMIT_MAX, timeWindow: '1 minute' });
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ZodError) {
