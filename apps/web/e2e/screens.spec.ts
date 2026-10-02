@@ -448,3 +448,53 @@ test('plays the launch splash, then hands off to the app', async ({ page }) => {
   await page.getByRole('link', { name: 'Create an account' }).click();
   await expect(splash).toHaveCount(0);
 });
+
+test('solo challenges: pace against a goal, and beating your past self', async ({ page }) => {
+  await signIn(page);
+  // Seeded: a total to reach and a comparison with the previous week.
+  await page.goto('/challenges');
+  await expect(page.getByText('Solo').first()).toBeVisible();
+  await page.getByText('Run 80 km').click();
+  const card = page.getByLabel('Your progress');
+  await expect(card).toBeVisible();
+  await expect(card.getByText(/of 80\.0 km/)).toBeVisible();
+  await expect(card.getByText(/Even pace/)).toBeVisible();
+  await expect(page.getByRole('img', { name: /^Progress by day\./ })).toBeVisible();
+  await expect(page.getByText(/Goal 80/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Invite friends/ })).toHaveCount(0);
+  await snap(page, '40-solo-target');
+
+  await page.goto('/challenges');
+  await page.getByText('Beat last week').click();
+  await expect(page.getByLabel('Your progress').getByText(/Change vs before/)).toBeVisible();
+  await expect(
+    page.getByLabel('Your progress').getByText(/Compared with your steps over the 7 days before/),
+  ).toBeVisible();
+  await snap(page, '41-solo-improve');
+
+  // Create one: against yourself, a daily average.
+  const stamp = Date.now().toString(36);
+  await page.goto('/c/new');
+  await page.getByRole('button', { name: 'Solo' }).click();
+  await expect(page.getByText('Who can join')).toHaveCount(0);
+  await expect(page.getByText('Invite', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Challenge name').fill(`Steady ${stamp}`);
+  await page
+    .getByRole('group', { name: 'Activity' })
+    .getByRole('button', { name: 'Steps' })
+    .click();
+  await page
+    .getByRole('group', { name: 'Goal type' })
+    .getByRole('button', { name: 'Daily average' })
+    .click();
+  await expect(page.getByRole('button', { name: 'Start solo challenge' })).toBeEnabled();
+  await page.getByRole('textbox', { name: 'Goal' }).fill('9000');
+  await snap(page, '42-new-solo');
+  await page.getByRole('button', { name: 'Start solo challenge' }).click();
+  await expect(page.getByRole('heading', { name: `Steady ${stamp}` })).toBeVisible();
+  await expect(page.getByLabel('Your progress').getByText(/a day/).first()).toBeVisible();
+  // Delete it again so the demo stays tidy.
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Delete this solo challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+});

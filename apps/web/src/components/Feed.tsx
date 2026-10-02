@@ -1,5 +1,5 @@
 import type { ChallengeSummary, FeedEvent } from '@gauntlet/shared';
-import { ordinal } from '@gauntlet/shared';
+import { ordinal, SOLO_STATUS_LABELS } from '@gauntlet/shared';
 import { Link } from 'react-router';
 import { daysLeftText, fmt, timeAgo } from '../lib/format';
 import { Icon } from './Icon';
@@ -31,7 +31,13 @@ export function ChallengeHero({ c }: { c: ChallengeSummary }) {
   const amount = (v: number) =>
     c.unit ? fmt(v, c) : `${fmt(v, c)} ${c.metricLabel.toLowerCase()}`;
   let line: string;
-  if (c.myScore == null || c.myRank == null) line = 'No data yet. Get moving.';
+  if (c.solo) {
+    const st = SOLO_STATUS_LABELS[c.solo.status];
+    line =
+      c.solo.status === 'upcoming'
+        ? 'Starts soon'
+        : `${st} · ${Math.round(c.solo.progress * 100)}% of the way`;
+  } else if (c.myScore == null || c.myRank == null) line = 'No data yet. Get moving.';
   else if (c.gap && c.gap.ahead)
     line = `${amount(c.gap.amount)} behind ${c.gap.user.displayName.split(' ')[0]}`;
   else if (c.gap && !c.gap.ahead)
@@ -39,7 +45,9 @@ export function ChallengeHero({ c }: { c: ChallengeSummary }) {
   else line = `${amount(c.myScore)} so far`;
   return (
     <Link to={`/c/${c.id}`} className="hero">
-      <div className="badge">{c.myRank ? ordinal(c.myRank) : '–'}</div>
+      <div className="badge">
+        {c.solo ? `${Math.round(c.solo.progress * 100)}%` : c.myRank ? ordinal(c.myRank) : '–'}
+      </div>
       <div className="grow">
         <small className="ellipsis" style={{ display: 'block' }}>
           {c.name} · {daysLeftText(c)}

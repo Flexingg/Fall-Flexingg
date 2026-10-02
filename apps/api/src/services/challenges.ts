@@ -3,6 +3,8 @@ import {
   computeStandings,
   daysBetween,
   participantParamsSchema,
+  soloProgress,
+  type SoloProgress,
   relativeSeries,
   weightGoalSeries,
   type MetricTransform,
@@ -95,6 +97,8 @@ export interface ComputedStandings {
   asOf: string;
   standings: Standing[];
   bestDays: Map<string, number>;
+  /** Each joined person's daily values (after any per-person transform). */
+  byUser: Map<string, { date: string; value: number }[]>;
 }
 
 /** Each joined person's daily values for a challenge, after any per-person transform. */
@@ -160,7 +164,40 @@ export async function computeChallengeStandings(
     rules,
     [...byUser].map(([userId, days]) => ({ userId, days })),
   );
-  return { asOf: rules.asOf, standings, bestDays };
+  return { asOf: rules.asOf, standings, bestDays, byUser };
+}
+
+/** How a solo challenge is going, for its one participant. Null for a challenge with friends. */
+export async function soloFor(
+  ctx: AppContext,
+  ch: ChallengeRow,
+  byUser: Map<string, { date: string; value: number }[]>,
+): Promise<SoloProgress | null> {
+  const solo = ch.solo;
+  if (!solo) return null;
+  const rules = scoringRules(ctx, ch);
+  const def = challengeMetricDef(ch);
+  let baselineDays: { date: string; value: number }[] = [];
+  if (solo.kind === 'improve') {
+    baselineDays = await ctx.db
+      .select({ date: dailyMetrics.date, value: dailyMetrics.value })
+      .from(dailyMetrics)
+      .where(
+        and(
+          eq(dailyMetrics.userId, ch.createdBy),
+          eq(dailyMetrics.metric, def.source ?? ch.metric),
+          gte(dailyMetrics.date, addDays(ch.startDate, -solo.baselineDays)),
+          lte(dailyMetrics.date, addDays(ch.startDate, -1)),
+        ),
+      );
+  }
+  return soloProgress({
+    solo,
+    rules,
+    days: byUser.get(ch.createdBy) ?? [],
+    baselineDays,
+    today: challengeToday(ctx, ch),
+  });
 }
 
 /** How far back to look for someone's starting weight or starting 1RM. */
@@ -204,6 +241,8 @@ interface BuildArgs {
   viewerId: string;
   computed: ComputedStandings;
   usersById: Map<string, UserRow>;
+  /** Set for a solo challenge. */
+  solo?: SoloProgress | null;
 }
 
 export function buildSummary({
@@ -213,6 +252,7 @@ export function buildSummary({
   viewerId,
   computed,
   usersById,
+  solo = null,
 }: BuildArgs): ChallengeSummary {
   const def = challengeMetricDef(ch);
   const status = challengeStatus(ctx, ch);
@@ -221,7 +261,9 @@ export function buildSummary({
   const standingFor = (userId: string) => computed.standings.find((s) => s.userId === userId);
   const mine = standingFor(viewerId);
   const myRank = finalized ? (me?.finalRank ?? mine?.rank ?? null) : (mine?.rank ?? null);
-  const myScore = finalized ? (me?.finalScore ?? mine?.score ?? null) : (mine?.score ?? null);
+  let myScore = finalized ? (me?.finalScore ?? mine?.score ?? null) : (mine?.score ?? null);
+  // Against yourself the headline number is the thing being aimed at: % change or streak length.
+  if (solo && (solo.kind === 'improve' || solo.kind === 'streak')) myScore = solo.current;
 
   const leaderStanding = computed.standings[0];
   const leaderUser = leaderStanding ? usersById.get(leaderStanding.userId) : undefined;
@@ -249,9 +291,11 @@ export function buildSummary({
     id: ch.id,
     name: ch.name,
     metric: ch.metric as MetricKey,
-    metricLabel: def.label,
-    unit: def.unit,
-    decimals: def.decimals,
+    metricLabel: solo
+      ? `${def.label} ${{ target: 'total', average: 'per day', streak: 'streak', improve: 'vs before' }[solo.kind]}`
+      : def.label,
+    unit: solo?.valueKind === 'pct' ? '%' : solo?.valueKind === 'days' ? 'days' : def.unit,
+    decimals: solo?.valueKind === 'pct' ? 1 : solo?.valueKind === 'days' ? 0 : def.decimals,
     scoring: ch.scoring,
     goal: ch.goal,
     startDate: ch.startDate,
@@ -275,6 +319,7 @@ export function buildSummary({
     visibility: ch.visibility,
     featured: ch.featured,
     showEvents: ch.showEvents,
+    solo,
   };
 }
 
@@ -310,6 +355,7 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
   const mine = partByUser.get(viewerId);
   return {
     ...summary,
+    soloConfig: ch.solo ?? null,
     myParams: mine ? paramsOf(mine) : null,
     lowerIsBetter: ch.lowerIsBetter,
     aggregate: ch.aggregate,
@@ -332,7 +378,8 @@ export async function loadDetail(
     ctx,
     parts.map((p) => p.userId),
   );
-  return buildDetail({ ctx, ch, parts, viewerId, computed, usersById });
+  const solo = await soloFor(ctx, ch, computed.byUser);
+  return buildDetail({ ctx, ch, parts, viewerId, computed, usersById, solo });
 }
 
 export async function listForUser(ctx: AppContext, userId: string): Promise<ChallengeSummary[]> {
@@ -379,7 +426,8 @@ export async function summarize(
   for (const ch of chs) {
     const parts = allParts.filter((p) => p.challengeId === ch.id);
     const computed = await computeChallengeStandings(ctx, ch, parts);
-    out.push(buildSummary({ ctx, ch, parts, viewerId: userId, computed, usersById }));
+    const solo = await soloFor(ctx, ch, computed.byUser);
+    out.push(buildSummary({ ctx, ch, parts, viewerId: userId, computed, usersById, solo }));
   }
   return out;
 }
@@ -480,7 +528,7 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
         );
     }
     const winners = standings.filter((s) => s.rank === 1 && s.score != null);
-    for (const w of winners) {
+    for (const w of ch.solo ? [] : winners) {
       await tx.insert(feedEvents).values({
         actorId: w.userId,
         challengeId: ch.id,

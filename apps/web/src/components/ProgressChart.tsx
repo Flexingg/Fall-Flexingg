@@ -66,8 +66,9 @@ export function ProgressChart({
   if (!nums.length)
     return <div className="notice">The graph appears after the first day of data.</div>;
 
-  const lo = Math.min(0, ...nums);
-  const hi = Math.max(...nums, lo + 1);
+  const target = data.target;
+  const lo = Math.min(0, ...nums, target ?? 0);
+  const hi = Math.max(...nums, target ?? 0, lo + 1);
   const ticks = niceTicks(lo, hi);
   const top = Math.max(hi, ticks.at(-1) ?? hi);
   const x = (i: number) =>
@@ -176,6 +177,22 @@ export function ProgressChart({
               {day(dates[i]!)}
             </text>
           ))}
+          {target != null && (
+            <g>
+              <line
+                x1={M.l}
+                x2={W - M.r}
+                y1={y(target)}
+                y2={y(target)}
+                stroke="var(--text)"
+                strokeOpacity={0.6}
+                strokeWidth={1}
+              />
+              <text x={W - M.r} y={y(target) - 4} textAnchor="end" fontSize="10" fill="var(--text)">
+                Goal {format(target)}
+              </text>
+            </g>
+          )}
           {[...series]
             .sort((a, b) => Number(a.isMe) - Number(b.isMe))
             .map((s) => {
@@ -276,7 +293,15 @@ export function ProgressChart({
           </div>
         )}
       </div>
-      <div className="row" style={{ flexWrap: 'wrap', gap: '4px 14px', marginTop: 8 }}>
+      <div
+        className="row"
+        style={{
+          flexWrap: 'wrap',
+          gap: '4px 14px',
+          marginTop: 8,
+          display: series.length > 1 ? undefined : 'none',
+        }}
+      >
         {series.map((s) => (
           <span key={s.user.id} className="row" style={{ gap: 6, fontSize: 12 }}>
             <i

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { isDateString } from './dates.js';
 import { isMetricKey, type MetricAggregate, type MetricGroup, type MetricKey } from './metrics.js';
 import { isTrendMetric } from './derive.js';
+import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
 
 const dateString = z.string().refine(isDateString, 'Expected a YYYY-MM-DD date');
@@ -218,6 +219,8 @@ export const createChallengeSchema = z
     params: participantParamsSchema.optional(),
     /** Participants can open the workouts, sets and fasts that count. */
     showEvents: z.boolean().default(false),
+    /** A challenge against yourself: the kind and its extras. Goal and dates work as usual. */
+    solo: soloConfigSchema.optional(),
   })
   .refine((v) => v.endDate >= v.startDate, {
     message: 'End date must be on or after start date',
@@ -257,6 +260,8 @@ export interface ChallengeSummary {
   visibility: Visibility;
   featured: boolean;
   showEvents: boolean;
+  /** Set for a challenge against yourself: how you are doing against your own goal. */
+  solo: SoloProgress | null;
 }
 
 export interface StandingRow {
@@ -274,6 +279,8 @@ export interface StandingRow {
 export interface ChallengeDetail extends ChallengeSummary {
   /** The viewer's own settings in this challenge (e.g. their weight target). */
   myParams: ParticipantParams | null;
+  /** The kind of solo challenge and its extras, when it is one. */
+  soloConfig: SoloConfig | null;
   lowerIsBetter: boolean;
   aggregate: MetricAggregate;
   standings: StandingRow[];
@@ -312,6 +319,9 @@ export interface ChallengeProgress {
   dates: string[];
   series: { user: PublicUser; rank: number; isMe: boolean; values: (number | null)[] }[];
   lowerIsBetter: boolean;
+  /** A goal line to draw (solo challenges), and how to read the values. */
+  target: number | null;
+  valueKind: 'metric' | 'pct' | 'days';
   /** More people are in the challenge than are drawn (top ranked plus the viewer). */
   truncated: boolean;
   total: number;

@@ -1,10 +1,10 @@
 import type { ChallengeSummary } from '@gauntlet/shared';
-import { ordinal } from '@gauntlet/shared';
+import { ordinal, SOLO_STATUS_LABELS } from '@gauntlet/shared';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
-import { daysLeftText, fmt } from '../lib/format';
+import { daysLeftText, fmt, fmtSolo } from '../lib/format';
 import { useChallenges, useDiscover } from '../lib/queries';
 
 export function ChallengesPage() {
@@ -124,12 +124,29 @@ function ChallengeList({ items }: { items: ChallengeSummary[] }) {
           <div className="grow">
             <div className="t ellipsis">{c.name}</div>
             <small>
-              {c.metricLabel} · {c.participantCount}{' '}
-              {c.participantCount === 1 ? 'person' : 'people'} · {daysLeftText(c)}
+              {c.metricLabel} ·{' '}
+              {c.solo
+                ? 'Solo'
+                : `${c.participantCount} ${c.participantCount === 1 ? 'person' : 'people'}`}{' '}
+              · {daysLeftText(c)}
             </small>
           </div>
           {c.featured && <span className="pill">Featured</span>}
-          {c.myState == null || c.myState === 'declined' ? (
+          {c.solo ? (
+            <>
+              <span className="v num">
+                {c.solo.kind === 'target' || c.solo.kind === 'average'
+                  ? `${Math.round(c.solo.progress * 100)}%`
+                  : fmtSolo(c.myScore, c.solo.valueKind, c)}
+              </span>
+              <span
+                className={`pill${c.solo.status === 'behind' || c.solo.status === 'missed' || c.solo.status === 'upcoming' ? ' plain' : ''}`}
+              >
+                {SOLO_STATUS_LABELS[c.solo.status]}
+              </span>
+            </>
+          ) : null}
+          {c.solo ? null : c.myState == null || c.myState === 'declined' ? (
             <span className="pill plain">Join</span>
           ) : c.myState === 'invited' ? (
             <span className="pill">Invited</span>

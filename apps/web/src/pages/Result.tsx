@@ -2,6 +2,7 @@ import { ordinal, type ChallengeDetail } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { SoloCard, soloSentence } from '../components/SoloCard';
 import { ErrorBox, Header, Screen, Skeleton } from '../components/ui';
 import { post } from '../lib/api';
 import { fmt, shortName } from '../lib/format';
@@ -58,7 +59,38 @@ export function ResultPage() {
       <Header title=" " back="/challenges" />
       <ErrorBox error={q.error ?? error} />
       {q.isPending && <Skeleton height={400} />}
-      {c && r && (
+      {c && r && c.solo && (
+        <div className="center">
+          <div className="lbl" style={{ justifyContent: 'center', marginTop: 0 }}>
+            {c.name} · Final
+          </div>
+          <div className="big" style={{ fontSize: 36, margin: '18px 0 8px' }}>
+            {c.solo.status === 'achieved' ? 'You did it.' : 'Not this time.'}
+          </div>
+          <p className="muted" style={{ fontSize: 15, margin: '0 0 22px' }}>
+            {soloSentence(c)}
+          </p>
+          <SoloCard c={c} />
+          {r.me && (
+            <div className="pb" style={{ marginTop: 14, textAlign: 'left' }}>
+              <div>
+                <b className="num">{fmt(r.me.bestDay, { ...c, unit: '' }, false)}</b>
+                <span>Best day</span>
+              </div>
+              <div>
+                <b className="num">{r.me.daysWithData}</b>
+                <span>Active days</span>
+              </div>
+            </div>
+          )}
+          <div className="dock">
+            <button className="btn" onClick={rematch} disabled={busy}>
+              {busy ? <span className="spinner" /> : 'Run it again'}
+            </button>
+          </div>
+        </div>
+      )}
+      {c && r && !c.solo && (
         <div className="center">
           <div className="lbl" style={{ justifyContent: 'center', marginTop: 0 }}>
             {c.name} · Final

@@ -330,6 +330,27 @@ const fast = await call<{ id: string }>('you', 'POST', '/api/challenges', {
 });
 await call('dre', 'POST', `/api/challenges/${fast.id}/respond`, { accept: true });
 
+// Two challenges against yourself: a total to reach, and beating your own past week.
+await call('you', 'POST', '/api/challenges', {
+  name: 'Run 80 km',
+  metric: 'distance',
+  scoring: 'race_to_goal',
+  goal: 80,
+  solo: { kind: 'target' },
+  startDate: d(-4),
+  endDate: d(2),
+  timezone: TZ,
+});
+await call('you', 'POST', '/api/challenges', {
+  name: 'Beat last week',
+  metric: 'steps',
+  scoring: 'daily_avg',
+  solo: { kind: 'improve', changePct: 5, direction: 'up', baselineDays: 7 },
+  startDate: d(-4),
+  endDate: d(3),
+  timezone: TZ,
+});
+
 // A featured public challenge anyone public can join from Discover.
 await call('riley', 'PATCH', '/api/me', { visibility: 'public', handle: 'riley' });
 await call('maya', 'PATCH', '/api/me', { visibility: 'public', handle: 'maya' });

@@ -1,3 +1,4 @@
+import type { SoloConfig } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -123,6 +124,8 @@ export const challenges = pgTable(
     maxParticipants: integer('max_participants').notNull().default(500),
     /** Participants can open the workouts, sets and fasts that count (read live from SparkyFitness). */
     showEvents: boolean('show_events').notNull().default(false),
+    /** Set for a challenge against yourself (one participant): which kind and its extras. */
+    solo: jsonb('solo').$type<SoloConfig>(),
     leaderId: uuid('leader_id'),
     finalizedAt: timestamp('finalized_at', { withTimezone: true }),
     createdAt: createdAt(),

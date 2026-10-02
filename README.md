@@ -15,6 +15,11 @@ Pick a metric, set the rules, invite your crew, and race:
   fasts from Gauntlet's Today screen).
 - **Custom:** any SparkyFitness custom measurement.
 
+**Solo challenges** are challenges against yourself: hit a total, keep a daily average, build a streak,
+or beat your past self by a percentage (your daily average, or heaviest lift, vs the days before it
+started, up or down). You get a pace, a plain-words status, a progress graph with your goal line, and
+the same Show Events. They stay private and can't be shared.
+
 **Trends** covers every stat a challenge can be scored on (activity, strength including each exercise's
 heaviest set and estimated 1RM, calorie/macro/water goals, fasting) plus weight and your custom
 measurements, with an all-stats overview for the range you pick.

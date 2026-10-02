@@ -32,6 +32,7 @@ export function inviteRoutes(app: FastifyInstance, ctx: AppContext) {
     if (body.kind === 'challenge') {
       if (!body.challengeId) throw badRequest('challengeId is required');
       const ch = await getChallenge(ctx, body.challengeId);
+      if (ch.solo) throw badRequest('A solo challenge is just for you.');
       const parts = await getParticipants(ctx, ch.id);
       if (!parts.some((p) => p.userId === req.userId && p.state === 'joined'))
         throw forbidden('Join the challenge first');

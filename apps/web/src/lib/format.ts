@@ -45,3 +45,17 @@ export function daysLeftText(
   if (c.status === 'upcoming') return `Starts ${dateRange(c.startDate, c.startDate)}`;
   return c.daysLeft === 1 ? 'Last day' : `${c.daysLeft} days left`;
 }
+
+/** A solo challenge's number the way it should read: "+12.4%", "4 days", or in the stat's own unit. */
+export function fmtSolo(
+  value: number | null | undefined,
+  valueKind: 'metric' | 'pct' | 'days',
+  c: Pick<ChallengeSummary, 'decimals' | 'unit'>,
+  withUnit = true,
+): string {
+  if (value == null || !Number.isFinite(value)) return '–';
+  if (valueKind === 'pct') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+  if (valueKind === 'days')
+    return `${Math.round(value)}${withUnit ? (Math.round(value) === 1 ? ' day' : ' days') : ''}`;
+  return fmt(value, c, withUnit);
+}

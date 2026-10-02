@@ -101,7 +101,12 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   // End one day ahead of UTC so users east of UTC get "today" too.
   const end = addDays(todayIn('UTC', ctx.now()), 1);
   let start = addDays(todayIn(user.timezone, ctx.now()), -HISTORY_DAYS);
-  for (const ch of open) start = minDate(start, ch.startDate);
+  for (const ch of open) {
+    start = minDate(start, ch.startDate);
+    // "Beat my past self" compares with the days before it started.
+    if (ch.solo?.kind === 'improve')
+      start = minDate(start, addDays(ch.startDate, -ch.solo.baselineDays));
+  }
   start = start < addDays(end, -MAX_WINDOW_DAYS) ? addDays(end, -MAX_WINDOW_DAYS) : start;
 
   const customMetrics: Record<string, MetricAggregate> = {};
@@ -284,7 +289,8 @@ async function postProgress(
 ) {
   const posted = new Set<string>();
   for (const ch of open) {
-    if (posted.has(ch.metric)) continue;
+    // A solo challenge has no one to tell.
+    if (ch.solo || posted.has(ch.metric)) continue;
     const relevant = changes.filter(
       (c) => c.metric === ch.metric && c.date >= ch.startDate && c.date <= ch.endDate,
     );

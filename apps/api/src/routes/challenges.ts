@@ -12,7 +12,10 @@ import {
   isCustomMetric,
   metricDef,
   minDate,
+  liftExercise,
   progressSeries,
+  soloGraph,
+  soloScoring,
   respondChallengeSchema,
   updateChallengeSchema,
   todayIn,
@@ -40,6 +43,7 @@ import {
   computeChallengeStandings,
   loadSeries,
   scoringRules,
+  soloFor,
   getChallenge,
   getParticipants,
   listForUser,
@@ -103,7 +107,42 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!def.scoring.includes(body.scoring))
         throw badRequest(`${def.label} can't be won that way. Pick another way to win.`);
     }
-    const problem = validateRules({ scoring: body.scoring, aggregate, goal: body.goal });
+    let scoring = body.scoring;
+    let goal = body.goal ?? null;
+    if (body.solo) {
+      if (body.inviteUserIds.length || body.visibility === 'public')
+        throw badRequest('A solo challenge is just for you: no invites, and it stays private.');
+      const kind = body.solo.kind;
+      if (metricDef(metric).transform && kind !== 'target')
+        throw badRequest(
+          'That stat is already scored against your own starting point. Use "Hit a total" with it.',
+        );
+      if (kind === 'target' && aggregate === 'avg')
+        throw badRequest(
+          'A total only works for stats that add up (steps, distance…). Try a daily average.',
+        );
+      if (
+        kind !== 'improve' &&
+        metricDef(metric).transform !== 'weight_goal' &&
+        !(goal && goal > 0)
+      )
+        throw badRequest(
+          kind === 'streak' ? 'Set the daily target to hit.' : 'Set the number to aim for.',
+        );
+      if (
+        kind === 'streak' &&
+        body.solo.kind === 'streak' &&
+        body.solo.days > daysBetween(body.startDate, body.endDate) + 1
+      )
+        throw badRequest('The streak is longer than the challenge.');
+      scoring = soloScoring(kind, {
+        heaviest: !!liftExercise(metric) && liftExercise(metric)!.prefix === 'lift_max:',
+      });
+      if (kind === 'improve') goal = null;
+      // Weight challenges against yourself aim at 100% of your own target.
+      if (metricDef(metric).transform === 'weight_goal') goal = 100;
+    }
+    const problem = validateRules({ scoring, aggregate, goal });
     if (problem) throw badRequest(problem);
     const params = checkParams(metric, body.params);
 
@@ -129,8 +168,9 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           customUnit: custom?.unit ?? null,
           aggregate,
           lowerIsBetter,
-          scoring: body.scoring,
-          goal: body.goal ?? null,
+          scoring,
+          goal,
+          solo: body.solo ?? null,
           startDate: body.startDate,
           endDate: body.endDate,
           timezone: body.timezone,
@@ -148,12 +188,13 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           invitedBy: req.userId,
         })),
       ]);
-      await tx.insert(feedEvents).values({
-        actorId: req.userId,
-        challengeId: ch!.id,
-        kind: 'challenge_created',
-        payload: {},
-      });
+      if (!body.solo)
+        await tx.insert(feedEvents).values({
+          actorId: req.userId,
+          challengeId: ch!.id,
+          kind: 'challenge_created',
+          payload: {},
+        });
       return ch!.id;
     });
     // Pull the data the new challenge needs (custom metrics, older start dates).
@@ -233,6 +274,8 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     const ch = await getChallenge(ctx, uuid(req.params.id));
     if (ch.createdBy !== req.userId) throw forbidden('Only the creator can change a challenge');
     if (ch.finalizedAt) throw badRequest('That challenge is over');
+    if (ch.solo && body.visibility === 'public')
+      throw badRequest('A solo challenge is just for you, so it stays private.');
     if (body.visibility === 'public' && ch.visibility !== 'public') {
       const me = await getUser(ctx, req.userId);
       if (me.visibility !== 'public')
@@ -285,18 +328,38 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         everyone.filter((p) => shown.has(p.userId)),
       );
       const usersById = await getUsers(ctx, [...shown]);
+      // Against yourself the graph is read against your goal: a reference line, and for "beat my past
+      // self" the values are % change from your own past.
+      let target: number | null = null;
+      let valueKind: ChallengeProgress['valueKind'] = 'metric';
+      let toPct: ((v: number) => number) | null = null;
+      if (ch.solo) {
+        const sp = await soloFor(ctx, ch, byUser);
+        const g = soloGraph(ch.solo, ch.goal, sp?.baseline?.value ?? null);
+        target = g.target;
+        valueKind = g.valueKind;
+        if (ch.solo.kind === 'improve' && sp?.baseline) {
+          const base = sp.baseline.value;
+          toPct = (v) => (v / base - 1) * 100;
+        }
+      }
       return {
         dates,
         series: ranked
           .filter((s) => shown.has(s.userId))
           .flatMap((s) => {
             const u = usersById.get(s.userId);
-            const values = series.find((x) => x.userId === s.userId)?.values;
+            const raw = series.find((x) => x.userId === s.userId)?.values;
+            const values = raw && toPct ? raw.map((v) => (v == null ? null : toPct!(v))) : raw;
             return u && values
               ? [{ user: toPublicUser(u), rank: s.rank, isMe: s.userId === req.userId, values }]
               : [];
           }),
-        lowerIsBetter: ch.lowerIsBetter,
+        target,
+        valueKind,
+        // Aiming lower (e.g. resting heart rate) flips the graph so up still means ahead.
+        lowerIsBetter:
+          ch.solo?.kind === 'improve' ? ch.solo.direction === 'down' : ch.lowerIsBetter,
         truncated: everyone.length > shown.size,
         total: everyone.length,
       };
@@ -379,6 +442,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({ userIds: z.array(z.string().uuid()).min(1).max(50) })
       .parse(req.body);
     const ch = await getChallenge(ctx, uuid(req.params.id));
+    if (ch.solo) throw badRequest('A solo challenge is just for you.');
     const parts = await assertCanView(ctx, ch, req.userId);
     if (parts.find((p) => p.userId === req.userId)?.state !== 'joined')
       throw forbidden('Join the challenge first');
@@ -458,6 +522,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           rematchOf: ch.id,
           visibility: ch.visibility,
           showEvents: ch.showEvents,
+          solo: ch.solo,
         })
         .returning({ id: challenges.id });
       await tx.insert(challengeParticipants).values([
@@ -475,12 +540,13 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           invitedBy: req.userId,
         })),
       ]);
-      await tx.insert(feedEvents).values({
-        actorId: req.userId,
-        challengeId: copy!.id,
-        kind: 'challenge_created',
-        payload: { rematchOf: ch.id },
-      });
+      if (!ch.solo)
+        await tx.insert(feedEvents).values({
+          actorId: req.userId,
+          challengeId: copy!.id,
+          kind: 'challenge_created',
+          payload: { rematchOf: ch.id },
+        });
       return copy!.id;
     });
     reply.code(201);

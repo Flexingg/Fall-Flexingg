@@ -1,5 +1,6 @@
 import { needsWeightGoal, scoringLabel, type WeightGoalParams } from '@gauntlet/shared';
 import { ChallengeEvents } from '../components/ChallengeEvents';
+import { SoloCard } from '../components/SoloCard';
 import { EditChallenge } from '../components/EditChallenge';
 import { WeightGoalFields } from '../components/WeightGoal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,7 +19,7 @@ import {
 } from '../components/ui';
 import { del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { dateRange, daysLeftText, fmt } from '../lib/format';
+import { dateRange, daysLeftText, fmt, fmtSolo } from '../lib/format';
 import { keys, useChallenge, useProgress, useToday } from '../lib/queries';
 import { ProgressChart } from '../components/ProgressChart';
 import { shareLink } from '../lib/share';
@@ -37,6 +38,7 @@ export function ChallengeDetailPage() {
   const [weightGoal, setWeightGoal] = useState<WeightGoalParams | null>(null);
   const [error, setError] = useState<unknown>(null);
   const c = q.data;
+  const solo = !!c?.soloConfig;
   const needsTarget = !!c && needsWeightGoal(c.metric) && !c.myParams?.weightGoal;
   const params = needsTarget && weightGoal ? { weightGoal } : undefined;
 
@@ -86,7 +88,7 @@ export function ChallengeDetailPage() {
       {c && (
         <>
           <p className="muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
-            {c.metricLabel} · {scoringLabel(c.scoring, c.aggregate)}
+            {c.metricLabel} · {solo ? 'Solo' : scoringLabel(c.scoring, c.aggregate)}
             {c.goal ? ` · ${fmt(c.goal, c)}${c.scoring === 'streak' ? '/day' : ''}` : ''} ·{' '}
             {dateRange(c.startDate, c.endDate)} · {daysLeftText(c)}
             {c.visibility === 'public' ? ' · Public' : ''}
@@ -168,18 +170,27 @@ export function ChallengeDetailPage() {
               {c.myParams.weightGoal.targetType === 'percent' ? '%' : ' kg'}. Only your % is shown.
             </p>
           )}
-          <Podium challenge={c} />
-          {c.standings.length > 0 ? (
-            <StandingsList challenge={c} showToday={c.status === 'active'} />
+          {solo ? (
+            <SoloCard c={c} />
           ) : (
-            <div className="notice">Nobody has joined yet.</div>
+            <>
+              <Podium challenge={c} />
+              {c.standings.length > 0 ? (
+                <StandingsList challenge={c} showToday={c.status === 'active'} />
+              ) : (
+                <div className="notice">Nobody has joined yet.</div>
+              )}
+            </>
           )}
 
           {progress.data && progress.data.dates.length > 0 && (
             <>
               <div className="lbl">Progress</div>
               <div className="card">
-                <ProgressChart data={progress.data} format={(v) => fmt(v, c)} />
+                <ProgressChart
+                  data={progress.data}
+                  format={(v) => fmtSolo(v, progress.data!.valueKind, c)}
+                />
               </div>
             </>
           )}
@@ -194,10 +205,12 @@ export function ChallengeDetailPage() {
 
           {c.status !== 'completed' && c.myState === 'joined' && (
             <div className="stack" style={{ marginTop: 20 }}>
-              <button className="btn" onClick={() => invite().catch(setError)}>
-                <Icon name="share" size={18} /> Invite friends
-              </button>
-              {c.createdBy === user?.id && c.status === 'upcoming' ? (
+              {!solo && (
+                <button className="btn" onClick={() => invite().catch(setError)}>
+                  <Icon name="share" size={18} /> Invite friends
+                </button>
+              )}
+              {c.createdBy === user?.id && (c.status === 'upcoming' || solo) ? (
                 <button
                   className="btn ghost"
                   disabled={busy}
@@ -208,7 +221,7 @@ export function ChallengeDetailPage() {
                     })
                   }
                 >
-                  Delete challenge
+                  {solo ? 'Delete this solo challenge' : 'Delete challenge'}
                 </button>
               ) : (
                 <button

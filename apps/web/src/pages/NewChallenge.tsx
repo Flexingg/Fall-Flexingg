@@ -1,8 +1,13 @@
 import {
   addDays,
   BUILTIN_METRICS,
+  BASELINE_CHOICES,
   daysBetween,
   isDateString,
+  SOLO_KINDS,
+  SOLO_LABELS,
+  soloScoring,
+  type SoloKind,
   METRIC_GROUPS,
   metricDef,
   METRICS,
@@ -111,6 +116,12 @@ export function NewChallengePage() {
   const [customAgg, setCustomAgg] = useState<'sum' | 'avg'>('sum');
   const [customLower, setCustomLower] = useState(false);
   const [scoring, setScoring] = useState<ScoringMode>('total');
+  const [mode, setMode] = useState<'versus' | 'solo'>('versus');
+  const [soloKind, setSoloKind] = useState<SoloKind>('target');
+  const [streakDays, setStreakDays] = useState('7');
+  const [improvePct, setImprovePct] = useState('10');
+  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
+  const [baselineDays, setBaselineDays] = useState<number>(30);
   const [goal, setGoal] = useState('');
   const [duration, setDuration] = useState<Duration>('7');
   const [invited, setInvited] = useState<Set<string>>(new Set());
@@ -165,14 +176,39 @@ export function NewChallengePage() {
   const needsTarget = def?.transform === 'weight_goal';
   const customChoice = customMetrics.data?.find((m) => m.categoryId === customId);
   const unit = isCustom ? (customChoice?.unit ?? '') : (def?.unit ?? '');
+  const solo = mode === 'solo';
+  // Which kinds of solo challenge suit the chosen stat: running figures (weight, 1RM gain) can only
+  // aim at their own target, and totals only make sense for stats that add up.
+  const kindOk = (k: SoloKind) =>
+    def?.transform ? k === 'target' : k === 'target' ? aggregate !== 'avg' : true;
+  const kind: SoloKind = kindOk(soloKind) ? soloKind : (SOLO_KINDS.find(kindOk) ?? 'average');
+  const dir: 'up' | 'down' = direction ?? (def?.lowerIsBetter ? 'down' : 'up');
+  const effScoring: ScoringMode = solo
+    ? soloScoring(kind, { heaviest: isLift && liftKind === 'lift_max:' })
+    : scoring;
   const suggested =
-    scoring === 'streak'
+    effScoring === 'streak' || (solo && kind === 'average')
       ? DAILY_TARGETS[metric as MetricKey]
-      : scoring === 'race_to_goal'
+      : effScoring === 'race_to_goal'
         ? DEFAULT_GOALS[metric as MetricKey]
         : undefined;
-  const goalNum = goal.trim() ? Number(goal) : (suggested ?? null);
-  const ruleProblem = validateRules({ scoring, aggregate, goal: goalNum });
+  const goalNum = solo && needsTarget ? 100 : goal.trim() ? Number(goal) : (suggested ?? null);
+  const ruleProblem = solo
+    ? kind === 'improve'
+      ? null
+      : validateRules({ scoring: effScoring, aggregate, goal: goalNum })
+    : validateRules({ scoring, aggregate, goal: goalNum });
+  const soloProblem = !solo
+    ? null
+    : kind === 'improve'
+      ? Number(improvePct) > 0
+        ? null
+        : 'Enter how much better you want to be.'
+      : kind === 'streak' && !(Number(streakDays) >= 2)
+        ? 'A streak needs at least 2 days.'
+        : !needsTarget && !(goalNum && goalNum > 0)
+          ? 'Set the number to aim for.'
+          : null;
   const scoringOptions = useMemo(
     () =>
       (def?.scoring ?? (Object.keys(SCORING_LABELS) as ScoringMode[])).filter(
@@ -221,13 +257,20 @@ export function NewChallengePage() {
                 lowerIsBetter: customLower,
               }
             : undefined,
-        scoring,
-        goal: goalNum,
+        scoring: effScoring,
+        goal: solo && kind === 'improve' ? null : goalNum,
+        solo: solo
+          ? kind === 'streak'
+            ? { kind, days: Number(streakDays) }
+            : kind === 'improve'
+              ? { kind, changePct: Number(improvePct), direction: dir, baselineDays }
+              : { kind }
+          : undefined,
         startDate: start,
         endDate: end,
         timezone,
-        inviteUserIds: [...invited],
-        visibility: isPublic ? 'public' : 'private',
+        inviteUserIds: solo ? [] : [...invited],
+        visibility: isPublic && !solo ? 'public' : 'private',
         showEvents,
         params: needsTarget && weightGoal ? { weightGoal } : undefined,
       };
@@ -363,6 +406,16 @@ export function NewChallengePage() {
     <Screen>
       <Header title="New challenge" back="/challenges" />
       <form onSubmit={submit}>
+        <Seg
+          label="Who is it against"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'versus', label: 'Versus friends' },
+            { value: 'solo', label: 'Solo' },
+          ]}
+        />
+        <div style={{ height: 12 }} />
         {todayQ.data && !todayQ.data.hasSources && <NoSourcesNote />}
         <label className="input">
           <input
@@ -394,41 +447,152 @@ export function NewChallengePage() {
             {groupOf(metric) === g.key && details()}
           </div>
         ))}
-        <div className="lbl">How to win</div>
-        <label className="input">
-          <select
-            value={scoring}
-            onChange={(e) => setScoring(e.target.value as ScoringMode)}
-            aria-label="How to win"
-          >
-            {scoringOptions.map((s) => (
-              <option key={s} value={s}>
-                {scoringLabel(s, aggregate)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {solo ? (
+          <>
+            <div className="lbl">Your goal</div>
+            <div
+              className="metric-grid"
+              role="group"
+              aria-label="Goal type"
+              style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}
+            >
+              {SOLO_KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={kind === k}
+                  disabled={!kindOk(k)}
+                  onClick={() => setSoloKind(k)}
+                  style={{ padding: '12px 8px', opacity: kindOk(k) ? 1 : 0.4 }}
+                >
+                  {SOLO_LABELS[k].title}
+                </button>
+              ))}
+            </div>
+            <p className="muted" style={{ fontSize: 12, lineHeight: 1.45, marginTop: 8 }}>
+              {SOLO_LABELS[kind].blurb}
+              {def?.transform ? ' This stat is already measured against your own target.' : ''}
+            </p>
 
-        <div className="lbl">{scoring === 'streak' ? 'Daily target' : 'Goal'}</div>
-        <label className="input">
-          <input
-            inputMode="decimal"
-            value={goal}
-            onChange={(e) => setGoal(e.target.value.replace(/[^\d.]/g, ''))}
-            placeholder={suggested != null ? String(suggested) : 'None'}
-            aria-label="Goal"
-          />
-          <span>
-            {unit}
-            {scoring === 'race_to_goal'
-              ? ' · first to reach it wins'
-              : scoring === 'streak'
-                ? ' per day'
-                : scoring === 'total'
-                  ? ' · optional'
-                  : ''}
-          </span>
-        </label>
+            {kind === 'improve' ? (
+              <div className="stack" style={{ marginTop: 10, gap: 10 }}>
+                <Seg
+                  label="Direction"
+                  value={dir}
+                  onChange={setDirection}
+                  options={[
+                    { value: 'up', label: 'Increase' },
+                    { value: 'down', label: 'Decrease' },
+                  ]}
+                />
+                <label className="input">
+                  <input
+                    inputMode="decimal"
+                    value={improvePct}
+                    onChange={(e) => setImprovePct(e.target.value.replace(/[^\d.]/g, ''))}
+                    aria-label="Percent change"
+                  />
+                  <span>% {dir === 'up' ? 'better' : 'lower'} than before</span>
+                </label>
+                <label className="input">
+                  <select
+                    value={baselineDays}
+                    onChange={(e) => setBaselineDays(Number(e.target.value))}
+                    aria-label="Compared with"
+                  >
+                    {BASELINE_CHOICES.map((n) => (
+                      <option key={n} value={n}>
+                        vs my previous {n} days
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <small className="muted" style={{ lineHeight: 1.45 }}>
+                  Compared with your{' '}
+                  {isLift && liftKind === 'lift_max:' ? 'best day' : 'daily average'} over the{' '}
+                  {baselineDays} days before the start. If there was no data then, there is nothing
+                  to compare with.
+                </small>
+              </div>
+            ) : needsTarget ? (
+              <small
+                className="muted"
+                style={{ display: 'block', marginTop: 10, lineHeight: 1.45 }}
+              >
+                The goal is 100% of your own target below.
+              </small>
+            ) : (
+              <div className="stack" style={{ marginTop: 10, gap: 10 }}>
+                <label className="input">
+                  <input
+                    inputMode="decimal"
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value.replace(/[^\d.]/g, ''))}
+                    placeholder={suggested != null ? String(suggested) : ''}
+                    aria-label="Goal"
+                  />
+                  <span>
+                    {unit}
+                    {kind === 'target'
+                      ? ' in total'
+                      : kind === 'average'
+                        ? ' a day, on average'
+                        : ' a day to count'}
+                  </span>
+                </label>
+                {kind === 'streak' && (
+                  <label className="input">
+                    <input
+                      inputMode="numeric"
+                      value={streakDays}
+                      onChange={(e) => setStreakDays(e.target.value.replace(/\D/g, ''))}
+                      aria-label="Streak length"
+                    />
+                    <span>days in a row</span>
+                  </label>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="lbl">How to win</div>
+            <label className="input">
+              <select
+                value={scoring}
+                onChange={(e) => setScoring(e.target.value as ScoringMode)}
+                aria-label="How to win"
+              >
+                {scoringOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {scoringLabel(s, aggregate)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="lbl">{scoring === 'streak' ? 'Daily target' : 'Goal'}</div>
+            <label className="input">
+              <input
+                inputMode="decimal"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value.replace(/[^\d.]/g, ''))}
+                placeholder={suggested != null ? String(suggested) : 'None'}
+                aria-label="Goal"
+              />
+              <span>
+                {unit}
+                {scoring === 'race_to_goal'
+                  ? ' · first to reach it wins'
+                  : scoring === 'streak'
+                    ? ' per day'
+                    : scoring === 'total'
+                      ? ' · optional'
+                      : ''}
+              </span>
+            </label>
+          </>
+        )}
 
         <div className="lbl">
           <span>Duration</span>
@@ -479,41 +643,45 @@ export function NewChallengePage() {
           </div>
         )}
 
-        <div className="lbl">Invite</div>
-        <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
-          {user && <Avatar user={user} size={42} me />}
-          {friends.data?.friends.map((f) => {
-            const on = invited.has(f.id);
-            return (
-              <button
-                type="button"
-                key={f.id}
-                aria-pressed={on}
-                aria-label={`Invite ${f.displayName}`}
-                onClick={() =>
-                  setInvited((s) => {
-                    const n = new Set(s);
-                    if (on) n.delete(f.id);
-                    else n.add(f.id);
-                    return n;
-                  })
-                }
-                style={{
-                  borderRadius: '50%',
-                  outline: on ? '2px solid var(--volt)' : 'none',
-                  outlineOffset: 2,
-                  color: on ? 'var(--volt)' : undefined,
-                }}
-              >
-                <Avatar user={f} size={42} />
-              </button>
-            );
-          })}
-        </div>
-        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          {friends.data?.friends.length ? 'Tap friends to invite them. ' : ''}You can share a link
-          to the challenge once it's created.
-        </p>
+        {!solo && (
+          <>
+            <div className="lbl">Invite</div>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
+              {user && <Avatar user={user} size={42} me />}
+              {friends.data?.friends.map((f) => {
+                const on = invited.has(f.id);
+                return (
+                  <button
+                    type="button"
+                    key={f.id}
+                    aria-pressed={on}
+                    aria-label={`Invite ${f.displayName}`}
+                    onClick={() =>
+                      setInvited((s) => {
+                        const n = new Set(s);
+                        if (on) n.delete(f.id);
+                        else n.add(f.id);
+                        return n;
+                      })
+                    }
+                    style={{
+                      borderRadius: '50%',
+                      outline: on ? '2px solid var(--volt)' : 'none',
+                      outlineOffset: 2,
+                      color: on ? 'var(--volt)' : undefined,
+                    }}
+                  >
+                    <Avatar user={f} size={42} />
+                  </button>
+                );
+              })}
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              {friends.data?.friends.length ? 'Tap friends to invite them. ' : ''}You can share a
+              link to the challenge once it's created.
+            </p>
+          </>
+        )}
 
         <div className="lbl">Show events</div>
         <div className="card stack" style={{ gap: 6 }}>
@@ -522,7 +690,9 @@ export function NewChallengePage() {
               <div style={{ fontWeight: 700 }}>Show what counted</div>
               <small className="muted">
                 {showEvents
-                  ? 'Participants can open the workouts, sets and fasts behind each score. People can switch this off for themselves in Privacy.'
+                  ? solo
+                    ? 'Open the workouts, sets and fasts behind your progress.'
+                    : 'Participants can open the workouts, sets and fasts behind each score. People can switch this off for themselves in Privacy.'
                   : 'Only totals are shown.'}
               </small>
             </div>
@@ -530,38 +700,48 @@ export function NewChallengePage() {
           </div>
         </div>
 
-        <div className="lbl">Who can join</div>
-        <div className="card stack" style={{ gap: 8 }}>
-          <div className="row">
-            <div className="grow">
-              <div style={{ fontWeight: 700 }}>Public</div>
-              <small className="muted">
-                {isPublic
-                  ? 'Listed in Discover. Anyone with a public profile can join.'
-                  : 'Invite only: friends you pick and people with the link.'}
-              </small>
+        {!solo && (
+          <>
+            <div className="lbl">Who can join</div>
+            <div className="card stack" style={{ gap: 8 }}>
+              <div className="row">
+                <div className="grow">
+                  <div style={{ fontWeight: 700 }}>Public</div>
+                  <small className="muted">
+                    {isPublic
+                      ? 'Listed in Discover. Anyone with a public profile can join.'
+                      : 'Invite only: friends you pick and people with the link.'}
+                  </small>
+                </div>
+                <Toggle
+                  checked={isPublic}
+                  onChange={setIsPublic}
+                  label="Public challenge"
+                  disabled={user?.visibility !== 'public'}
+                />
+              </div>
+              {user?.visibility !== 'public' && (
+                <small className="muted">
+                  Make your profile public (Profile → Public profile) to start public challenges.
+                </small>
+              )}
             </div>
-            <Toggle
-              checked={isPublic}
-              onChange={setIsPublic}
-              label="Public challenge"
-              disabled={user?.visibility !== 'public'}
-            />
-          </div>
-          {user?.visibility !== 'public' && (
-            <small className="muted">
-              Make your profile public (Profile → Public profile) to start public challenges.
-            </small>
-          )}
-        </div>
+          </>
+        )}
 
         <div className="dock stack">
-          <ErrorBox error={error ?? (ruleProblem ? new Error(ruleProblem) : null)} />
+          <ErrorBox
+            error={
+              error ??
+              (ruleProblem ? new Error(ruleProblem) : soloProblem ? new Error(soloProblem) : null)
+            }
+          />
           <button
             className="btn"
             disabled={
               busy ||
               !!ruleProblem ||
+              !!soloProblem ||
               !!datesProblem ||
               !scoringOk ||
               (isCustom && !customChoice) ||
@@ -569,7 +749,13 @@ export function NewChallengePage() {
               (needsTarget && !weightGoal)
             }
           >
-            {busy ? <span className="spinner" /> : 'Start challenge'}
+            {busy ? (
+              <span className="spinner" />
+            ) : solo ? (
+              'Start solo challenge'
+            ) : (
+              'Start challenge'
+            )}
           </button>
         </div>
       </form>

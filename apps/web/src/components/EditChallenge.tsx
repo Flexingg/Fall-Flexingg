@@ -59,23 +59,25 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
         />
         <span>Name</span>
       </label>
-      <div className="row">
-        <div className="grow">
-          <div style={{ fontWeight: 700 }}>Public</div>
-          <small className="muted">
-            {isPublic
-              ? 'Listed in Discover. Anyone with a public profile can join.'
-              : 'Invite only: friends you pick and people with the link.'}
-          </small>
+      {!c.soloConfig && (
+        <div className="row">
+          <div className="grow">
+            <div style={{ fontWeight: 700 }}>Public</div>
+            <small className="muted">
+              {isPublic
+                ? 'Listed in Discover. Anyone with a public profile can join.'
+                : 'Invite only: friends you pick and people with the link.'}
+            </small>
+          </div>
+          <Toggle
+            checked={isPublic}
+            onChange={setPublic}
+            label="Public challenge"
+            disabled={!canGoPublic}
+          />
         </div>
-        <Toggle
-          checked={isPublic}
-          onChange={setPublic}
-          label="Public challenge"
-          disabled={!canGoPublic}
-        />
-      </div>
-      {!canGoPublic && (
+      )}
+      {!c.soloConfig && !canGoPublic && (
         <small className="muted">
           Make your profile public (<Link to="/me">Profile</Link>) to make this challenge public.
         </small>
