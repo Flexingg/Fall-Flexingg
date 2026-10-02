@@ -201,3 +201,13 @@ export function NoSourcesNote() {
     </div>
   );
 }
+
+/** Said wherever someone is about to join a challenge that shows the workouts behind scores. */
+export function ShowEventsNotice() {
+  return (
+    <small className="muted" style={{ lineHeight: 1.45 }}>
+      Show Events is on: the workouts that count toward your score are visible to the other
+      participants. Turn this off any time under Data sources → Privacy.
+    </small>
+  );
+}

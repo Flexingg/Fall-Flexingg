@@ -1,6 +1,7 @@
 import {
   addDays,
   createChallengeSchema,
+  DATES_FIXED_MESSAGE,
   featureChallengeSchema,
   joinChallengeSchema,
   needsWeightGoal,
@@ -9,6 +10,7 @@ import {
   isCustomMetric,
   metricDef,
   respondChallengeSchema,
+  updateChallengeSchema,
   todayIn,
   validateRules,
   type ChallengeResult,
@@ -64,8 +66,6 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       throw badRequest('Challenges can last at most a year');
     const today = todayIn(body.timezone, ctx.now());
     if (body.endDate < today) throw badRequest('That challenge would already be over');
-    if (body.startDate < addDays(today, -30))
-      throw badRequest('Start date can be at most 30 days ago');
 
     let metric: MetricKey = body.metric;
     let custom: { label: string; unit: string | null } | null = null;
@@ -121,6 +121,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           timezone: body.timezone,
           createdBy: req.userId,
           visibility: body.visibility,
+          showEvents: body.showEvents,
         })
         .returning({ id: challenges.id });
       await tx.insert(challengeParticipants).values([
@@ -202,6 +203,37 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         .insert(feedEvents)
         .values({ actorId: req.userId, challengeId: ch.id, kind: 'joined', payload: {} });
     void syncUser(ctx, req.userId).catch(() => undefined);
+    return loadDetail(ctx, ch.id, req.userId);
+  });
+
+  /**
+   * The creator can rename a challenge, make it public or private, and turn Show Events on or off.
+   * Dates are fixed at creation (scores can't be shifted under people); Rematch runs it again.
+   */
+  app.patch<{ Params: { id: string } }>('/api/challenges/:id', auth, async (req) => {
+    const raw = (req.body ?? {}) as Record<string, unknown>;
+    if ('startDate' in raw || 'endDate' in raw)
+      throw badRequest(DATES_FIXED_MESSAGE, 'dates_fixed');
+    const body = updateChallengeSchema.parse(raw);
+    const ch = await getChallenge(ctx, uuid(req.params.id));
+    if (ch.createdBy !== req.userId) throw forbidden('Only the creator can change a challenge');
+    if (ch.finalizedAt) throw badRequest('That challenge is over');
+    if (body.visibility === 'public' && ch.visibility !== 'public') {
+      const me = await getUser(ctx, req.userId);
+      if (me.visibility !== 'public')
+        throw badRequest('Make your profile public to make a challenge public.', 'needs_public');
+    }
+    const visibility = body.visibility ?? ch.visibility;
+    await ctx.db
+      .update(challenges)
+      .set({
+        ...(body.name ? { name: body.name } : {}),
+        visibility,
+        // A challenge that leaves Discover can't stay pinned there.
+        ...(visibility === 'private' ? { featured: false } : {}),
+        ...(body.showEvents != null ? { showEvents: body.showEvents } : {}),
+      })
+      .where(eq(challenges.id, ch.id));
     return loadDetail(ctx, ch.id, req.userId);
   });
 
@@ -330,6 +362,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           createdBy: req.userId,
           rematchOf: ch.id,
           visibility: ch.visibility,
+          showEvents: ch.showEvents,
         })
         .returning({ id: challenges.id });
       await tx.insert(challengeParticipants).values([

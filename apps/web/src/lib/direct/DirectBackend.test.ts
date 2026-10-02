@@ -107,7 +107,11 @@ describe('DirectBackend', () => {
       email: 'alex.morgan@example.com',
       timezone: TZ,
     });
-    expect(me.settings).toEqual({ shareWorkoutDetails: true, healthConnectSync: false });
+    expect(me.settings).toEqual({
+      shareWorkoutDetails: true,
+      shareEvents: true,
+      healthConnectSync: false,
+    });
     const updated = await backend.updateSettings({ healthConnectSync: true });
     expect(updated.settings.healthConnectSync).toBe(true);
     expect((await backend.me()).settings.healthConnectSync).toBe(true);

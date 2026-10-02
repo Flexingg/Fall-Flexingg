@@ -258,6 +258,7 @@ export function buildSummary({
     createdBy: ch.createdBy,
     visibility: ch.visibility,
     featured: ch.featured,
+    showEvents: ch.showEvents,
   };
 }
 

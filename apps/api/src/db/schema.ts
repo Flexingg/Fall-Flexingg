@@ -29,6 +29,8 @@ export const users = pgTable('users', {
     .notNull()
     .default('active'),
   shareWorkoutDetails: boolean('share_workout_details').notNull().default(true),
+  /** Other participants can see this person's workouts in challenges that have Show Events on. */
+  shareEvents: boolean('share_events').notNull().default(true),
   healthConnectSync: boolean('health_connect_sync').notNull().default(false),
   /** public: findable by name/handle and can join public challenges. */
   visibility: text('visibility', { enum: ['private', 'public'] })
@@ -119,6 +121,8 @@ export const challenges = pgTable(
     /** Pinned to the top of Discover by a server admin. */
     featured: boolean('featured').notNull().default(false),
     maxParticipants: integer('max_participants').notNull().default(500),
+    /** Participants can open the workouts, sets and fasts that count (read live from SparkyFitness). */
+    showEvents: boolean('show_events').notNull().default(false),
     leaderId: uuid('leader_id'),
     finalizedAt: timestamp('finalized_at', { withTimezone: true }),
     createdAt: createdAt(),

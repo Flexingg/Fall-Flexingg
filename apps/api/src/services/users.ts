@@ -30,6 +30,7 @@ export function toMe(u: UserRow, ctx: Pick<AppContext, 'cfg'>): MeUser {
     timezone: u.timezone,
     settings: {
       shareWorkoutDetails: u.shareWorkoutDetails,
+      shareEvents: u.shareEvents,
       healthConnectSync: u.healthConnectSync,
     },
     sparkyKeyStatus: u.keyStatus,

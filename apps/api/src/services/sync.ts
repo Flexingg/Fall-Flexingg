@@ -22,7 +22,7 @@ import { getUser, markKeyInvalid, sparkyToken } from './users.js';
 /** How far back the Today and Trends screens look. */
 const HISTORY_DAYS = 62;
 /** Never pull more than this many days in one go. */
-const MAX_WINDOW_DAYS = 120;
+const MAX_WINDOW_DAYS = 400;
 
 /** Smallest change worth a feed post, per metric. */
 const PROGRESS_THRESHOLD: Record<string, number> = {

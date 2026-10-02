@@ -58,6 +58,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
         ...(body.settings?.shareWorkoutDetails != null
           ? { shareWorkoutDetails: body.settings.shareWorkoutDetails }
           : {}),
+        ...(body.settings?.shareEvents != null ? { shareEvents: body.settings.shareEvents } : {}),
         ...(body.settings?.healthConnectSync != null
           ? { healthConnectSync: body.settings.healthConnectSync }
           : {}),

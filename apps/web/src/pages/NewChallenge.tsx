@@ -1,6 +1,8 @@
 import {
   addDays,
   BUILTIN_METRICS,
+  daysBetween,
+  isDateString,
   METRIC_GROUPS,
   metricDef,
   METRICS,
@@ -28,7 +30,7 @@ import { timezone } from '../lib/platform';
 import { useCustomMetrics, useFriends, useLifts, useToday } from '../lib/queries';
 import { WeightGoalFields } from '../components/WeightGoal';
 
-type Duration = '3' | 'weekend' | '7' | '30';
+type Duration = '3' | 'weekend' | '7' | '30' | 'custom';
 const CUSTOM = 'custom' as const;
 /** One exercise: the heaviest set, or estimated 1RM gain. */
 const LIFT = 'lift' as const;
@@ -40,7 +42,12 @@ function groupOf(choice: Choice): MetricGroup {
   return metricDef(choice as MetricKey).group;
 }
 
-function window(duration: Duration, today: string): { start: string; end: string } {
+function window(
+  duration: Duration,
+  today: string,
+  custom: { start: string; end: string },
+): { start: string; end: string } {
+  if (duration === 'custom') return custom;
   if (duration === 'weekend') {
     const dow = weekday(today); // 0 Sun .. 6 Sat
     if (dow === 6) return { start: today, end: addDays(today, 1) };
@@ -114,7 +121,32 @@ export function NewChallengePage() {
   const lifts = useLifts(metric === LIFT);
 
   const today = todayIn(timezone);
-  const { start, end } = window(duration, today);
+  const [customStart, setCustomStart] = useState(today);
+  const [customEnd, setCustomEnd] = useState(addDays(today, 6));
+  const [showEvents, setShowEvents] = useState(false);
+  const { start, end } = window(duration, today, { start: customStart, end: customEnd });
+  const datesProblem =
+    duration !== 'custom'
+      ? null
+      : !isDateString(customStart) || !isDateString(customEnd)
+        ? 'Pick a start and an end date.'
+        : customEnd < customStart
+          ? 'The end date is before the start date.'
+          : customEnd < today
+            ? 'That challenge would already be over.'
+            : daysBetween(customStart, customEnd) + 1 > 366
+              ? 'Challenges can last at most a year.'
+              : null;
+  const timing =
+    duration === 'custom' && !datesProblem
+      ? `${daysBetween(start, end) + 1} days · ${
+          start > today
+            ? `starts in ${daysBetween(today, start)} ${daysBetween(today, start) === 1 ? 'day' : 'days'}`
+            : start === today
+              ? 'starts today'
+              : `started ${daysBetween(start, today)} ${daysBetween(start, today) === 1 ? 'day' : 'days'} ago, past data counts`
+        }`
+      : null;
   const isCustom = metric === CUSTOM;
   const isLift = metric === LIFT;
   const metricKey: MetricKey | null = isCustom
@@ -154,7 +186,7 @@ export function NewChallengePage() {
     ? (customChoice?.label ?? 'Custom')
     : isLift
       ? `${liftLabel ?? 'Lift'} ${liftKind === 'lift_max:' ? 'Max' : '1RM Gain'}`
-      : `${def?.label} ${duration === 'weekend' ? 'Weekend' : `${duration}-Day`}`;
+      : `${def?.label} ${duration === 'weekend' ? 'Weekend' : duration === 'custom' ? 'Challenge' : `${duration}-Day`}`;
 
   function choose(next: Choice) {
     setMetric(next);
@@ -196,6 +228,7 @@ export function NewChallengePage() {
         timezone,
         inviteUserIds: [...invited],
         visibility: isPublic ? 'public' : 'private',
+        showEvents,
         params: needsTarget && weightGoal ? { weightGoal } : undefined,
       };
       const created = await post<ChallengeDetail>('/api/challenges', body);
@@ -412,8 +445,39 @@ export function NewChallengePage() {
             { value: 'weekend', label: 'Weekend' },
             { value: '7', label: '7 days' },
             { value: '30', label: '30 days' },
+            { value: 'custom', label: 'Custom' },
           ]}
         />
+        {duration === 'custom' && (
+          <div className="stack" style={{ marginTop: 10, gap: 10 }}>
+            <div className="row" style={{ gap: 10 }}>
+              <label className="input grow">
+                <input
+                  type="date"
+                  value={customStart}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  aria-label="Start date"
+                />
+                <span>Start</span>
+              </label>
+              <label className="input grow">
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  aria-label="End date"
+                />
+                <span>End</span>
+              </label>
+            </div>
+            <small className="muted" style={{ lineHeight: 1.45 }}>
+              {timing ?? datesProblem} Start in the past to count activity that already happened
+              (people without data back then start behind). Dates are fixed once the challenge is
+              created.
+            </small>
+          </div>
+        )}
 
         <div className="lbl">Invite</div>
         <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
@@ -451,6 +515,21 @@ export function NewChallengePage() {
           to the challenge once it's created.
         </p>
 
+        <div className="lbl">Show events</div>
+        <div className="card stack" style={{ gap: 6 }}>
+          <div className="row">
+            <div className="grow">
+              <div style={{ fontWeight: 700 }}>Show what counted</div>
+              <small className="muted">
+                {showEvents
+                  ? 'Participants can open the workouts, sets and fasts behind each score. People can switch this off for themselves in Privacy.'
+                  : 'Only totals are shown.'}
+              </small>
+            </div>
+            <Toggle checked={showEvents} onChange={setShowEvents} label="Show events" />
+          </div>
+        </div>
+
         <div className="lbl">Who can join</div>
         <div className="card stack" style={{ gap: 8 }}>
           <div className="row">
@@ -483,6 +562,7 @@ export function NewChallengePage() {
             disabled={
               busy ||
               !!ruleProblem ||
+              !!datesProblem ||
               !scoringOk ||
               (isCustom && !customChoice) ||
               (isLift && !lift) ||

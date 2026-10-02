@@ -175,6 +175,20 @@ export function SourcesPage() {
                 label="Show my data sources"
               />
             </div>
+            <div className="item">
+              <div className="grow">
+                <div className="t">Show my workouts in challenges</div>
+                <small>
+                  In challenges with Show Events on, others can open the workouts, sets and fasts
+                  behind your score. Turn off to share totals only.
+                </small>
+              </div>
+              <Toggle
+                checked={!!user?.settings.shareEvents}
+                onChange={(v) => save({ shareEvents: v })}
+                label="Show my workouts in challenges"
+              />
+            </div>
           </div>
         </>
       )}

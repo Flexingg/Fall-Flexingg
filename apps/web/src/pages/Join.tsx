@@ -2,7 +2,7 @@ import type { InvitePreview } from '@gauntlet/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
-import { Avatar, ErrorBox, Screen, Skeleton } from '../components/ui';
+import { Avatar, ErrorBox, Screen, ShowEventsNotice, Skeleton } from '../components/ui';
 import { post, publicGet } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange } from '../lib/format';
@@ -71,6 +71,11 @@ export function JoinPage() {
               <p className="muted" style={{ fontSize: 15 }}>
                 Accept to add each other as friends on Gauntlet.
               </p>
+            )}
+            {p.challenge?.showEvents && (
+              <div style={{ marginTop: 14 }}>
+                <ShowEventsNotice />
+              </div>
             )}
             <div className="stack" style={{ marginTop: 28 }}>
               <button className="btn" onClick={accept} disabled={busy}>

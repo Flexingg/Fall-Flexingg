@@ -238,3 +238,129 @@ describe('public challenges', () => {
     expect(d.challenges.map((c) => c.name)).toEqual(['Featured one', 'public steps']);
   });
 });
+
+describe('editing a challenge after it is made', () => {
+  let id = '';
+  const patch = (who: Who, payload: object, expect = 200) =>
+    call<ChallengeDetail & { code?: string }>(
+      who,
+      'PATCH',
+      `/api/challenges/${id}`,
+      payload,
+      expect,
+    );
+
+  it('lets only the creator rename it and switch it between private and public', async () => {
+    const made = await call<ChallengeDetail>(
+      'ana',
+      'POST',
+      '/api/challenges',
+      { ...newChallenge('private'), name: 'Original' },
+      201,
+    );
+    id = made.id;
+    expect(made.showEvents).toBe(false);
+    await patch('ben', { name: 'Hijack' }, 403);
+
+    const pub = await patch('ana', { name: 'Renamed', visibility: 'public', showEvents: true });
+    expect(pub).toMatchObject({ name: 'Renamed', visibility: 'public', showEvents: true });
+    expect(
+      (await call<DiscoverResponse>('cat', 'GET', '/api/challenges/discover')).challenges.map(
+        (c) => c.id,
+      ),
+    ).toContain(id);
+
+    const priv = await patch('ana', { visibility: 'private' });
+    expect(priv.visibility).toBe('private');
+    expect(
+      (await call<DiscoverResponse>('cat', 'GET', '/api/challenges/discover')).challenges.map(
+        (c) => c.id,
+      ),
+    ).not.toContain(id);
+    await call('cat', 'GET', `/api/challenges/${id}`, undefined, 403);
+  });
+
+  it('needs a public profile to make a challenge public, and drops the featured pin when it goes private', async () => {
+    const made = await call<ChallengeDetail>(
+      'cat',
+      'POST',
+      '/api/challenges',
+      newChallenge('private'),
+      201,
+    );
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/challenges/${made.id}`,
+      payload: { visibility: 'public' },
+      headers: { authorization: `Bearer ${access.cat}` },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'needs_public' });
+
+    const adminMade = await call<ChallengeDetail>(
+      'admin',
+      'POST',
+      '/api/challenges',
+      newChallenge('public'),
+      201,
+    );
+    await call('admin', 'PATCH', `/api/challenges/${adminMade.id}/featured`, { featured: true });
+    const back = await call<ChallengeDetail>('admin', 'PATCH', `/api/challenges/${adminMade.id}`, {
+      visibility: 'private',
+    });
+    expect(back).toMatchObject({ visibility: 'private', featured: false });
+  });
+
+  it('keeps dates fixed once a challenge exists', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/challenges/${id}`,
+      payload: { startDate: '2026-01-01' },
+      headers: { authorization: `Bearer ${access.ana}` },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'dates_fixed' });
+    await patch('ana', { endDate: '2030-01-01' }, 400);
+    await patch('ana', { nonsense: true }, 400);
+  });
+});
+
+describe('choosing any start date when creating', () => {
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+  it('allows a start far in the past and one in the future', async () => {
+    const past = await call<ChallengeDetail>(
+      'ana',
+      'POST',
+      '/api/challenges',
+      { ...newChallenge('private'), startDate: day(-200), endDate: day(3) },
+      201,
+    );
+    expect(past.status).toBe('active');
+    expect(past.startDate).toBe(day(-200));
+    const future = await call<ChallengeDetail>(
+      'ana',
+      'POST',
+      '/api/challenges',
+      { ...newChallenge('private'), startDate: day(10), endDate: day(17) },
+      201,
+    );
+    expect(future.status).toBe('upcoming');
+    // Still can't be over before it starts or longer than a year.
+    await call(
+      'ana',
+      'POST',
+      '/api/challenges',
+      { ...newChallenge('private'), startDate: day(-400), endDate: day(1) },
+      400,
+    );
+    await call(
+      'ana',
+      'POST',
+      '/api/challenges',
+      { ...newChallenge('private'), startDate: day(-5), endDate: day(-1) },
+      400,
+    );
+  });
+});

@@ -1,11 +1,20 @@
 import { needsWeightGoal, scoringLabel, type WeightGoalParams } from '@gauntlet/shared';
+import { EditChallenge } from '../components/EditChallenge';
 import { WeightGoalFields } from '../components/WeightGoal';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Podium, StandingsList } from '../components/Standings';
-import { ErrorBox, Header, Screen, Skeleton, toast, NoSourcesNote } from '../components/ui';
+import {
+  ErrorBox,
+  Header,
+  NoSourcesNote,
+  Screen,
+  ShowEventsNotice,
+  Skeleton,
+  toast,
+} from '../components/ui';
 import { del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange, daysLeftText, fmt } from '../lib/format';
@@ -21,6 +30,7 @@ export function ChallengeDetailPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [weightGoal, setWeightGoal] = useState<WeightGoalParams | null>(null);
   const [error, setError] = useState<unknown>(null);
   const c = q.data;
@@ -52,7 +62,22 @@ export function ChallengeDetailPage() {
 
   return (
     <Screen>
-      <Header title={c?.name ?? ' '} back="/challenges" />
+      <Header
+        title={c?.name ?? ' '}
+        back="/challenges"
+        action={
+          c && c.createdBy === user?.id && c.status !== 'completed' ? (
+            <button
+              className="btn sm secondary"
+              style={{ width: 'auto' }}
+              onClick={() => setEditing((e) => !e)}
+              aria-expanded={editing}
+            >
+              Edit
+            </button>
+          ) : undefined
+        }
+      />
       <ErrorBox error={q.error ?? error} />
       {q.isPending && <Skeleton height={320} />}
       {c && (
@@ -70,6 +95,7 @@ export function ChallengeDetailPage() {
             c.status !== 'completed' && (
               <div className="card stack" style={{ marginBottom: 14 }}>
                 <b>Open to everyone</b>
+                {c.showEvents && <ShowEventsNotice />}
                 {today.data && !today.data.hasSources && <NoSourcesNote />}
                 {user?.visibility === 'public' ? (
                   <button
@@ -88,9 +114,12 @@ export function ChallengeDetailPage() {
               </div>
             )}
 
+          {editing && <EditChallenge c={c} onDone={() => setEditing(false)} />}
+
           {c.myState === 'invited' && (
             <div className="card stack" style={{ marginBottom: 14 }}>
               <b>You're invited</b>
+              {c.showEvents && <ShowEventsNotice />}
               {needsTarget && <WeightGoalFields value={weightGoal} onChange={setWeightGoal} />}
               <div className="row">
                 <button

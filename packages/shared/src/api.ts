@@ -86,6 +86,8 @@ export const userSearchSchema = z.object({ q: z.string().trim().min(2).max(40) }
 
 export interface UserSettings {
   shareWorkoutDetails: boolean;
+  /** Show my workouts to the other people in challenges that have Show Events on. */
+  shareEvents: boolean;
   healthConnectSync: boolean;
 }
 
@@ -95,6 +97,7 @@ export const updateMeSchema = z.object({
   settings: z
     .object({
       shareWorkoutDetails: z.boolean().optional(),
+      shareEvents: z.boolean().optional(),
       healthConnectSync: z.boolean().optional(),
     })
     .optional(),
@@ -155,7 +158,14 @@ export interface InvitePreview {
   code: string;
   kind: 'friend' | 'challenge';
   from: PublicUser;
-  challenge?: { id: string; name: string; metricLabel: string; startDate: string; endDate: string };
+  challenge?: {
+    id: string;
+    name: string;
+    metricLabel: string;
+    startDate: string;
+    endDate: string;
+    showEvents: boolean;
+  };
 }
 
 // ---------- Challenges ----------
@@ -205,6 +215,8 @@ export const createChallengeSchema = z
     visibility: z.enum(['private', 'public']).default('private'),
     /** The creator's own settings (e.g. their weight target). */
     params: participantParamsSchema.optional(),
+    /** Participants can open the workouts, sets and fasts that count. */
+    showEvents: z.boolean().default(false),
   })
   .refine((v) => v.endDate >= v.startDate, {
     message: 'End date must be on or after start date',
@@ -243,6 +255,7 @@ export interface ChallengeSummary {
   createdBy: string;
   visibility: Visibility;
   featured: boolean;
+  showEvents: boolean;
 }
 
 export interface StandingRow {
@@ -277,6 +290,21 @@ export interface ChallengeResult {
   } | null;
   winner: PublicUser | null;
 }
+
+/**
+ * What the creator can change after a challenge exists. Dates are fixed at creation (scores
+ * can't be shifted under people), so sending them is refused; Rematch runs it again.
+ */
+export const DATES_FIXED_MESSAGE =
+  "Dates can't be changed after a challenge is created. Use Rematch to run it again.";
+export const updateChallengeSchema = z
+  .object({
+    name: z.string().trim().min(1).max(60).optional(),
+    visibility: z.enum(['private', 'public']).optional(),
+    showEvents: z.boolean().optional(),
+  })
+  .strict();
+export type UpdateChallengeRequest = z.input<typeof updateChallengeSchema>;
 
 export const respondChallengeSchema = z.object({
   accept: z.boolean(),

@@ -86,6 +86,7 @@ export function inviteRoutes(app: FastifyInstance, ctx: AppContext) {
           metricLabel: challengeMetricDef(ch).label,
           startDate: ch.startDate,
           endDate: ch.endDate,
+          showEvents: ch.showEvents,
         };
       }
       return preview;
