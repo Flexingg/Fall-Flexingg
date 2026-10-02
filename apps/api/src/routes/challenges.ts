@@ -1,5 +1,6 @@
 import {
   addDays,
+  computeStandings,
   createChallengeSchema,
   DATES_FIXED_MESSAGE,
   featureChallengeSchema,
@@ -9,10 +10,12 @@ import {
   daysBetween,
   isCustomMetric,
   metricDef,
+  progressSeries,
   respondChallengeSchema,
   updateChallengeSchema,
   todayIn,
   validateRules,
+  type ChallengeProgress,
   type ChallengeResult,
   type ChallengeStatus,
   type DiscoverResponse,
@@ -30,6 +33,8 @@ import {
   assertCanView,
   challengeStatus,
   computeChallengeStandings,
+  loadSeries,
+  scoringRules,
   getChallenge,
   getParticipants,
   listForUser,
@@ -50,6 +55,8 @@ import {
 
 const MAX_DAYS = 366;
 const DISCOVER_LIMIT = 30;
+/** Lines drawn on the progress graph besides the viewer's. */
+const PROGRESS_LINES = 7;
 
 export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
@@ -250,6 +257,42 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get<{ Params: { id: string } }>('/api/challenges/:id', auth, async (req) =>
     loadDetail(ctx, uuid(req.params.id), req.userId),
+  );
+
+  /** Everyone's score day by day (top ranked plus you), worked out with the leaderboard's own rules. */
+  app.get<{ Params: { id: string } }>(
+    '/api/challenges/:id/progress',
+    auth,
+    async (req): Promise<ChallengeProgress> => {
+      const ch = await getChallenge(ctx, uuid(req.params.id));
+      const parts = await assertCanView(ctx, ch, req.userId, { allowPublic: true });
+      const { byUser } = await loadSeries(ctx, ch, parts);
+      const rules = scoringRules(ctx, ch);
+      const everyone = [...byUser].map(([userId, days]) => ({ userId, days }));
+      const ranked = computeStandings(rules, everyone);
+      const shown = new Set(ranked.slice(0, PROGRESS_LINES).map((s) => s.userId));
+      if (byUser.has(req.userId)) shown.add(req.userId);
+      const { dates, series } = progressSeries(
+        rules,
+        everyone.filter((p) => shown.has(p.userId)),
+      );
+      const usersById = await getUsers(ctx, [...shown]);
+      return {
+        dates,
+        series: ranked
+          .filter((s) => shown.has(s.userId))
+          .flatMap((s) => {
+            const u = usersById.get(s.userId);
+            const values = series.find((x) => x.userId === s.userId)?.values;
+            return u && values
+              ? [{ user: toPublicUser(u), rank: s.rank, isMe: s.userId === req.userId, values }]
+              : [];
+          }),
+        lowerIsBetter: ch.lowerIsBetter,
+        truncated: everyone.length > shown.size,
+        total: everyone.length,
+      };
+    },
   );
 
   app.post<{ Params: { id: string } }>('/api/challenges/:id/respond', auth, async (req) => {

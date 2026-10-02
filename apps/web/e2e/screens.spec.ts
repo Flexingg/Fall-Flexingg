@@ -360,3 +360,24 @@ test('picks custom dates in the past, then edits visibility but not dates', asyn
   // Clean up so the test can run again: back to private... and delete is only for upcoming ones,
   // so leave this challenge; it is renamed every run.
 });
+
+test('challenge page graphs everyone day by day', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  const chart = page.getByRole('img', { name: /^Progress by day\./ });
+  await expect(chart).toBeVisible();
+  await expect(chart).toHaveAttribute('aria-label', /You [\d.]+ km/);
+  // Legend names everyone, and the table view has a row per day.
+  await expect(page.getByText('Maya R.').first()).toBeVisible();
+  await page.getByText('Table', { exact: true }).click();
+  await expect(page.getByRole('columnheader', { name: 'Maya R.' })).toBeVisible();
+  await expect(page.getByRole('row').nth(1)).toBeVisible();
+  await chart.scrollIntoViewIfNeeded();
+  await snap(page, '22a-progress-resting');
+  // Tapping a day shows every person's value for it.
+  const box = (await chart.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await expect(page.getByRole('status')).toContainText('You');
+  await snap(page, '22-progress-graph');
+});

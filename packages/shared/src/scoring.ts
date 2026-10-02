@@ -231,3 +231,27 @@ export function ordinal(n: number): string {
       return `${n}th`;
   }
 }
+
+export interface ProgressSeries {
+  userId: string;
+  /** Score as of each date in `dates`, or null while the person has no score yet. */
+  values: (number | null)[];
+}
+
+/**
+ * Each person's score at the end of every day from the start to `rules.asOf`, worked out with the
+ * leaderboard's own rules, so the last point always equals the current score.
+ */
+export function progressSeries(
+  rules: ScoringRules,
+  participants: ParticipantSeries[],
+): { dates: string[]; series: ProgressSeries[] } {
+  const dates = countedDates(rules);
+  const series = participants.map((p) => ({ userId: p.userId, values: [] as (number | null)[] }));
+  for (const date of dates) {
+    const standings = computeStandings({ ...rules, asOf: date }, participants);
+    for (const s of series)
+      s.values.push(standings.find((x) => x.userId === s.userId)?.score ?? null);
+  }
+  return { dates, series };
+}

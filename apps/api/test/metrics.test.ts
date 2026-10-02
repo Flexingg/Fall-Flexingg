@@ -1,4 +1,10 @@
-import type { ChallengeDetail, FastStatus, LiftOption, MeUser } from '@gauntlet/shared';
+import type {
+  ChallengeDetail,
+  ChallengeProgress,
+  FastStatus,
+  LiftOption,
+  MeUser,
+} from '@gauntlet/shared';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
 import { sql } from 'drizzle-orm';
@@ -236,5 +242,45 @@ describe('fasting', () => {
     await call('cut', 'POST', '/api/me/fast/end');
     expect(await call<FastStatus>('cut', 'GET', '/api/me/fast')).toEqual({ active: null });
     await call('cut', 'POST', '/api/me/fast/end', undefined, 400);
+  });
+});
+
+describe('progress graph data', () => {
+  it('ends every line on the leaderboard score and flips nothing for higher-is-better', async () => {
+    const ch = await call<ChallengeDetail>('bulk', 'POST', '/api/challenges', {
+      ...base,
+      name: 'Squat graph',
+      metric: 'lift_max:squat',
+      scoring: 'best_day',
+      inviteUserIds: [ids.cut],
+    });
+    await call('cut', 'POST', `/api/challenges/${ch.id}/respond`, { accept: true });
+    await syncAll();
+    const detail = await call<ChallengeDetail>('bulk', 'GET', `/api/challenges/${ch.id}`);
+    const p = await call<ChallengeProgress>('bulk', 'GET', `/api/challenges/${ch.id}/progress`);
+    expect(p.dates[0]).toBe('2026-10-01');
+    expect(p.dates.at(-1)).toBe('2026-10-02'); // the clock is on the 2nd
+    expect(p.truncated).toBe(false);
+    expect(p.lowerIsBetter).toBe(false);
+    expect(p.series.map((s) => s.user.displayName)).toEqual(['Bo Bulk', 'Cy Cut']);
+    expect(p.series.find((s) => s.isMe)?.user.displayName).toBe('Bo Bulk');
+    for (const s of p.series) {
+      const row = detail.standings.find((r) => r.user.id === s.user.id)!;
+      expect(s.values.at(-1)).toBe(row.score);
+      expect(s.rank).toBe(row.rank);
+    }
+    // Bo lifted 140 on the 1st; Cy 120 on the 2nd.
+    expect(p.series[0]!.values).toEqual([140, 140]);
+    expect(p.series[1]!.values).toEqual([null, 120]);
+  });
+
+  it('is not shown to people outside a private challenge', async () => {
+    const ch = await call<ChallengeDetail>('bulk', 'POST', '/api/challenges', {
+      ...base,
+      name: 'Private one',
+      metric: 'steps',
+      scoring: 'total',
+    });
+    await call('cut', 'GET', `/api/challenges/${ch.id}/progress`, undefined, 403);
   });
 });

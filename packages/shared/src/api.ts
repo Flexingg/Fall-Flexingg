@@ -306,6 +306,16 @@ export const updateChallengeSchema = z
   .strict();
 export type UpdateChallengeRequest = z.input<typeof updateChallengeSchema>;
 
+/** Everyone's score at the end of each day, for the line graph on the challenge page. */
+export interface ChallengeProgress {
+  dates: string[];
+  series: { user: PublicUser; rank: number; isMe: boolean; values: (number | null)[] }[];
+  lowerIsBetter: boolean;
+  /** More people are in the challenge than are drawn (top ranked plus the viewer). */
+  truncated: boolean;
+  total: number;
+}
+
 export const respondChallengeSchema = z.object({
   accept: z.boolean(),
   params: participantParamsSchema.optional(),

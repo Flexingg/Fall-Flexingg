@@ -6,6 +6,7 @@ import {
   relativeSeries,
   weightGoalSeries,
   type MetricTransform,
+  type ScoringRules,
   type ParticipantParams,
   maxDate,
   metricDef,
@@ -96,13 +97,13 @@ export interface ComputedStandings {
   bestDays: Map<string, number>;
 }
 
-export async function computeChallengeStandings(
+/** Each joined person's daily values for a challenge, after any per-person transform. */
+export async function loadSeries(
   ctx: AppContext,
   ch: ChallengeRow,
   parts: ParticipantRow[],
-): Promise<ComputedStandings> {
+): Promise<{ joined: string[]; byUser: Map<string, { date: string; value: number }[]> }> {
   const joined = parts.filter((p) => p.state === 'joined').map((p) => p.userId);
-  const asOf = minDate(maxDate(challengeToday(ctx, ch), ch.startDate), ch.endDate);
   const def = challengeMetricDef(ch);
   // Per-person transforms need each person's values from before the start, as their baseline.
   const from = def.transform ? addDays(ch.startDate, -BASELINE_DAYS) : ch.startDate;
@@ -121,30 +122,45 @@ export async function computeChallengeStandings(
     : [];
   const rows = def.transform ? transformRows(def.transform, raw, parts, ch.startDate) : raw;
   const byUser = new Map<string, { date: string; value: number }[]>(joined.map((id) => [id, []]));
+  for (const r of rows) byUser.get(r.userId)?.push({ date: r.date, value: r.value });
+  return { joined, byUser };
+}
+
+export function scoringRules(ctx: AppContext, ch: ChallengeRow): ScoringRules {
+  return {
+    scoring: ch.scoring,
+    aggregate: ch.aggregate,
+    lowerIsBetter: ch.lowerIsBetter,
+    goal: ch.goal,
+    startDate: ch.startDate,
+    endDate: ch.endDate,
+    asOf: minDate(maxDate(challengeToday(ctx, ch), ch.startDate), ch.endDate),
+  };
+}
+
+export async function computeChallengeStandings(
+  ctx: AppContext,
+  ch: ChallengeRow,
+  parts: ParticipantRow[],
+): Promise<ComputedStandings> {
+  const rules = scoringRules(ctx, ch);
+  const { byUser } = await loadSeries(ctx, ch, parts);
   const bestDays = new Map<string, number>();
-  for (const r of rows) {
-    byUser.get(r.userId)?.push({ date: r.date, value: r.value });
-    if (r.date <= asOf) {
-      const prev = bestDays.get(r.userId);
+  for (const [userId, days] of byUser) {
+    for (const r of days) {
+      if (r.date > rules.asOf) continue;
+      const prev = bestDays.get(userId);
       const better = ch.lowerIsBetter
         ? prev == null || r.value < prev
         : prev == null || r.value > prev;
-      if (better) bestDays.set(r.userId, r.value);
+      if (better) bestDays.set(userId, r.value);
     }
   }
   const standings = computeStandings(
-    {
-      scoring: ch.scoring,
-      aggregate: ch.aggregate,
-      lowerIsBetter: ch.lowerIsBetter,
-      goal: ch.goal,
-      startDate: ch.startDate,
-      endDate: ch.endDate,
-      asOf,
-    },
+    rules,
     [...byUser].map(([userId, days]) => ({ userId, days })),
   );
-  return { asOf, standings, bestDays };
+  return { asOf: rules.asOf, standings, bestDays };
 }
 
 /** How far back to look for someone's starting weight or starting 1RM. */

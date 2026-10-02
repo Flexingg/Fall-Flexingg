@@ -1,6 +1,7 @@
 import type {
   AndroidRelease,
   ChallengeDetail,
+  ChallengeProgress,
   ChallengeResult,
   ChallengeSummary,
   CustomMetricOption,
@@ -26,6 +27,7 @@ export const keys = {
   discover: ['discover'] as const,
   userSearch: (q: string) => ['user-search', q] as const,
   challenge: (id: string) => ['challenge', id] as const,
+  progress: (id: string) => ['progress', id] as const,
   result: (id: string) => ['result', id] as const,
   friends: ['friends'] as const,
   trends: (range: string, metric: string) => ['trends', range, metric] as const,
@@ -81,6 +83,13 @@ export const useChallenge = (id: string) =>
   useQuery({
     queryKey: keys.challenge(id),
     queryFn: () => get<ChallengeDetail>(`/api/challenges/${id}`),
+    ...live,
+  });
+export const useProgress = (id: string) =>
+  useQuery({
+    queryKey: keys.progress(id),
+    queryFn: () => get<ChallengeProgress>(`/api/challenges/${id}/progress`),
+    enabled: !session.direct,
     ...live,
   });
 export const useResult = (id: string) =>

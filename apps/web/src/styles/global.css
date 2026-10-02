@@ -688,3 +688,38 @@ svg {
     transition: none !important;
   }
 }
+
+/* ---------- Progress chart ---------- */
+.pchart svg {
+  display: block;
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.pchart-end {
+  position: absolute;
+  transform: translateX(-100%);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.pchart-tip {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 3px;
+  min-width: 120px;
+  max-width: 220px;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.pchart-tip b {
+  font-size: 13px;
+}

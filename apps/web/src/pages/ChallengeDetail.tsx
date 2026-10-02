@@ -18,13 +18,15 @@ import {
 import { del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange, daysLeftText, fmt } from '../lib/format';
-import { keys, useChallenge, useToday } from '../lib/queries';
+import { keys, useChallenge, useProgress, useToday } from '../lib/queries';
+import { ProgressChart } from '../components/ProgressChart';
 import { shareLink } from '../lib/share';
 import type { Invite } from '@gauntlet/shared';
 
 export function ChallengeDetailPage() {
   const { id = '' } = useParams();
   const q = useChallenge(id);
+  const progress = useProgress(id);
   const today = useToday();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -170,6 +172,15 @@ export function ChallengeDetailPage() {
             <StandingsList challenge={c} showToday={c.status === 'active'} />
           ) : (
             <div className="notice">Nobody has joined yet.</div>
+          )}
+
+          {progress.data && progress.data.dates.length > 0 && (
+            <>
+              <div className="lbl">Progress</div>
+              <div className="card">
+                <ProgressChart data={progress.data} format={(v) => fmt(v, c)} />
+              </div>
+            </>
           )}
 
           {c.invited.length > 0 && (

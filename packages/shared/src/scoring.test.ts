@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeStandings, ordinal, validateRules, type ScoringRules } from './scoring.js';
+import {
+  computeStandings,
+  ordinal,
+  progressSeries,
+  validateRules,
+  type ScoringRules,
+} from './scoring.js';
 
 const base: ScoringRules = {
   scoring: 'total',
@@ -173,5 +179,68 @@ describe('"last" metrics (running figures like % toward a target)', () => {
       ['a', '2026-01-04'],
     ]);
     expect(validateRules({ scoring: 'race_to_goal', aggregate: 'last', goal: 100 })).toBeNull();
+  });
+});
+
+describe('progressSeries', () => {
+  const base = {
+    aggregate: 'sum' as const,
+    lowerIsBetter: false,
+    startDate: '2026-01-01',
+    endDate: '2026-01-10',
+    asOf: '2026-01-06',
+  };
+  const people = [
+    {
+      userId: 'a',
+      days: [
+        { date: '2026-01-01', value: 5 },
+        { date: '2026-01-02', value: 7 },
+        { date: '2026-01-04', value: 3 },
+        { date: '2026-01-06', value: 9 },
+      ],
+    },
+    {
+      userId: 'b',
+      days: [
+        { date: '2026-01-02', value: 10 },
+        { date: '2026-01-03', value: 10 },
+        { date: '2026-01-05', value: 1 },
+      ],
+    },
+  ];
+
+  it.each([
+    ['total', {}],
+    ['daily_avg', {}],
+    ['best_day', {}],
+    ['streak', { goal: 4 }],
+    ['race_to_goal', { goal: 15 }],
+  ] as const)('ends on the leaderboard score for %s', (scoring, extra) => {
+    const rules = { ...base, scoring, ...extra };
+    const { dates, series } = progressSeries(rules, people);
+    expect(dates).toHaveLength(6);
+    const final = computeStandings(rules, people);
+    for (const s of series) {
+      expect(s.values).toHaveLength(6);
+      expect(s.values.at(-1)).toEqual(final.find((x) => x.userId === s.userId)!.score);
+    }
+  });
+
+  it('grows day by day and starts empty for someone who has not logged yet', () => {
+    const { series } = progressSeries({ ...base, scoring: 'total' }, people);
+    expect(series[0]!.values).toEqual([5, 12, 12, 15, 15, 24]);
+    expect(series[1]!.values).toEqual([0, 10, 20, 20, 21, 21]);
+  });
+
+  it('handles running figures (last) and lower-is-better', () => {
+    const last = progressSeries({ ...base, aggregate: 'last', scoring: 'total' }, people).series[0]!
+      .values;
+    expect(last).toEqual([5, 7, 7, 3, 3, 9]);
+    const hr = progressSeries(
+      { ...base, aggregate: 'avg', lowerIsBetter: true, scoring: 'best_day' },
+      people,
+    ).series[0]!.values;
+    expect(hr).toEqual([5, 5, 5, 3, 3, 3]);
   });
 });
