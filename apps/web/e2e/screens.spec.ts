@@ -245,7 +245,7 @@ test('goes public, joins a public challenge from Discover, and finds people by n
   await expect(page.getByText('Open to everyone')).toBeVisible();
   await page.getByRole('button', { name: 'Join challenge' }).click();
   await expect(page.getByRole('button', { name: 'Leave challenge' })).toBeVisible();
-  await expect(page.getByText('Riley P.')).toBeVisible();
+  await expect(page.locator('.item .t', { hasText: 'Riley P.' })).toBeVisible();
   await snap(page, '15-joined-public');
 
   // Put things back so the test can run again.
@@ -275,7 +275,7 @@ test('new metrics: bulk vs cut leaderboard, weight target, one-lift challenge, f
   await page.goto('/challenges');
   await page.getByText('Dial It In').click();
   await expect(page.getByText('Calorie goal ·')).toBeVisible();
-  await expect(page.getByText('Maya R.')).toBeVisible();
+  await expect(page.locator('.item .t', { hasText: 'Maya R.' })).toBeVisible();
   await snap(page, '16-calorie-goal');
 
   // The fasting challenge puts a timer on Today.
@@ -320,8 +320,9 @@ test('new metrics: bulk vs cut leaderboard, weight target, one-lift challenge, f
 
 test('picks custom dates in the past, then edits visibility but not dates', async ({ page }) => {
   await signIn(page, 'riley@example.com');
+  const stamp = Date.now().toString(36); // so the test can run again on the same data
   await page.goto('/c/new');
-  await page.getByLabel('Challenge name').fill('Back-dated Steps');
+  await page.getByLabel('Challenge name').fill(`Back-dated ${stamp}`);
   await page
     .getByRole('group', { name: 'Activity' })
     .getByRole('button', { name: 'Steps' })
@@ -338,24 +339,24 @@ test('picks custom dates in the past, then edits visibility but not dates', asyn
   await page.getByLabel('End date').fill(iso(4));
   await snap(page, '20-custom-dates');
   await page.getByRole('button', { name: 'Start challenge' }).click();
-  await expect(page.getByRole('heading', { name: 'Back-dated Steps' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Back-dated ${stamp}` })).toBeVisible();
 
   // Edit: rename, make it public; dates are read-only.
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const edit = page.getByLabel('Edit challenge');
   await expect(edit.getByText(/Dates \(.*\) are fixed/)).toBeVisible();
-  await edit.getByLabel('Challenge name').fill('Back-dated Steps Open');
+  await edit.getByLabel('Challenge name').fill(`Open ${stamp}`);
   await edit.getByRole('switch', { name: 'Public challenge' }).click();
   await edit.getByRole('switch', { name: 'Show events' }).click();
   await snap(page, '21-edit-challenge');
   await edit.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('heading', { name: 'Back-dated Steps Open' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Open ${stamp}` })).toBeVisible();
   await expect(page.getByText(/· Public/)).toBeVisible();
 
   // It is now listed in Discover.
   await page.goto('/challenges');
   await page.getByRole('button', { name: 'Discover' }).click();
-  await expect(page.getByText('Back-dated Steps Open')).toBeVisible();
+  await expect(page.getByText(`Open ${stamp}`)).toBeVisible();
 
   // Clean up so the test can run again: back to private... and delete is only for upcoming ones,
   // so leave this challenge; it is renamed every run.
