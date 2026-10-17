@@ -59,8 +59,10 @@ jobs:
           pnpm vite preview --outDir dist-direct --port 4175 --strictPort &
           for i in $(seq 1 30); do curl -sf localhost:4175 >/dev/null && break; sleep 1; done
           E2E_DIRECT=1 E2E_BASE_URL=http://localhost:4175 SCREENSHOT_DIR=$PWD/../../screens pnpm exec playwright test e2e/direct.spec.ts
+      # Screenshots are a convenience: a full artifact quota mustn't fail the build.
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: screens
           path: screens
@@ -91,6 +93,7 @@ jobs:
           GAUNTLET_VERSION_NAME: 0.1.${{ github.run_number }}
         run: ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: gauntlet-android-debug
           path: apps/web/android/app/build/outputs/apk/debug/*.apk
