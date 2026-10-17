@@ -5,3 +5,4 @@ export * from './api.js';
 export * from './derive.js';
 export * from './names.js';
 export * from './solo.js';
+export * from './wallpaper.js';

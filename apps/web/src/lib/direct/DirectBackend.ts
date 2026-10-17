@@ -8,6 +8,7 @@
 import {
   buildToday,
   buildTrends,
+  buildWallpaper,
   initials,
   personalBests,
   addDays,
@@ -27,6 +28,7 @@ import {
   type TrendsOverview,
   type TrendsResponse,
   type UserSettings,
+  type WallpaperResponse,
 } from '@gauntlet/shared';
 import {
   connectProvider,
@@ -238,6 +240,11 @@ export class DirectBackend {
       featured: null,
       hasSources: await this.hasSources(rows, today),
     };
+  }
+
+  async wallpaper(): Promise<WallpaperResponse> {
+    const { rows } = await this.load();
+    return buildWallpaper(rows, this.today_(), this.o.timezone);
   }
 
   /** Same rule as the server: recent data, Health Connect, or a linked app. */

@@ -6,4 +6,7 @@
     <string name="custom_url_scheme">cc.randalls.gauntlet</string>
     <!-- Shown by Health Connect when the user taps "Privacy policy" in the permission sheet. -->
     <string name="health_connect_privacy_policy_url">https://gauntlet.randalls.cc/privacy.html</string>
+    <!-- Live wallpaper (system wallpaper picker). -->
+    <string name="wallpaper_label">Gauntlet galaxy</string>
+    <string name="wallpaper_description">A slowly turning galaxy drawn from today\'s food, water and lifting in Gauntlet. The core is calories, the three arms protein, carbs and fat, the outer ring water, and the jets volume lifted.</string>
 </resources>

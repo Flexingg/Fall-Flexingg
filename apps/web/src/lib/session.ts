@@ -18,6 +18,7 @@ import { secret } from './direct/secret';
 import { get, post, patch } from './api';
 import { timezone } from './platform';
 import { storage } from './storage';
+import { publishWallpaper } from './wallpaper';
 
 export type Mode = 'direct' | 'server';
 
@@ -54,6 +55,8 @@ export async function clearStored() {
     saveStored({ mode: null, sparkyUrl: null, serverUrl: null }),
     secret.remove(),
     clearDirectCaches(),
+    // Signed out: the live wallpaper goes back to an empty galaxy.
+    publishWallpaper(null),
   ]);
 }
 

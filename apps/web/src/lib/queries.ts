@@ -17,6 +17,7 @@ import type {
   TrendsOverview,
   TrendsResponse,
   UserCard,
+  WallpaperResponse,
 } from '@gauntlet/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, get } from './api';
@@ -40,6 +41,7 @@ export const keys = {
   lifts: ['lifts'] as const,
   fast: ['fast'] as const,
   androidRelease: ['android-release'] as const,
+  wallpaper: ['wallpaper'] as const,
 };
 
 const live = { refetchInterval: 60_000, refetchOnWindowFocus: true };
@@ -50,6 +52,15 @@ export const useToday = () =>
   useQuery({
     queryKey: keys.today,
     queryFn: () => (session.direct ? session.direct.today() : get<TodayResponse>('/api/me/today')),
+    ...live,
+  });
+/** Today's food, water and lifting against goals: what the live wallpaper draws. */
+export const useWallpaper = (enabled = true) =>
+  useQuery({
+    queryKey: keys.wallpaper,
+    queryFn: () =>
+      session.direct ? session.direct.wallpaper() : get<WallpaperResponse>('/api/me/wallpaper'),
+    enabled,
     ...live,
   });
 export const useFeed = () =>
