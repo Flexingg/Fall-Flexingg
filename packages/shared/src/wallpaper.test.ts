@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { WallpaperResponse } from './api.js';
 import type { MetricRow } from './derive.js';
 import {
   buildWallpaper,
   DEFAULT_VOLUME_TARGET_KG,
+  SLEEP_TARGET_HOURS,
   wallpaperFraction,
   wallpaperFractions,
 } from './wallpaper.js';
@@ -59,6 +61,36 @@ describe('buildWallpaper', () => {
   });
 });
 
+describe('sleep', () => {
+  it("uses last night's sleep against 8 hours", () => {
+    const w = buildWallpaper(
+      [row(today, 'sleep', 6.5), row('2026-09-30', 'sleep', 9)],
+      today,
+      'UTC',
+    );
+    expect(w.sleep).toEqual({ value: 6.5, goal: SLEEP_TARGET_HOURS });
+    expect(wallpaperFractions(w, today).sleep).toBeCloseTo(6.5 / 8);
+  });
+
+  it("falls back to the night before when last night hasn't synced", () => {
+    const w = buildWallpaper([row('2026-09-30', 'sleep', 7)], today, 'UTC');
+    expect(w.sleep.value).toBe(7);
+    // Two nights ago is too old to stand in.
+    expect(buildWallpaper([row('2026-09-29', 'sleep', 7)], today, 'UTC').sleep.value).toBeNull();
+  });
+
+  it('fills the sky at 8 hours and no further', () => {
+    const w = buildWallpaper([row(today, 'sleep', 10)], today, 'UTC');
+    expect(wallpaperFractions(w, today).sleep).toBe(1);
+    expect(wallpaperFractions(w, '2026-10-02').sleep).toBe(0);
+  });
+
+  it('draws no sleep stars from a snapshot saved before sleep existed', () => {
+    const { sleep: _omitted, ...old } = buildWallpaper([row(today, 'sleep', 8)], today, 'UTC');
+    expect(wallpaperFractions(old as WallpaperResponse, today).sleep).toBe(0);
+  });
+});
+
 describe('wallpaperFraction', () => {
   it('divides and clamps to [0, 1.25]', () => {
     expect(wallpaperFraction(50, 100)).toBe(0.5);
@@ -96,10 +128,11 @@ describe('wallpaperFractions', () => {
       fat: 1.25,
       water: 0,
       volume: 0,
+      sleep: 0,
     });
   });
 
   it("shows an empty day once the person's local day has moved on", () => {
-    expect(Object.values(wallpaperFractions(snap, '2026-10-02'))).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(Object.values(wallpaperFractions(snap, '2026-10-02'))).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 });

@@ -8,7 +8,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class GalaxyAnimatorTest {
-    private static final float[] TARGETS = {0.8f, 1f, 0.5f, 0.25f, 0.6f, 1.25f};
+    private static final float[] TARGETS = {0.8f, 1f, 0.5f, 0.25f, 0.6f, 1.25f, 0.75f};
 
     @Test
     public void easesOutCubically() {
@@ -29,8 +29,12 @@ public class GalaxyAnimatorTest {
         // Fade comes up first, over 1.5 s.
         assertEquals(1f, a.value(GalaxyAnimator.FADE, 1.5f), 0);
         assertFalse(a.settled(4.1f));
-        assertTrue(a.settled(4.25f));
-        for (int i = 0; i < 6; i++) assertEquals(TARGETS[i], a.value(i, 10f), 1e-6);
+        assertFalse(a.settled(4.3f));
+        assertTrue(a.settled(4.45f));
+        // Sleep stars come in last, from 1.6 s over 2.8 s.
+        assertEquals(0f, a.value(GalaxyAnimator.SLEEP, 1.59f), 0);
+        assertEquals(0.75f, a.value(GalaxyAnimator.SLEEP, 4.45f), 1e-6);
+        for (int i = 0; i < 7; i++) assertEquals(TARGETS[i], a.value(i, 10f), 1e-6);
     }
 
     @Test

@@ -154,8 +154,8 @@ cd apps/web/android && ./gradlew assembleDebug
   rate, sleep, exercise, history) and syncs when opened or resumed. Records use the same format and
   source name as the SparkyFitness app, so if you already run that, you only need one of them syncing.
 - **Live wallpaper** (Me → Live wallpaper): a GLES 2 spiral galaxy drawn from today's calories (core),
-  protein/carbs/fat (three arms), water (outer ring) and volume lifted (jets, against your best same
-  weekday of the last 8 weeks). The app hands the wallpaper its latest numbers through Capacitor
+  protein/carbs/fat (three arms), water (outer ring), volume lifted (jets, against your best same
+  weekday of the last 8 weeks) and last night's sleep (more stars, full at 8 hours). The app hands the wallpaper its latest numbers through Capacitor
   Preferences, so it shows what Gauntlet last synced. The shader in `apps/web/shaders/` is shared by
   the wallpaper and the in-app preview.
 - Icons and splash screens come from `apps/web/public/icons/*.svg`: `pnpm --filter @gauntlet/web icons`.

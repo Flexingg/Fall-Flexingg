@@ -2,10 +2,10 @@ package cc.randalls.gauntlet.wallpaper;
 
 /**
  * Today's numbers as the app last saw them (WallpaperResponse in packages/shared). Missing values
- * and goals are NaN. Channel order: calories, protein, carbs, fat, water, volume.
+ * and goals are NaN. Channel order: calories, protein, carbs, fat, water, volume, sleep.
  */
 public final class WallpaperSnapshot {
-    public static final String[] CHANNELS = {"calories", "protein", "carbs", "fat", "water", "volume"};
+    public static final String[] CHANNELS = {"calories", "protein", "carbs", "fat", "water", "volume", "sleep"};
 
     public final String date;
     public final String timezone;

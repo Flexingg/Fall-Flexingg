@@ -54,6 +54,7 @@ const WALLPAPER_METRICS = [
   'fat',
   'water',
   'lift_volume',
+  'sleep',
   'goal_calories',
   'goal_protein',
   'goal_carbs',
@@ -125,7 +126,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
-  /** Today's food, water and lifting against the person's goals, for the Android live wallpaper. */
+  /** Today's food, water, lifting and sleep against the person's goals, for the Android live wallpaper. */
   app.get('/api/me/wallpaper', auth, async (req): Promise<WallpaperResponse> => {
     const user = await getUser(ctx, req.userId);
     const date = todayIn(user.timezone, ctx.now());

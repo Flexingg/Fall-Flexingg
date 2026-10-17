@@ -6,11 +6,12 @@ package cc.randalls.gauntlet.wallpaper;
  * Times are seconds; nothing here allocates after construction.
  */
 public final class GalaxyAnimator {
-    /** Channel order: calories, protein, carbs, fat, water, volume, then fade. */
-    public static final int CHANNELS = 7;
-    public static final int FADE = 6;
-    private static final float[] DELAYS = {0.2f, 0.5f, 0.8f, 1.1f, 1.4f, 1.2f, 0f};
-    private static final float[] DURATIONS = {3.0f, 2.8f, 2.8f, 2.8f, 2.8f, 2.8f, 1.5f};
+    /** Channel order: calories, protein, carbs, fat, water, volume, sleep, then fade. */
+    public static final int CHANNELS = 8;
+    public static final int SLEEP = 6;
+    public static final int FADE = 7;
+    private static final float[] DELAYS = {0.2f, 0.5f, 0.8f, 1.1f, 1.4f, 1.2f, 1.6f, 0f};
+    private static final float[] DURATIONS = {3.0f, 2.8f, 2.8f, 2.8f, 2.8f, 2.8f, 2.8f, 1.5f};
     static final float RETARGET_SECONDS = 1.5f;
 
     private final float[] from = new float[CHANNELS];
@@ -27,7 +28,7 @@ public final class GalaxyAnimator {
         return 1f - u * u * u;
     }
 
-    /** Everything grows in from nothing. targets: the six fractions (fade is implied). */
+    /** Everything grows in from nothing. targets: the seven fractions (fade is implied). */
     public void intro(float[] targets, float now) {
         for (int i = 0; i < CHANNELS; i++) {
             from[i] = 0f;

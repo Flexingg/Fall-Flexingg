@@ -11,15 +11,21 @@ import java.time.ZoneId;
  */
 public final class WallpaperFractions {
     public static final float MAX = 1.25f;
+    /** Sleep fills the sky at 8 hours; more draws the same. */
+    static final int SLEEP = 6;
 
     private WallpaperFractions() {}
 
     /** No goal (or a zero one) draws nothing; a small overshoot shows, more is capped. */
     public static float fraction(double value, double goal) {
+        return fraction(value, goal, MAX);
+    }
+
+    static float fraction(double value, double goal, float max) {
         if (!Double.isFinite(value) || !Double.isFinite(goal)) return 0f;
         if (goal <= 0) return 0f;
         double f = value / goal;
-        return (float) Math.min(Math.max(f, 0), MAX);
+        return (float) Math.min(Math.max(f, 0), max);
     }
 
     /**
@@ -29,7 +35,7 @@ public final class WallpaperFractions {
     public static float[] compute(WallpaperSnapshot s, LocalDate today) {
         float[] out = new float[WallpaperSnapshot.CHANNELS.length];
         if (s == null || !today.toString().equals(s.date)) return out;
-        for (int i = 0; i < out.length; i++) out[i] = fraction(s.values[i], s.goals[i]);
+        for (int i = 0; i < out.length; i++) out[i] = fraction(s.values[i], s.goals[i], i == SLEEP ? 1f : MAX);
         return out;
     }
 

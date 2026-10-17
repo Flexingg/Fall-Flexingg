@@ -1,14 +1,19 @@
 // Health galaxy live wallpaper (GLSL ES 1.00). One source for the Android wallpaper (packaged as
 // an asset by app/build.gradle) and the in-app preview (imported by src/wallpaper/galaxy.ts).
-// uA = calories, protein, carbs, fat fractions; uB = water, volume, fade, seconds; uRes = pixels.
+// uA = calories, protein, carbs, fat fractions; uB = water, volume, fade, seconds; uRes = pixels;
+// uS = sleep fraction (hours / 8, capped at 1): more stars after more sleep.
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
 precision mediump float;
 #endif
-uniform vec4 uA; uniform vec4 uB; uniform vec2 uRes;
+uniform vec4 uA; uniform vec4 uB; uniform vec2 uRes; uniform float uS;
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
-float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
+// Corner hash in exact whole-number math (mod 289 permutation), so neighbouring cells agree on
+// the corners they share on every GPU; the float hash above can differ by rounding and leave seams.
+float perm(float x){return mod((34.*x+1.)*x,289.);}
+float ihash(vec2 i){i=mod(i,289.);return fract(perm(perm(i.x)+i.y)*.0346021);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(ihash(i),ihash(i+vec2(1.,0.)),f.x),mix(ihash(i+vec2(0.,1.)),ihash(i+vec2(1.,1.)),f.x),f.y);}
 float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*vn(p);p=p*2.03+vec2(17.1,9.7);a*=.5;}return v;}
 float armf(float ph,float off,float w){float d=abs(mod(ph-off+3.14159,6.28318)-3.14159);return exp(-d*d*w);}
 float stars(vec2 fc,float sc,float dens,float t){vec2 p=fc/sc;vec2 i=floor(p),f=fract(p);float h=hash(i);float on=step(1.-dens,h);vec2 c=vec2(hash(i+3.1),hash(i+7.7))*.6+.2;float d=length(f-c);float b=exp(-d*d*26.)*(.4+.6*hash(i+1.3));b*=.75+.25*sin(t*(1.+3.*hash(i+9.))+hash(i)*6.28);return on*b;}
@@ -35,15 +40,15 @@ void main(){
   vec3 knots=tint*clump*1.5*exp(-r/75.);
   float ld=exp(-r/38.)*(1.-smoothstep(95.,125.,r));
   float armGlow=armL*exp(-r/60.)*(.55+.9*fbm(qn*.2+11.));
-  vec3 disk=vec3(.55,.68,1.)*(ld*.3+armGlow*1.1)*(1.-.75*dust);
+  vec3 disk=vec3(.70,.60,1.)*(ld*.3+armGlow*1.1)*(1.-.75*dust);
   float rb=7.+16.*uA.x; float rbb=length(vec2(q.x,q.y*.75));
   float bulge=(.6+1.8*uA.x)*exp(-pow(rbb/rb,.55)*2.3);
-  vec3 col=disk+vec3(1.,.78,.48)*bulge*(1.-.3*dust)+knots*(1.-.5*dust);
+  vec3 col=disk+vec3(1.,.76,.60)*bulge*(1.-.3*dust)+knots*(1.-.5*dust);
   float ring=exp(-pow((r-104.)/3.,2.));
   float aw=mod(a-t*.03,6.28318); float L=6.28318*uB.x;
   float mask=smoothstep(0.,.25,aw)*(1.-smoothstep(L-.25,L,aw));
   float lead=.3+.7*aw/max(L,.01);
-  col+=vec3(.52,.72,.95)*ring*mask*lead*(.4+1.1*vn(qn*.6+5.))*.9;
+  col+=vec3(.60,.66,1.)*ring*mask*lead*(.4+1.1*vn(qn*.6+5.))*.9;
   vec2 dj=vec2(-sn,cs); float s=dot(pos,dj), qd=dot(pos,vec2(-dj.y,dj.x));
   float Lj=(18.+80.*uB.y)*step(.001,uB.y); float as=abs(s);
   float jet=exp(-qd*qd/(2.+as*.05))*(1.-smoothstep(Lj*.4,Lj+.01,as))*smoothstep(3.,8.,as)*(.7+.3*sin(as*.25-t*3.));
@@ -51,8 +56,11 @@ void main(){
   col*=fade;
   float lum=clamp(dot(col,vec3(.4)),0.,1.5);
   vec3 sc=mix(vec3(1.),col/(max(max(col.r,col.g),col.b)+.001),.45);
-  float st=stars(gl_FragCoord.xy,3.2/k,.01+.16*lum,t)*.8+stars(gl_FragCoord.xy+40.,7./k,.004+.05*lum,t)*1.2;
-  vec3 bg=vec3(.015,.02,.05)+vec3(.18,.1,.35)*pow(fbm(pos*.012+5.),3.)*1.2+vec3(.05,.2,.18)*pow(fbm(pos*.011+30.),3.)*1.1;
+  // Sleep: a sparse sky after a short night, the full starfield (plus faint dust stars) at 8 hours.
+  float sl=.1+2.4*uS;
+  float st=stars(gl_FragCoord.xy,3.2/k,(.01+.16*lum)*sl,t)*.8+stars(gl_FragCoord.xy+40.,7./k,(.004+.05*lum)*sl,t)*(.8+.5*uS)
+    +stars(gl_FragCoord.xy+90.,2./k,.07*uS*uS,t)*.45;
+  vec3 bg=vec3(.022,.016,.055)+vec3(.26,.10,.44)*pow(fbm(pos*.012+5.),3.)*1.35+vec3(.20,.06,.30)*pow(fbm(pos*.011+30.),3.)*1.1;
   col+=bg*fade+sc*st*fade;
   col=1.-exp(-col*1.3);
   gl_FragColor=vec4(col,1.);

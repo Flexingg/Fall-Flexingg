@@ -24,7 +24,7 @@ public final class GalaxyRenderer {
     private final String frag;
     private final FloatBuffer triangle;
     private int program;
-    private int uA, uB, uRes;
+    private int uA, uB, uRes, uS;
 
     public GalaxyRenderer(String fragSource) {
         frag = fragSource;
@@ -72,6 +72,7 @@ public final class GalaxyRenderer {
         uA = GLES20.glGetUniformLocation(program, "uA");
         uB = GLES20.glGetUniformLocation(program, "uB");
         uRes = GLES20.glGetUniformLocation(program, "uRes");
+        uS = GLES20.glGetUniformLocation(program, "uS");
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
         GLES20.glDisable(GLES20.GL_BLEND);
         return true;
@@ -91,13 +92,15 @@ public final class GalaxyRenderer {
         return sh;
     }
 
-    /** a = calories, protein, carbs, fat; b = water, volume, fade, seconds. */
-    public void draw(int width, int height, float a0, float a1, float a2, float a3, float b0, float b1, float b2, float b3) {
+    /** a = calories, protein, carbs, fat; b = water, volume, fade, seconds; sleep = star fraction. */
+    public void draw(
+            int width, int height, float a0, float a1, float a2, float a3, float b0, float b1, float b2, float b3, float sleep) {
         GLES20.glViewport(0, 0, width, height);
         GLES20.glUseProgram(program);
         GLES20.glUniform4f(uA, a0, a1, a2, a3);
         GLES20.glUniform4f(uB, b0, b1, b2, b3);
         GLES20.glUniform2f(uRes, width, height);
+        GLES20.glUniform1f(uS, sleep);
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
         GLES20.glEnableVertexAttribArray(0);
         GLES20.glVertexAttribPointer(0, 2, GLES20.GL_FLOAT, false, 0, triangle);

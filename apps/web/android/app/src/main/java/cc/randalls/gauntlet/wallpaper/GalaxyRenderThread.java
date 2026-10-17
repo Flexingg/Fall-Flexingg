@@ -90,7 +90,7 @@ final class GalaxyRenderThread implements Choreographer.FrameCallback {
         });
     }
 
-    /** Plays the intro toward these fractions (calories, protein, carbs, fat, water, volume). */
+    /** Plays the intro toward these fractions (calories, protein, carbs, fat, water, volume, sleep). */
     void show(float[] targets) {
         float[] t = targets.clone();
         handler.post(() -> {
@@ -197,7 +197,8 @@ final class GalaxyRenderThread implements Choreographer.FrameCallback {
                 anim.value(4, now),
                 anim.value(5, now),
                 anim.value(GalaxyAnimator.FADE, now),
-                now);
+                now,
+                anim.value(GalaxyAnimator.SLEEP, now));
         if (!EGL14.eglSwapBuffers(display, surface)) {
             onSwapFailed(EGL14.eglGetError());
             requestFrame();

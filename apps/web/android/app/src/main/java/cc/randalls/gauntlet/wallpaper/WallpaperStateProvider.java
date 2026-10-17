@@ -62,7 +62,7 @@ public final class WallpaperStateProvider implements SharedPreferences.OnSharedP
         return snapshot;
     }
 
-    /** Calories, protein, carbs, fat, water, volume, for the person's local day as of `now`. */
+    /** Calories, protein, carbs, fat, water, volume, sleep, for the person's local day as of `now`. */
     public float[] fractions(Instant now) {
         WallpaperSnapshot s = snapshot();
         return WallpaperFractions.compute(s, WallpaperFractions.today(s == null ? null : s.timezone, now));

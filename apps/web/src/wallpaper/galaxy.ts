@@ -6,24 +6,26 @@ import FRAG from '../../shaders/wallpaper/galaxy.frag?raw';
 
 export const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 
-/** Channel order: calories, protein, carbs, fat, water, volume, fade. Seconds. */
-const DELAYS = [0.2, 0.5, 0.8, 1.1, 1.4, 1.2, 0];
-const DURATIONS = [3.0, 2.8, 2.8, 2.8, 2.8, 2.8, 1.5];
+/** Channel order: calories, protein, carbs, fat, water, volume, sleep, fade. Seconds. */
+const DELAYS = [0.2, 0.5, 0.8, 1.1, 1.4, 1.2, 1.6, 0];
+const DURATIONS = [3.0, 2.8, 2.8, 2.8, 2.8, 2.8, 2.8, 1.5];
 const RETARGET_SECONDS = 1.5;
-const FADE = 6;
+const CHANNELS = 8;
+const SLEEP = 6;
+const FADE = 7;
 
 const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
 
 /** Eases each value toward its target: the intro on show, then a short glide when data changes. */
 export class GalaxyAnimator {
-  private from = new Float32Array(7);
-  private to = new Float32Array(7);
-  private start = new Float32Array(7);
-  private dur = new Float32Array(7);
+  private from = new Float32Array(CHANNELS);
+  private to = new Float32Array(CHANNELS);
+  private start = new Float32Array(CHANNELS);
+  private dur = new Float32Array(CHANNELS);
 
-  /** targets: calories, protein, carbs, fat, water, volume fractions. */
+  /** targets: calories, protein, carbs, fat, water, volume, sleep fractions. */
   intro(targets: readonly number[], now: number) {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < CHANNELS; i++) {
       this.from[i] = 0;
       this.to[i] = i === FADE ? 1 : (targets[i] ?? 0);
       this.start[i] = now + DELAYS[i]!;
@@ -53,6 +55,7 @@ export class GalaxyGL {
   private uA: WebGLUniformLocation | null = null;
   private uB: WebGLUniformLocation | null = null;
   private uRes: WebGLUniformLocation | null = null;
+  private uS: WebGLUniformLocation | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
@@ -91,6 +94,7 @@ export class GalaxyGL {
     this.uA = gl.getUniformLocation(prog, 'uA');
     this.uB = gl.getUniformLocation(prog, 'uB');
     this.uRes = gl.getUniformLocation(prog, 'uRes');
+    this.uS = gl.getUniformLocation(prog, 'uS');
   }
 
   draw(anim: GalaxyAnimator, now: number, seconds: number) {
@@ -101,6 +105,7 @@ export class GalaxyGL {
     gl.uniform4f(this.uA, v(0), v(1), v(2), v(3));
     gl.uniform4f(this.uB, v(4), v(5), v(FADE), seconds);
     gl.uniform2f(this.uRes, canvas.width, canvas.height);
+    gl.uniform1f(this.uS, v(SLEEP));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 }

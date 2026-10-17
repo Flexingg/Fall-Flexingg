@@ -27,12 +27,13 @@ const amount = (c: WallpaperChannel, unit: string, decimals = 0) => {
 
 function legend(w: WallpaperResponse) {
   return [
-    { what: 'Core', means: 'Calories', color: '#ffc77a', value: amount(w.calories, 'kcal') },
+    { what: 'Core', means: 'Calories', color: '#ffc2a0', value: amount(w.calories, 'kcal') },
     { what: 'Coral arm', means: 'Protein', color: '#f59a7a', value: amount(w.protein, 'g') },
     { what: 'Amber arm', means: 'Carbs', color: '#fac776', value: amount(w.carbs, 'g') },
     { what: 'Violet arm', means: 'Fat', color: '#b0a8ed', value: amount(w.fat, 'g') },
-    { what: 'Outer ring', means: 'Water', color: '#85b8f2', value: amount(w.water, 'L', 1) },
+    { what: 'Outer ring', means: 'Water', color: '#a3a8ff', value: amount(w.water, 'L', 1) },
     { what: 'Jets', means: 'Volume lifted', color: '#8ce6cc', value: amount(w.volume, 'kg') },
+    { what: 'Stars', means: 'Sleep', color: '#ece8ff', value: amount(w.sleep, 'h', 1) },
   ];
 }
 
@@ -58,9 +59,9 @@ export function WallpaperPage() {
 
   const w = wallpaper.data;
   const targets = useMemo(() => {
-    if (!w) return [0, 0, 0, 0, 0, 0];
+    if (!w) return [0, 0, 0, 0, 0, 0, 0];
     const f = wallpaperFractions(w, todayIn(w.timezone));
-    return [f.calories, f.protein, f.carbs, f.fat, f.water, f.volume];
+    return [f.calories, f.protein, f.carbs, f.fat, f.water, f.volume, f.sleep];
   }, [w]);
 
   async function pickQuality(q: WallpaperQuality) {
@@ -81,8 +82,9 @@ export function WallpaperPage() {
     <Screen>
       <Header title="Live wallpaper" back="/me" />
       <p className="muted" style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 14 }}>
-        A slowly turning galaxy drawn from today&apos;s food, water and lifting. No numbers on your
-        lock screen; the shapes grow as you get closer to your goals.
+        A slowly turning galaxy drawn from today&apos;s food, water and lifting, with more stars the
+        more you slept. No numbers on your lock screen; the shapes grow as you get closer to your
+        goals.
       </p>
       <ErrorBox error={wallpaper.error ?? error} />
 

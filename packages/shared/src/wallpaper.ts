@@ -1,6 +1,7 @@
 /**
  * What the Android "health galaxy" live wallpaper shows: today's food, water and lifting as
- * fractions of the person's own goals. Built from the same daily rows as Today and Trends.
+ * fractions of the person's own goals, and last night's sleep as stars. Built from the same daily
+ * rows as Today and Trends.
  */
 import type { WallpaperChannel, WallpaperResponse } from './api.js';
 import { addDays } from './dates.js';
@@ -11,6 +12,8 @@ export const WALLPAPER_MAX_FRACTION = 1.25;
 /** Volume target when there's no lifting on the same weekday in the last 8 weeks. */
 export const DEFAULT_VOLUME_TARGET_KG = 5000;
 const VOLUME_LOOKBACK_WEEKS = 8;
+/** Hours of sleep that fill the sky with stars; more draws the same. */
+export const SLEEP_TARGET_HOURS = 8;
 /** Earliest day buildWallpaper reads, relative to today. */
 export const WALLPAPER_HISTORY_DAYS = VOLUME_LOOKBACK_WEEKS * 7;
 
@@ -21,6 +24,7 @@ export interface WallpaperFractions {
   fat: number;
   water: number;
   volume: number;
+  sleep: number;
 }
 
 export function buildWallpaper(
@@ -55,14 +59,27 @@ export function buildWallpaper(
     water: channel('water', 'goal_water'),
     volume: { value: value('lift_volume'), goal: best > 0 ? best : DEFAULT_VOLUME_TARGET_KG },
     volumeGoalSource: best > 0 ? 'best_weekday' : 'default',
+    // Sleep is stored on the day you wake up. Early in the day last night may not have synced yet,
+    // so fall back to the night before rather than showing an empty sky.
+    sleep: {
+      value:
+        value('sleep') ??
+        rows.find((r) => r.date === addDays(today, -1) && r.metric === 'sleep')?.value ??
+        null,
+      goal: SLEEP_TARGET_HOURS,
+    },
   };
 }
 
-/** value / goal, clamped to [0, 1.25]. No goal (or a zero one) draws nothing. */
-export function wallpaperFraction(value: number | null, goal: number | null): number {
+/** value / goal, clamped to [0, max] (1.25 unless given). No goal (or a zero one) draws nothing. */
+export function wallpaperFraction(
+  value: number | null,
+  goal: number | null,
+  max = WALLPAPER_MAX_FRACTION,
+): number {
   if (value == null || goal == null || !Number.isFinite(value) || !Number.isFinite(goal)) return 0;
   if (goal <= 0) return 0;
-  return Math.min(Math.max(value / goal, 0), WALLPAPER_MAX_FRACTION);
+  return Math.min(Math.max(value / goal, 0), max);
 }
 
 /**
@@ -70,7 +87,8 @@ export function wallpaperFraction(value: number | null, goal: number | null): nu
  * nothing about today's intake, so it draws as an empty day.
  */
 export function wallpaperFractions(s: WallpaperResponse, today: string): WallpaperFractions {
-  const f = (c: WallpaperChannel) => (s.date === today ? wallpaperFraction(c.value, c.goal) : 0);
+  const f = (c: WallpaperChannel, max?: number) =>
+    s.date === today ? wallpaperFraction(c.value, c.goal, max) : 0;
   return {
     calories: f(s.calories),
     protein: f(s.protein),
@@ -78,5 +96,7 @@ export function wallpaperFractions(s: WallpaperResponse, today: string): Wallpap
     fat: f(s.fat),
     water: f(s.water),
     volume: f(s.volume),
+    // Snapshots saved before sleep was added have none.
+    sleep: s.sleep ? f(s.sleep, 1) : 0,
   };
 }

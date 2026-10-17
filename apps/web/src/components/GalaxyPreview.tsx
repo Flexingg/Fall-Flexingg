@@ -5,8 +5,8 @@ import { RENDER_SCALE, type WallpaperQuality } from '../lib/wallpaper';
 const FPS: Record<WallpaperQuality, number> = { max: 30, balanced: 24, saver: 12 };
 
 /**
- * The live wallpaper, drawn in the app. `targets` are calories, protein, carbs, fat, water and
- * volume fractions; changing `replay` plays the intro again, as unlocking the phone does.
+ * The live wallpaper, drawn in the app. `targets` are calories, protein, carbs, fat, water,
+ * volume and sleep fractions; changing `replay` plays the intro again, as unlocking the phone does.
  */
 export function GalaxyPreview({
   targets,

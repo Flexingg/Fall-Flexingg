@@ -420,7 +420,7 @@ export interface WallpaperChannel {
   goal: number | null;
 }
 
-/** Today's nutrition, water and lifting for the Android live wallpaper (no challenge data). */
+/** Today's nutrition, water, lifting and sleep for the Android live wallpaper (no challenge data). */
 export interface WallpaperResponse {
   date: string;
   /** The day boundary `date` was taken in, so the phone can tell when it's a new day. */
@@ -434,6 +434,8 @@ export interface WallpaperResponse {
   /** Kilograms lifted; the goal is the best same-weekday day of the last 8 weeks. */
   volume: WallpaperChannel;
   volumeGoalSource: 'best_weekday' | 'default';
+  /** Hours slept last night (the night before if last night hasn't synced); the goal is 8. */
+  sleep: WallpaperChannel;
 }
 
 export const trendsQuerySchema = z.object({

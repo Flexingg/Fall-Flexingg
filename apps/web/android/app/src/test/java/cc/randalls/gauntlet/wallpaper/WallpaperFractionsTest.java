@@ -11,12 +11,12 @@ public class WallpaperFractionsTest {
     private static final double NA = Double.NaN;
 
     private static WallpaperSnapshot snap(String date, String tz) {
-        // calories, protein, carbs, fat, water, volume
+        // calories, protein, carbs, fat, water, volume, sleep
         return new WallpaperSnapshot(
                 date,
                 tz,
-                new double[] {1100, 75, 400, 70, 1.5, 9000},
-                new double[] {2200, 150, 200, 0, NA, 6000});
+                new double[] {1100, 75, 400, 70, 1.5, 9000, 10},
+                new double[] {2200, 150, 200, 0, NA, 6000, 8});
     }
 
     @Test
@@ -39,14 +39,14 @@ public class WallpaperFractionsTest {
     @Test
     public void usesTheSnapshotOnItsOwnDay() {
         float[] f = WallpaperFractions.compute(snap("2026-10-01", "UTC"), LocalDate.parse("2026-10-01"));
-        assertArrayEquals(new float[] {0.5f, 0.5f, 1.25f, 0f, 0f, 1.25f}, f, 1e-6f);
+        assertArrayEquals(new float[] {0.5f, 0.5f, 1.25f, 0f, 0f, 1.25f, 1f}, f, 1e-6f);
     }
 
     @Test
     public void aNewDayStartsEmpty() {
         float[] f = WallpaperFractions.compute(snap("2026-10-01", "UTC"), LocalDate.parse("2026-10-02"));
-        assertArrayEquals(new float[6], f, 0);
-        assertArrayEquals(new float[6], WallpaperFractions.compute(null, LocalDate.parse("2026-10-02")), 0);
+        assertArrayEquals(new float[7], f, 0);
+        assertArrayEquals(new float[7], WallpaperFractions.compute(null, LocalDate.parse("2026-10-02")), 0);
     }
 
     @Test
