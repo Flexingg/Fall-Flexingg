@@ -414,6 +414,28 @@ export interface TodayResponse {
   hasSources: boolean;
 }
 
+/** One quantity the live wallpaper draws: today's value and the person's own target. */
+export interface WallpaperChannel {
+  value: number | null;
+  goal: number | null;
+}
+
+/** Today's nutrition, water and lifting for the Android live wallpaper (no challenge data). */
+export interface WallpaperResponse {
+  date: string;
+  /** The day boundary `date` was taken in, so the phone can tell when it's a new day. */
+  timezone: string;
+  calories: WallpaperChannel;
+  protein: WallpaperChannel;
+  carbs: WallpaperChannel;
+  fat: WallpaperChannel;
+  /** Litres. */
+  water: WallpaperChannel;
+  /** Kilograms lifted; the goal is the best same-weekday day of the last 8 weeks. */
+  volume: WallpaperChannel;
+  volumeGoalSource: 'best_weekday' | 'default';
+}
+
 export const trendsQuerySchema = z.object({
   range: z.enum(['day', 'week', 'month']).default('week'),
   metric: z.string().refine(isTrendMetric, 'Unknown metric').default('steps'),

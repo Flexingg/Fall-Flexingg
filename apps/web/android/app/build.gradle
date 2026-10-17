@@ -32,6 +32,10 @@ android {
             }
         }
     }
+    // The live wallpaper's shader is shared with the web preview: apps/web/shaders -> assets.
+    sourceSets {
+        main.assets.srcDirs += '../../shaders'
+    }
     lint {
         // The release lint pass only reports Kotlin metadata noise from a plugin and adds minutes.
         checkReleaseBuilds = false

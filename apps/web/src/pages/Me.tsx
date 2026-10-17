@@ -150,6 +150,13 @@ export function MePage() {
           <div className="grow t">Data sources & privacy</div>
           <Icon name="chevron" size={18} />
         </Link>
+        {isNative && (
+          <Link to="/me/wallpaper" className="item">
+            <Icon name="moon" size={20} />
+            <div className="grow t">Live wallpaper</div>
+            <Icon name="chevron" size={18} />
+          </Link>
+        )}
         <div className="item">
           <Icon name="today" size={20} />
           <div className="grow">

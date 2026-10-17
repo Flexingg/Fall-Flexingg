@@ -1,5 +1,14 @@
 package cc.randalls.gauntlet;
 
+import android.os.Bundle;
+import cc.randalls.gauntlet.wallpaper.GalaxyWallpaperPlugin;
 import com.getcapacitor.BridgeActivity;
 
-public class MainActivity extends BridgeActivity {}
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        // App-local plugins register before the bridge starts.
+        registerPlugin(GalaxyWallpaperPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
+}

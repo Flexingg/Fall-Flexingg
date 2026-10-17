@@ -6,6 +6,7 @@ import type {
   MeUser,
   TrendsOverview,
   TrendsResponse,
+  WallpaperResponse,
 } from '@gauntlet/shared';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
@@ -339,5 +340,20 @@ describe('Trends covers every stat', () => {
     expect(lift.def.label).toBe('Squat heaviest set');
     await call('bulk', 'GET', '/api/me/trends?range=day&metric=goal_calories', undefined, 400);
     await call('bulk', 'GET', '/api/me/trends?range=day&metric=nonsense', undefined, 400);
+  });
+});
+
+describe('live wallpaper', () => {
+  it("reports today's food against the person's own goals", async () => {
+    const w = await call<WallpaperResponse>('bulk', 'GET', '/api/me/wallpaper');
+    expect(w).toMatchObject({
+      date: '2026-10-02',
+      timezone: 'UTC',
+      calories: { value: 3200, goal: 3200 },
+      protein: { value: 200, goal: 200 },
+    });
+    expect(w.volume.goal).toBeGreaterThan(0);
+    const c = await call<WallpaperResponse>('cut', 'GET', '/api/me/wallpaper');
+    expect(c.calories).toEqual({ value: 1980, goal: 1800 });
   });
 });

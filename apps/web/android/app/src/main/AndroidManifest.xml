@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- The live wallpaper is optional; the app installs on devices without it. -->
+    <uses-feature android:name="android.software.live_wallpaper" android:required="false" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -57,6 +60,20 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Health galaxy live wallpaper: today's food, water and lifting. -->
+        <service
+            android:name=".wallpaper.GalaxyWallpaperService"
+            android:label="@string/wallpaper_label"
+            android:permission="android.permission.BIND_WALLPAPER"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/galaxy_wallpaper" />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

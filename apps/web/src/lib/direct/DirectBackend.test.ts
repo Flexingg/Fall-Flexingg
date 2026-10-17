@@ -98,6 +98,25 @@ describe('DirectBackend', () => {
     expect(week.personalBests[0]!.value).toBe('8.5 km');
   });
 
+  it("feeds the live wallpaper today's food, water and lifting against goals", async () => {
+    const { backend, user } = setup();
+    user.goals.push({ from: '2026-01-01', goals: { calories: 2400, protein: 160 } });
+    user.nutrition.push({ date: '2026-10-02', calories: 1200, protein: 80 });
+    user.exerciseEntries.push(
+      { entry_date: '2026-10-02', exercise_name: 'Squat', sets: [{ reps: 5, weight: 100 }] },
+      { entry_date: '2026-09-25', exercise_name: 'Squat', sets: [{ reps: 10, weight: 100 }] },
+    );
+    const w = await backend.wallpaper();
+    expect(w).toMatchObject({
+      date: '2026-10-02',
+      timezone: TZ,
+      calories: { value: 1200, goal: 2400 },
+      protein: { value: 80, goal: 160 },
+      volume: { value: 500, goal: 1000 },
+      volumeGoalSource: 'best_weekday',
+    });
+  });
+
   it('reads the profile from SparkyFitness and keeps settings on the phone', async () => {
     const { backend } = setup();
     const me = await backend.me();

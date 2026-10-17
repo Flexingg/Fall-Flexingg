@@ -8,6 +8,8 @@ import { ToastHost } from './components/ui';
 import { useAuth } from './lib/auth';
 import { syncHealthConnect } from './lib/health';
 import { isNative } from './lib/platform';
+import { useWallpaper } from './lib/queries';
+import { publishWallpaper } from './lib/wallpaper';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
 import { FriendsPage } from './pages/Friends';
@@ -21,6 +23,7 @@ import { SignupPage } from './pages/Signup';
 import { SourcesPage } from './pages/Sources';
 import { TodayPage } from './pages/Today';
 import { TrendsPage } from './pages/Trends';
+import { WallpaperPage } from './pages/Wallpaper';
 
 function Private({ children }: { children: ReactNode }) {
   const { status } = useAuth();
@@ -91,6 +94,11 @@ function NativeBridge() {
       sub.then((h) => h.remove());
     };
   }, [status, user?.settings.healthConnectSync, qc]);
+  // Keep the live wallpaper's copy of today's numbers current while the app is open.
+  const wallpaper = useWallpaper(isNative && status === 'signedIn');
+  useEffect(() => {
+    if (wallpaper.data) publishWallpaper(wallpaper.data).catch(() => undefined);
+  }, [wallpaper.data]);
   return null;
 }
 
@@ -236,6 +244,14 @@ export function App() {
             element={
               <Private>
                 <MePage />
+              </Private>
+            }
+          />
+          <Route
+            path="/me/wallpaper"
+            element={
+              <Private>
+                <WallpaperPage />
               </Private>
             }
           />

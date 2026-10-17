@@ -3,6 +3,7 @@ import {
   buildOverview,
   buildToday,
   buildTrends,
+  buildWallpaper,
   isMetricKey,
   personalBests,
   todayIn,
@@ -17,8 +18,10 @@ import {
   type TodayResponse,
   type TrendsOverview,
   type TrendsResponse,
+  type WallpaperResponse,
+  WALLPAPER_HISTORY_DAYS,
 } from '@gauntlet/shared';
-import { and, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { requireUser, revokeAllRefreshTokens } from '../auth.js';
 import type { AppContext } from '../context.js';
@@ -43,6 +46,20 @@ import {
   type FastRow,
 } from '@gauntlet/sparky';
 import { connectionsEnv } from './connections.js';
+
+const WALLPAPER_METRICS = [
+  'calories_in',
+  'protein',
+  'carbs',
+  'fat',
+  'water',
+  'lift_volume',
+  'goal_calories',
+  'goal_protein',
+  'goal_carbs',
+  'goal_fat',
+  'goal_water',
+];
 
 export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
@@ -106,6 +123,24 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       featured,
       hasSources: await hasSources(ctx, user, date),
     };
+  });
+
+  /** Today's food, water and lifting against the person's goals, for the Android live wallpaper. */
+  app.get('/api/me/wallpaper', auth, async (req): Promise<WallpaperResponse> => {
+    const user = await getUser(ctx, req.userId);
+    const date = todayIn(user.timezone, ctx.now());
+    const rows = await ctx.db
+      .select({ date: dailyMetrics.date, metric: dailyMetrics.metric, value: dailyMetrics.value })
+      .from(dailyMetrics)
+      .where(
+        and(
+          eq(dailyMetrics.userId, user.id),
+          inArray(dailyMetrics.metric, WALLPAPER_METRICS),
+          gte(dailyMetrics.date, addDays(date, -WALLPAPER_HISTORY_DAYS)),
+          lte(dailyMetrics.date, date),
+        ),
+      );
+    return buildWallpaper(rows, date, user.timezone);
   });
 
   app.get('/api/me/trends', auth, async (req): Promise<TrendsResponse> => {
