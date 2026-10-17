@@ -198,7 +198,9 @@ jobs:
         run: |
           echo "::warning::The build is fine and will deploy, but GitHub refused to create or update release $TAG (HTTP 403 means the Actions token cannot write contents: Settings > Actions > General > Workflow permissions > Read and write). The APK and AAB are in this run's artifacts."
 
+      # With a full artifact quota this upload fails; the deploy then takes the APK from the release.
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: gauntlet-apk
           path: |
@@ -240,9 +242,21 @@ jobs:
         with:
           ref: ${{ needs.meta.outputs.ref }}
       - uses: actions/download-artifact@v4
+        id: artifact
+        continue-on-error: true
         with:
           name: gauntlet-apk
           path: apk
+      - name: Take the APK from the release instead
+        if: steps.artifact.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ needs.meta.outputs.publish }}
+        run: |
+          if [ "$PUBLISH" != true ]; then
+            echo "::error::No APK artifact (the artifact storage quota may be full) and a dry run has no release to take it from."; exit 1
+          fi
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern "gauntlet-${TAG}.apk" --dir apk
       - name: Put the APK into the Gauntlet image
         run: |
           # Built here rather than passed as a job output: GitHub drops outputs that contain the
