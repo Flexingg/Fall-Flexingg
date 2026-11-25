@@ -32,7 +32,12 @@ services:
       NODE_ENV: production
       TZ: ${TZ:-America/New_York}
       SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_PUBLIC_URL:-http://localhost:3004}
+      # Other addresses the SparkyFitness site is reached at (comma separated), e.g. a domain
+      # pointed at this machine.
+      SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS: ${SPARKY_EXTRA_ORIGINS:-}
       SPARKY_FITNESS_DB_HOST: db
+      # SparkyFitness' backup passes this to pg_dump as-is; unset breaks manual/scheduled backups.
+      SPARKY_FITNESS_DB_PORT: 5432
       SPARKY_FITNESS_DB_NAME: sparkyfitness_db
       SPARKY_FITNESS_DB_USER: sparky
       SPARKY_FITNESS_DB_PASSWORD: ${SPARKY_DB_PASSWORD}

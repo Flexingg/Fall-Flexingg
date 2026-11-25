@@ -11,6 +11,8 @@ swap_size_mb = 512
   NODE_ENV = 'production'
   TZ = 'America/New_York'
   SPARKY_FITNESS_SERVER_PORT = '3010'
+  # SparkyFitness' backup passes this to pg_dump as-is; unset breaks manual/scheduled backups.
+  SPARKY_FITNESS_DB_PORT = '5432'
   SPARKY_FITNESS_DB_NAME = 'sparkyfitness_db'
   SPARKY_FITNESS_DB_USER = 'sparky'
   SPARKY_FITNESS_APP_DB_USER = 'sparky_app'
