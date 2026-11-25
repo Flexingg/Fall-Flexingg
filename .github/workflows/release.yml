@@ -36,7 +36,7 @@ concurrency:
 jobs:
   meta:
     name: Work out version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.m.outputs.version }}
       ref: ${{ steps.m.outputs.ref }}
@@ -75,7 +75,7 @@ jobs:
   apk:
     name: Build signed APK
     needs: meta
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       TAG: ${{ needs.meta.outputs.version }}
     outputs:
@@ -211,7 +211,7 @@ jobs:
     name: Deploy to Fly.io
     needs: [meta, apk]
     if: inputs.deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       TAG: ${{ needs.meta.outputs.version }}
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
