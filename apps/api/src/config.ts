@@ -24,6 +24,15 @@ const envSchema = z.object({
   WEB_DIST: z.string().optional(),
   /** Directory holding the released APK and latest.json, served under /downloads. */
   DOWNLOADS_DIR: z.string().optional(),
+  /** "owner/name": keep DOWNLOADS_DIR filled from this repository's latest GitHub release. */
+  GITHUB_RELEASES_REPO: z
+    .string()
+    .regex(/^[\w.-]+\/[\w.-]+$/, 'GITHUB_RELEASES_REPO must look like owner/name')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  /** Read-only token for GITHUB_RELEASES_REPO; only needed when the repository is private. */
+  GITHUB_TOKEN: z.string().default(''),
+  GITHUB_RELEASE_CHECK_MINUTES: z.coerce.number().min(0).default(30),
   /** OAuth app credentials for linking apps, registered once by whoever runs the server. */
   OAUTH_STRAVA_CLIENT_ID: z.string().optional(),
   OAUTH_STRAVA_CLIENT_SECRET: z.string().optional(),

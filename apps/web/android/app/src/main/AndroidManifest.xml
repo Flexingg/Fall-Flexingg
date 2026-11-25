@@ -90,6 +90,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- In-app updates (AppUpdaterPlugin): hand a downloaded release to Android's installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Health Connect: read-only. Gauntlet forwards these to your SparkyFitness server. -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />

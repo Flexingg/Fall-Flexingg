@@ -8,6 +8,8 @@ import { useAuth } from '../lib/auth';
 import { isNative } from '../lib/platform';
 import { LegalLinks } from '../components/LegalLinks';
 import { useAndroidRelease } from '../lib/queries';
+import { AppUpdatesSection } from '../components/AppBanner';
+import { canSelfUpdate } from '../lib/appUpdate';
 
 export function MePage() {
   const { user, setUser, logout, mode, disconnectServer } = useAuth();
@@ -200,6 +202,8 @@ export function MePage() {
           </div>
         </>
       )}
+
+      {canSelfUpdate && <AppUpdatesSection />}
 
       {isNative && (
         <>

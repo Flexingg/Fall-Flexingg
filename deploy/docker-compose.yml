@@ -103,10 +103,19 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:-${SPARKY_ADMIN_EMAIL:-}}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
       SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-15}
+      # Release key fingerprint(s) so invite and sign-in links open the Android app.
+      ASSETLINKS_SHA256: ${ASSETLINKS_SHA256:-}
+      # The Android download and in-app updates come from this repository's latest GitHub release.
+      # A private repository also needs GITHUB_TOKEN (read-only access to its contents).
+      GITHUB_RELEASES_REPO: ${GITHUB_RELEASES_REPO:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    volumes:
+      - gauntlet-downloads:/app/downloads
     ports:
       - '${GAUNTLET_PORT:-8080}:8080'
 
 volumes:
   db:
+  gauntlet-downloads:
   sparky-uploads:
   sparky-backup:

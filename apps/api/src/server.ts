@@ -3,6 +3,7 @@ import { loadConfig } from './config.js';
 import { createDb, runMigrations } from './db/index.js';
 import { refreshDemo } from './services/demo.js';
 import { startScheduler } from './scheduler.js';
+import { startReleaseMirror } from './githubRelease.js';
 import { SparkyClient } from '@gauntlet/sparky';
 
 const cfg = loadConfig();
@@ -14,7 +15,23 @@ const { app, ctx } = await buildApp(
   { logger: { level: cfg.LOG_LEVEL } },
 );
 void refreshDemo(ctx).catch((err) => ctx.log.warn({ err }, 'demo setup failed'));
-const stop = startScheduler(ctx, cfg.SYNC_INTERVAL_MINUTES);
+const stopSync = startScheduler(ctx, cfg.SYNC_INTERVAL_MINUTES);
+// The Android app's downloads and update checks come from the newest GitHub release.
+const stopMirror =
+  cfg.DOWNLOADS_DIR && cfg.GITHUB_RELEASES_REPO
+    ? startReleaseMirror({
+        repo: cfg.GITHUB_RELEASES_REPO,
+        token: cfg.GITHUB_TOKEN || undefined,
+        dir: cfg.DOWNLOADS_DIR,
+        minutes: cfg.GITHUB_RELEASE_CHECK_MINUTES,
+        log: (msg, extra) => ctx.log.info(extra ?? {}, msg),
+        onError: (err) => ctx.log.warn({ err }, 'checking GitHub for an Android release failed'),
+      })
+    : () => undefined;
+const stop = () => {
+  stopSync();
+  stopMirror();
+};
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, async () => {

@@ -1,12 +1,13 @@
-# On every GitHub release: build + sign the Android APK, attach it to the release, then deploy
-# the backend to Fly.io (Postgres, SparkyFitness, Gauntlet) with the APK inside the Gauntlet image.
+# On every GitHub release: build + sign the Android APK and attach it to the release. A self-hosted
+# Gauntlet server with GITHUB_RELEASES_REPO set picks it up from there (web download and in-app
+# updates). Deploying the backend to Fly.io is optional: Run workflow with "Deploy to Fly.io" ticked.
 #
 # New release without the GitHub UI: Actions -> Release -> Run workflow with a tag that doesn't exist
 # yet (e.g. v0.2.0). It builds the selected branch, then creates the tag and release and attaches the
 # APK. With an existing release/tag it rebuilds that one.
 #
 # Dry run: Actions -> Release -> Run workflow with the tag left empty builds a signed APK from the
-# selected branch and deploys it as "dev-<sha>", without touching any GitHub release.
+# selected branch as "dev-<sha>", without touching any GitHub release.
 #
 # One-time setup: see deploy/fly/README.md.
 name: Release
@@ -23,7 +24,7 @@ on:
       deploy:
         description: Deploy to Fly.io after building
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write
@@ -209,7 +210,7 @@ jobs:
   deploy:
     name: Deploy to Fly.io
     needs: [meta, apk]
-    if: github.event_name == 'release' || inputs.deploy
+    if: inputs.deploy
     runs-on: ubuntu-latest
     env:
       TAG: ${{ needs.meta.outputs.version }}
