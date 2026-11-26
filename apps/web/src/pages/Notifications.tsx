@@ -19,6 +19,7 @@ const ICONS: Record<NotificationKind, IconName> = {
   personal_record: 'flame',
   weekly_recap: 'trends',
   new_round: 'refresh',
+  month_review: 'trends',
 };
 
 export function NotificationsPage() {

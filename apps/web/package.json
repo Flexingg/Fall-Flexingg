@@ -20,6 +20,7 @@
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.0",
     "@capgo/capacitor-health": "^8.11.4",
@@ -28,6 +29,7 @@
     "@gauntlet/shared": "workspace:*",
     "@gauntlet/sparky": "workspace:*",
     "@tanstack/react-query": "^5.104.0",
+    "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^7.18.4"
@@ -35,6 +37,7 @@
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
     "@playwright/test": "1.56.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
