@@ -3,6 +3,8 @@ import type { AppContext } from './context.js';
 import { challengeParticipants, challenges, users } from './db/schema.js';
 import { maintainDemo } from './services/demo.js';
 import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
+import { pruneNotifications } from './services/push.js';
+import { sendWeeklyRecaps } from './services/recap.js';
 import { syncUser } from './services/sync.js';
 
 /** Only one API instance runs the background loop at a time. */
@@ -62,6 +64,8 @@ async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: numb
     sql`delete from refresh_tokens where expires_at < now() - interval '7 days'`,
   );
   await ctx.db.execute(sql`delete from pending_logins where expires_at < now()`);
+  await pruneNotifications(ctx).catch((err) => ctx.log.warn({ err }, 'notification prune failed'));
+  await sendWeeklyRecaps(ctx).catch((err) => ctx.log.warn({ err }, 'weekly recap failed'));
   return { synced, finalized };
 }
 

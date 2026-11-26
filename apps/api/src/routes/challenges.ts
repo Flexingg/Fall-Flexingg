@@ -53,6 +53,7 @@ import {
 } from '../services/challenges.js';
 import { eventGroupFor } from '../services/events.js';
 import { friendIds } from '../services/friends.js';
+import { notifyChallengeInvites } from '../services/notifyEvents.js';
 import { syncUser } from '../services/sync.js';
 import {
   getUser,
@@ -197,6 +198,12 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         });
       return ch!.id;
     });
+    await notifyChallengeInvites(
+      ctx,
+      { id, name: body.name, solo: body.solo },
+      req.userId,
+      invitees,
+    );
     // Pull the data the new challenge needs (custom metrics, older start dates).
     void syncUser(ctx, req.userId).catch(() => undefined);
     reply.code(201);
@@ -461,6 +468,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           })),
         )
         .onConflictDoNothing();
+      await notifyChallengeInvites(ctx, ch, req.userId, fresh);
     }
     return loadDetail(ctx, ch.id, req.userId);
   });
@@ -549,6 +557,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         });
       return copy!.id;
     });
+    await notifyChallengeInvites(ctx, { id, name: ch.name, solo: ch.solo }, req.userId, others);
     reply.code(201);
     return loadDetail(ctx, id, req.userId);
   });

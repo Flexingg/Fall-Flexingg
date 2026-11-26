@@ -654,3 +654,93 @@ test('Trends chart: tap or drag to see a day, arrows to step, Show total to go b
   await expect(page.locator('.big')).toContainText('vs last');
   await expect(days.locator('[aria-selected="true"]')).toHaveCount(0);
 });
+
+/** ISO week id ("2026-W48") of a date, to open a recap without importing app code. */
+function isoWeek(d: Date): string {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+  const week = Math.floor((t.getTime() - Date.UTC(t.getUTCFullYear(), 0, 1)) / 604_800_000) + 1;
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+test('notifications: the bell, the list, opening one, and the weekly recap', async ({ page }) => {
+  await signIn(page);
+  const bell = page.getByTestId('bell-count');
+  await expect(bell).toBeVisible();
+  const unread = Number(await bell.textContent());
+  expect(unread).toBeGreaterThanOrEqual(3);
+  await snap(page, '70-bell');
+
+  await page.getByRole('link', { name: /^Notifications/ }).click();
+  await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+  await expect(page.getByText('New friend request')).toBeVisible();
+  await expect(page.getByText('Your week in review')).toBeVisible();
+  await snap(page, '71-notifications');
+
+  // Tapping one marks it read and opens what it is about.
+  await page.getByRole('button', { name: /You lost the lead/ }).click();
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  await page.goto('/');
+  await expect(page.getByTestId('bell-count')).toHaveText(String(unread - 1));
+
+  // The recap link opens the week as a card.
+  await page.getByRole('link', { name: /^Notifications/ }).click();
+  await page.getByRole('button', { name: /Your week in review/ }).click();
+  await expect(page).toHaveURL(/\/recap\/\d{4}-W\d{2}$/);
+  await expect(page.getByLabel('Weekly recap')).toBeVisible();
+  await expect(page.getByLabel('Weekly recap').getByText('steps', { exact: true })).toBeVisible();
+  await expect(page.getByText('Distance', { exact: true })).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+  await snap(page, '73-recap');
+
+  // Mark everything read: the badge goes away.
+  await page.goto('/notifications');
+  await page.getByRole('button', { name: 'Mark all read' }).click();
+  await expect(page.getByText(/\d+ unread/)).toHaveCount(0);
+  await page.goto('/');
+  await expect(page.getByTestId('bell-count')).toHaveCount(0);
+});
+
+test('notification settings: a switch per kind that sticks, and honest push status', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/me');
+  await page.getByRole('link', { name: /^Notifications/ }).click();
+  await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+  // This demo server has no push keys, so the page says so instead of offering a dead switch.
+  await expect(page.getByText(/Push isn.t set up on this server/)).toBeVisible();
+
+  const nudges = page.getByRole('switch', { name: 'Nudges from friends' });
+  await expect(nudges).toHaveAttribute('aria-checked', 'true');
+  await nudges.click();
+  await expect(nudges).toHaveAttribute('aria-checked', 'false');
+  await snap(page, '72-notification-settings');
+
+  await page.reload();
+  await expect(page.getByRole('switch', { name: 'Nudges from friends' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
+  await page.getByRole('switch', { name: 'Nudges from friends' }).click();
+  await expect(page.getByRole('switch', { name: 'Nudges from friends' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+});
+
+test('the demo account can open its weekly recap', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Try the demo' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  const week = isoWeek(new Date(Date.now() - 14 * 86_400_000));
+  await page.goto(`/recap/${week}`);
+  await expect(page.getByLabel('Weekly recap')).toBeVisible();
+  await expect(page.getByLabel('Weekly recap').getByText('steps', { exact: true })).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+  await snap(page, '74-demo-recap');
+  // Trends links to last week.
+  await page.goto('/trends');
+  await page.getByRole('link', { name: 'Last week' }).click();
+  await expect(page).toHaveURL(/\/recap\/\d{4}-W\d{2}$/);
+});

@@ -154,6 +154,13 @@ export function MePage() {
             <Icon name="chevron" size={18} />
           </Link>
         )}
+        {!direct && (
+          <Link to="/me/notifications" className="item">
+            <Icon name="bell" size={20} />
+            <div className="grow t">Notifications</div>
+            <Icon name="chevron" size={18} />
+          </Link>
+        )}
         <Link to="/sources" className="item">
           <Icon name="settings" size={20} />
           <div className="grow t">Data sources & privacy</div>

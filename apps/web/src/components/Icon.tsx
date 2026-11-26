@@ -14,9 +14,11 @@ export type IconName =
   | 'user'
   | 'check'
   | 'close'
-  | 'settings';
+  | 'settings'
+  | 'bell';
 
 const PATHS: Record<IconName, string> = {
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4',
   today: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8',
   trophy: 'M7 4h10v5a5 5 0 0 1-10 0zM9 20h6M12 14v6M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3',
   friends:

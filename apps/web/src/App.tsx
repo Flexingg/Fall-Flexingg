@@ -19,6 +19,9 @@ import { FriendsPage } from './pages/Friends';
 import { JoinPage } from './pages/Join';
 import { LoginPage } from './pages/Login';
 import { MePage } from './pages/Me';
+import { NotificationSettingsPage } from './pages/NotificationSettings';
+import { NotificationsPage } from './pages/Notifications';
+import { RecapPage } from './pages/Recap';
 import { OAuthReturnPage } from './pages/OAuthReturn';
 import { ProfilePage } from './pages/Profile';
 import { NewChallengePage } from './pages/NewChallenge';
@@ -65,6 +68,10 @@ function Splash() {
   );
 }
 
+/** Where a tapped notification may take the app (the Android job opens https://<server>/<path>). */
+const NOTIFICATION_PATH =
+  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|u\/[\w-]+|trends|challenges)$/;
+
 /** Android: open invite links in-app, and push Health Connect data when the app comes to the front. */
 function NativeBridge() {
   const navigate = useNavigate();
@@ -72,8 +79,21 @@ function NativeBridge() {
   const { status, user } = useAuth();
   useEffect(() => {
     if (!isNative) return;
+    const openNotification = (url: string) => {
+      try {
+        const path = new URL(url).pathname.replace(/\/+$/, '');
+        if (NOTIFICATION_PATH.test(path)) navigate(path);
+      } catch {
+        // Not a link we understand.
+      }
+    };
+    // The app was closed when a notification was tapped.
+    CapApp.getLaunchUrl()
+      .then((l) => l?.url && openNotification(l.url))
+      .catch(() => undefined);
     const subs = [
       CapApp.addListener('appUrlOpen', ({ url }) => {
+        openNotification(url);
         const m = /\/j\/([\w-]+)/.exec(url);
         if (m) navigate(`/j/${m[1]}`);
         // An app's sign-in page sent the person back: finish connecting it.
@@ -261,6 +281,36 @@ export function App() {
             element={
               <Private>
                 <MePage />
+              </Private>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <Private>
+                <NeedsServer what="Notifications">
+                  <NotificationsPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/me/notifications"
+            element={
+              <Private>
+                <NeedsServer what="Notifications">
+                  <NotificationSettingsPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/recap/:week"
+            element={
+              <Private>
+                <NeedsServer what="Weekly recap">
+                  <RecapPage />
+                </NeedsServer>
               </Private>
             }
           />

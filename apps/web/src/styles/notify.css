@@ -1,0 +1,167 @@
+/* Notifications: the bell, the list, the settings page, and the weekly recap card. */
+
+.bell-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--text);
+  flex: none;
+}
+.bell-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--volt);
+  color: var(--volt-ink);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+.hd-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.item.notif {
+  align-items: flex-start;
+}
+.item.notif .t {
+  display: block;
+}
+.item.notif.unread {
+  background: var(--volt-wash);
+}
+.notif-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--card-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--volt);
+}
+.notif-time {
+  color: var(--dim);
+}
+.notif-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--volt);
+  flex: none;
+}
+
+/* ---------- Weekly recap ---------- */
+.recap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.recap-hero {
+  background: var(--volt);
+  color: var(--volt-ink);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.recap-hero small {
+  font-weight: 700;
+  font-size: 13px;
+  opacity: 0.75;
+}
+.recap-hero b {
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-top: 6px;
+}
+.recap-hero > span {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.recap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.recap-tile {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.recap-tile small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.recap-tile b {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.recap-tile b span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.recap-change {
+  font-size: 12px;
+  font-weight: 600;
+}
+.recap-change.up {
+  color: var(--volt);
+}
+.recap-change.down {
+  color: var(--danger);
+}
+.recap-change.flat {
+  color: var(--muted);
+}
+.recap-hero .recap-change.up,
+.recap-hero .recap-change.down,
+.recap-hero .recap-change.flat {
+  color: var(--volt-ink);
+  margin-top: 8px;
+  opacity: 0.85;
+}
+.recap-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.recap-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.recap-row b {
+  font-weight: 800;
+}

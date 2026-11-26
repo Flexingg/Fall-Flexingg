@@ -17,6 +17,9 @@ import { userRoutes } from './routes/users.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
 import { miscRoutes } from './routes/misc.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { pushRoutes } from './routes/push.js';
+import { registerPushDelivery } from './services/push.js';
 import { SparkyError } from '@gauntlet/sparky';
 import { markKeyInvalid } from './services/users.js';
 
@@ -93,6 +96,9 @@ export async function buildApp(
   miscRoutes(app, full);
   garminRoutes(app, full);
   connectionRoutes(app, full);
+  notificationRoutes(app, full);
+  pushRoutes(app, full);
+  registerPushDelivery();
   downloadRoutes(app, full.cfg);
   legalRoutes(app, full);
 

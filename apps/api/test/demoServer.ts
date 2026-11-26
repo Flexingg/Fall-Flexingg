@@ -8,12 +8,13 @@
  * Connect screens: Hevy key good-hevy-key; Strava/Fitbit sign-in code good-code.
  * Garmin screen: runner@garmin.demo / demo, or mfa@garmin.demo / demo with code 123456.
  */
-import { addDays, todayIn } from '@gauntlet/shared';
+import { addDays, previousIsoWeek, todayIn } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, runMigrations } from '../src/db/index.js';
 import { runSyncCycle } from '../src/scheduler.js';
+import { notify } from '../src/services/notify.js';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
 
@@ -377,6 +378,36 @@ users.maya!.daily.find((r) => r.entry_date === today)!.total_distance_meters! +=
 users.dre!.daily.find((r) => r.entry_date === today)!.total_steps! += 12_000;
 users.sam!.daily.find((r) => r.entry_date === today)!.total_distance_meters! += 4_000;
 await runSyncCycle(ctx);
+
+// Alex's notifications: the sync cycles above may have produced some (it depends on the day of the
+// week), so start from a known inbox. Three unread, one read; the oldest is what the bell shows last.
+await ctx.db.execute(sql`delete from notifications`);
+const inbox = async (
+  kind: 'nudge' | 'weekly_recap' | 'lead_change' | 'friend_request',
+  title: string,
+  body: string,
+  url: string,
+) => notify(ctx, ids.you!, { kind, title, body, url });
+const nudge = await inbox(
+  'nudge',
+  'Dre nudged you',
+  'Dre is waiting on your steps in Weekend 100K.',
+  `/c/${live.id}`,
+);
+await ctx.db.execute(sql`update notifications set read_at = now() where id = ${nudge!.id}`);
+await inbox(
+  'weekly_recap',
+  'Your week in review',
+  'Last week: 71k steps (+12%), 3 workouts.',
+  `/recap/${previousIsoWeek(today)}`,
+);
+await inbox(
+  'lead_change',
+  'You lost the lead',
+  'Maya just took the lead in Weekend 100K.',
+  `/c/${live.id}`,
+);
+await inbox('friend_request', 'New friend request', 'Riley P. wants to be friends.', '/friends');
 
 const port = Number(process.env.PORT ?? 8080);
 await app.listen({ port, host: '0.0.0.0' });

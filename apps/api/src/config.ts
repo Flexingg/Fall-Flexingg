@@ -53,6 +53,14 @@ const envSchema = z.object({
   CONTACT_EMAIL: z.string().default(''),
   /** Release key SHA-256 fingerprint(s), comma separated, for Android App Links (invite links open the app). */
   ASSETLINKS_SHA256: z.string().default(''),
+  /**
+   * Web Push (browser and installed-app notifications) needs a VAPID key pair you generate once:
+   * `npx web-push generate-vapid-keys`. Without it only in-app and Android notifications work.
+   */
+  VAPID_PUBLIC_KEY: z.string().default(''),
+  VAPID_PRIVATE_KEY: z.string().default(''),
+  /** A mailto: or https: contact for push services, e.g. mailto:you@example.com. */
+  VAPID_SUBJECT: z.string().default(''),
 });
 
 export type Config = Omit<z.infer<typeof envSchema>, 'SPARKY_PUBLIC_URL'> & {

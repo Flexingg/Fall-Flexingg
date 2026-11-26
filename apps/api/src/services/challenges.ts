@@ -33,6 +33,7 @@ import {
   feedEvents,
   rankSnapshots,
 } from '../db/schema.js';
+import { notifyChallengeFinished, notifyLeadChange } from './notifyEvents.js';
 import { getUsers, toPublicUser, type UserRow } from './users.js';
 
 export type ChallengeRow = typeof challenges.$inferSelect;
@@ -460,6 +461,8 @@ export async function openChallengesForUser(
  * loaded earlier: a stale row would carry an out-of-date leader.
  */
 export async function refreshChallenge(ctx: AppContext, challengeId: string): Promise<void> {
+  // Who just lost the lead; told once the transaction (and its lock) is done.
+  let overtaken: { name: string; newLeaderId: string; previousLeaderId: string } | null = null;
   await ctx.db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`challenge:${challengeId}`}, 0))`,
@@ -500,8 +503,15 @@ export async function refreshChallenge(ctx: AppContext, challengeId: string): Pr
         kind: 'took_lead',
         payload: { previousLeaderId: ch.leaderId },
       });
+      overtaken = { name: ch.name, newLeaderId: top.userId, previousLeaderId: ch.leaderId };
     }
   });
+  if (overtaken) {
+    const o = overtaken as { name: string; newLeaderId: string; previousLeaderId: string };
+    await notifyLeadChange(ctx, { id: challengeId, name: o.name }, o.newLeaderId, [
+      o.previousLeaderId,
+    ]).catch((err) => ctx.log.warn({ err: String(err) }, 'lead change notification failed'));
+  }
 }
 
 /** Close challenges whose last day has passed: freeze ranks and announce the winner. */
@@ -509,6 +519,7 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
   if (ch.finalizedAt || challengeToday(ctx, ch) <= ch.endDate) return false;
   const parts = await getParticipants(ctx, ch.id);
   const { standings } = await computeChallengeStandings(ctx, ch, parts);
+  let claimedHere = false;
   await ctx.db.transaction(async (tx) => {
     const [claimed] = await tx
       .update(challenges)
@@ -516,6 +527,7 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
       .where(and(eq(challenges.id, ch.id), isNull(challenges.finalizedAt)))
       .returning({ id: challenges.id });
     if (!claimed) return;
+    claimedHere = true;
     for (const s of standings) {
       await tx
         .update(challengeParticipants)
@@ -537,6 +549,14 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
       });
     }
   });
+  // Only whoever closed it tells people, so each person hears once. Solo challenges have no results
+  // to compare, and the demo's rebuilt history shouldn't ping anyone.
+  if (claimedHere && !ch.solo)
+    await notifyChallengeFinished(
+      ctx,
+      ch,
+      standings.map((s) => ({ userId: s.userId, rank: s.rank, score: s.score })),
+    ).catch((err) => ctx.log.warn({ err: String(err) }, 'challenge result notification failed'));
   return true;
 }
 

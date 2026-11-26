@@ -383,7 +383,13 @@ export interface DiscoverResponse {
 // ---------- Feed ----------
 
 export type FeedEventKind =
-  'progress' | 'took_lead' | 'goal_reached' | 'challenge_won' | 'joined' | 'challenge_created';
+  | 'progress'
+  | 'took_lead'
+  | 'goal_reached'
+  | 'challenge_won'
+  | 'joined'
+  | 'challenge_created'
+  | 'personal_record';
 
 export interface FeedEvent {
   id: string;

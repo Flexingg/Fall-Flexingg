@@ -21,6 +21,7 @@ import {
 } from './api';
 import { DirectError } from './direct/DirectBackend';
 import { secret } from './direct/secret';
+import { stopNativePushOnSignOut } from './push';
 import { DEFAULT_SERVER_URL, DIRECT_AVAILABLE, isNative } from './platform';
 import {
   cleanUrl,
@@ -234,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       logout: async () => {
+        await stopNativePushOnSignOut();
         if (mode === 'server') await apiLogout();
         if (DIRECT_AVAILABLE) await clearStored();
         qc.clear();

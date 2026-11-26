@@ -8,6 +8,8 @@ import { useSyncNow } from '../lib/freshness';
 import { isNative } from '../lib/platform';
 import { fmtInt, timeAgo } from '../lib/format';
 import { useChallenges, useFeed, useToday } from '../lib/queries';
+import { useUnreadCount } from '../lib/notifyQueries';
+import '../styles/notify.css';
 import { FastCard } from '../components/FastCard';
 
 const FASTING = new Set<string>(['fast_hours', 'fasts_completed']);
@@ -23,6 +25,8 @@ export function TodayPage() {
     !!challenges.data?.some(
       (c) => c.status === 'active' && c.myState === 'joined' && FASTING.has(c.metric),
     );
+  const unread = useUnreadCount(!direct);
+  const unreadCount = unread.data?.count ?? 0;
   const { busy: syncing, sync } = useSyncNow();
 
   const m = today.data?.metrics ?? [];
@@ -40,9 +44,25 @@ export function TodayPage() {
     <Screen>
       <div className="hd">
         <h1>Today</h1>
-        <Link to="/me" aria-label="Profile">
-          {user && <Avatar user={user} size={36} me />}
-        </Link>
+        <div className="hd-actions">
+          {!direct && (
+            <Link
+              to="/notifications"
+              className="bell-btn"
+              aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+            >
+              <Icon name="bell" size={20} />
+              {unreadCount > 0 && (
+                <span className="bell-badge" data-testid="bell-count">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Link>
+          )}
+          <Link to="/me" aria-label="Profile">
+            {user && <Avatar user={user} size={36} me />}
+          </Link>
+        </div>
       </div>
       <ErrorBox error={today.error} />
       {today.data && !today.data.hasSources && <ConnectSourceHero />}

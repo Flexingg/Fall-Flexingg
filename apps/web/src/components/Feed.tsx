@@ -13,7 +13,9 @@ export function FeedList({ events }: { events: FeedEvent[] }) {
           <Avatar
             user={e.actor}
             size={40}
-            lead={e.kind === 'took_lead' || e.kind === 'challenge_won'}
+            lead={
+              e.kind === 'took_lead' || e.kind === 'challenge_won' || e.kind === 'personal_record'
+            }
           />
           <div className="grow">
             <div className="t">{e.text}</div>
