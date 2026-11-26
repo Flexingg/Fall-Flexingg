@@ -129,8 +129,9 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
 
   let merged: MergedValue[];
   let partial: boolean;
+  let sources: Record<string, string[]>;
   try {
-    ({ merged, partial } = await fetchMerged(ctx.sparky, token, start, end, {
+    ({ merged, partial, sources } = await fetchMerged(ctx.sparky, token, start, end, {
       customMetrics,
       lifts: [...lifts],
       timezone: user.timezone,
@@ -140,6 +141,7 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
       allLifts: true,
       onSkip: (label, err) =>
         ctx.log.warn({ err: err.message, label }, 'sparky read failed; continuing without it'),
+      priorities: user.sourcePriorities,
     }));
   } catch (err) {
     if (err instanceof SparkyError && err.status === 401) {
@@ -159,7 +161,10 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   ]);
   const isManaged = (m: string) => managed.has(m) || m.startsWith('custom:') || isLiftMetric(m);
   const changes = await store(ctx, userId, start, end, merged, isManaged, partial);
-  await ctx.db.update(users).set({ lastSyncedAt: ctx.now() }).where(eq(users.id, userId));
+  await ctx.db
+    .update(users)
+    .set({ lastSyncedAt: ctx.now(), seenSources: sources })
+    .where(eq(users.id, userId));
 
   // First sync pulls weeks of history at once; don't post that as "progress".
   if (user.lastSyncedAt) await postProgress(ctx, userId, open, changes);

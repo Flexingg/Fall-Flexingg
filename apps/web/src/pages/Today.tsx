@@ -1,16 +1,14 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { ChallengeHero, FeedList } from '../components/Feed';
 import { Icon } from '../components/Icon';
 import { Rings } from '../components/Rings';
 import { Avatar, Empty, ErrorBox, Screen, Skeleton } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { useSyncNow } from '../lib/freshness';
 import { isNative } from '../lib/platform';
 import { fmtInt, timeAgo } from '../lib/format';
 import { useChallenges, useFeed, useToday } from '../lib/queries';
 import { FastCard } from '../components/FastCard';
-import { syncNow } from '../lib/session';
 
 const FASTING = new Set<string>(['fast_hours', 'fasts_completed']);
 
@@ -25,18 +23,7 @@ export function TodayPage() {
     !!challenges.data?.some(
       (c) => c.status === 'active' && c.myState === 'joined' && FASTING.has(c.metric),
     );
-  const qc = useQueryClient();
-  const [syncing, setSyncing] = useState(false);
-
-  async function refresh() {
-    setSyncing(true);
-    try {
-      await syncNow();
-      await qc.invalidateQueries();
-    } finally {
-      setSyncing(false);
-    }
-  }
+  const { busy: syncing, sync } = useSyncNow();
 
   const m = today.data?.metrics ?? [];
   const ring = (k: string) => {
@@ -109,12 +96,13 @@ export function TodayPage() {
       <div className="lbl">
         <span>{direct ? 'Today' : 'Recent from your crew'}</span>
         <button
-          onClick={refresh}
+          onClick={() => void sync()}
           disabled={syncing}
           aria-label="Sync now"
-          className="row"
-          style={{ gap: 4 }}
+          className="row sync-btn"
+          style={{ gap: 5 }}
         >
+          <Icon name="refresh" size={14} className={syncing ? 'spin' : undefined} />
           {syncing ? 'Syncing…' : `Synced ${timeAgo(today.data?.lastSyncedAt)}`}
         </button>
       </div>

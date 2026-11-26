@@ -4,6 +4,7 @@
  * just call these helpers.
  */
 import type {
+  SyncResponse,
   ConnectionInfo,
   ConnectionsResponse,
   ConnectResult,
@@ -71,10 +72,13 @@ export function makeDirect(sparkyUrl: string, apiKey: string): DirectBackend {
 
 export const cleanUrl = (u: string) => u.trim().replace(/\/+$/, '');
 
-/** Pull fresh data now (pull-to-refresh). */
-export async function syncNow(): Promise<void> {
-  if (session.direct) await session.direct.sync();
-  else await post('/api/me/sync');
+/**
+ * Pull fresh data now. With `providers`, the server also asks each connected app to pull its
+ * latest (direct mode re-reads SparkyFitness only).
+ */
+export async function syncNow(opts: { providers?: boolean } = {}): Promise<SyncResponse> {
+  if (session.direct) return { ...(await session.direct.sync()), pulling: [] };
+  return post<SyncResponse>('/api/me/sync', opts);
 }
 
 /** Save profile settings. In direct mode they live on the phone. */

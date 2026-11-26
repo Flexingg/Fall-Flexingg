@@ -43,6 +43,7 @@ export const keys = {
   fast: ['fast'] as const,
   androidRelease: ['android-release'] as const,
   profiles: ['profile'] as const,
+  sourcePriority: ['source-priority'] as const,
   profile: (id: string) => ['profile', id] as const,
   wallpaper: ['wallpaper'] as const,
 };

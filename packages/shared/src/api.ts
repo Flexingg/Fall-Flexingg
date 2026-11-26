@@ -605,3 +605,56 @@ export interface AndroidRelease {
   url: string;
   latestUrl: string;
 }
+
+/** Metrics more than one source can report, where a person picks which one counts. */
+export const PRIORITY_METRIC_KEYS = [
+  'steps',
+  'distance',
+  'active_calories',
+  'active_minutes',
+  'sleep',
+  'resting_hr',
+] as const;
+
+export interface SourceChoice {
+  key: string;
+  label: string;
+}
+
+export interface SourcePriorityResponse {
+  metrics: {
+    key: (typeof PRIORITY_METRIC_KEYS)[number];
+    label: string;
+    /** Sources seen for this metric recently (plus the preferred one, if it has gone quiet). */
+    sources: SourceChoice[];
+    /** Null: automatic (the highest single source each day). */
+    preferred: string | null;
+  }[];
+}
+
+export const setSourcePrioritySchema = z.object({
+  metric: z.enum(PRIORITY_METRIC_KEYS),
+  /** A source key, or null for automatic. */
+  preferred: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .regex(/^[a-z0-9_-]+$/)
+    .nullable(),
+});
+
+export const syncRequestSchema = z
+  .object({
+    /** Also ask each connected app (Garmin, Fitbit, ...) to pull its latest data. */
+    providers: z.boolean().optional(),
+  })
+  .default({});
+
+export interface SyncResponse {
+  ok: boolean;
+  changed: number;
+  error?: string;
+  /** Apps asked to pull their latest data; their numbers arrive over the next minute or so. */
+  pulling: string[];
+}

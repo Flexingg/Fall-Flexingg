@@ -52,13 +52,16 @@ export function Icon({
   name,
   size = 24,
   strokeWidth = 2,
+  className,
 }: {
   name: IconName;
   size?: number;
   strokeWidth?: number;
+  className?: string;
 }) {
   return (
     <svg
+      className={className}
       width={size}
       height={size}
       viewBox="0 0 24 24"

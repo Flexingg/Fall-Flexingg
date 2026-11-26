@@ -11,11 +11,13 @@ import {
   syncHealthConnect,
 } from '../lib/health';
 import { isNative } from '../lib/platform';
-import { useSources } from '../lib/queries';
+import { useSources, useToday } from '../lib/queries';
+import { SourcePriority, SyncNowCard } from '../components/SourcePriority';
 import { updateSettings } from '../lib/session';
 
 export function SourcesPage() {
   const q = useSources();
+  const today = useToday();
   const { user, setUser, mode } = useAuth();
   const [error, setError] = useState<unknown>(null);
   const [hc, setHc] = useState<{ available: boolean; reason?: string } | null>(null);
@@ -63,7 +65,11 @@ export function SourcesPage() {
       </p>
       <ErrorBox error={q.error ?? error} />
 
+      {!user?.demo && <SyncNowCard lastSyncedAt={today.data?.lastSyncedAt} />}
+
       {!user?.demo && <Connections />}
+
+      {!user?.demo && mode !== 'direct' && <SourcePriority />}
 
       <div className="lbl">Synced into SparkyFitness</div>
       {q.isPending ? (

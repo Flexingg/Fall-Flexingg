@@ -63,6 +63,69 @@ export interface MergeInput {
   lifts?: string[];
   /** The person's time zone, to put a fast on the day it ended. Defaults to UTC. */
   timezone?: string;
+  /**
+   * Preferred sources per metric (source keys, see sourceKey), most preferred first. A day uses the
+   * first listed source that has a value; days none of them cover fall back to the usual rule.
+   */
+  priorities?: Record<string, string[]>;
+}
+
+/** Metrics more than one source commonly reports, where a person can pick which one counts. */
+export const PRIORITY_METRICS = [
+  'steps',
+  'distance',
+  'active_calories',
+  'active_minutes',
+  'sleep',
+  'resting_hr',
+] as const;
+export type PriorityMetric = (typeof PRIORITY_METRICS)[number];
+
+/**
+ * SparkyFitness labels data by where it stored it, not by device. Fold those labels into sources a
+ * person recognises: the provider (garmin, polar, ...), "health_connect" for what phone sync writes
+ * (check-ins, its Distance / resting heart rate categories, "Health Connect" entries), and
+ * "workouts" for logged exercise.
+ */
+export function sourceKey(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim().toLowerCase();
+  if (!s) return 'unknown';
+  if (
+    s === 'check-in' ||
+    s === 'health connect' ||
+    s === 'healthconnect' ||
+    s === 'health_connect' ||
+    s === 'apple health' ||
+    DISTANCE_CATEGORIES.includes(s) ||
+    RESTING_HR_CATEGORIES.includes(s)
+  )
+    return 'health_connect';
+  if (s === 'workouts' || s === 'wearable') return s;
+  return s.replace(/\s+/g, '_');
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  garmin: 'Garmin',
+  fitbit: 'Fitbit',
+  polar: 'Polar',
+  oura: 'Oura',
+  coros: 'COROS',
+  withings: 'Withings',
+  strava: 'Strava',
+  health_connect: 'Health Connect & phone',
+  workouts: 'Logged workouts',
+  wearable: 'Wearable',
+  demo: 'Demo',
+};
+
+export function sourceLabel(key: string): string {
+  return SOURCE_LABELS[key] ?? key.replace(/_/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+}
+
+export interface MergeResult {
+  values: MergedValue[];
+  /** For each PRIORITY_METRICS metric: the source keys that reported something in the window. */
+  sources: Record<string, string[]>;
 }
 
 /** Custom categories SparkyFitness' own phone sync and integrations create for built-in metrics. */
@@ -106,6 +169,15 @@ class DayTable {
     byMetric.set(metric, list);
   }
 
+  /** Every source key seen per metric. */
+  sourcesSeen(metrics: readonly string[]): Record<string, string[]> {
+    const seen: Record<string, Set<string>> = {};
+    for (const byMetric of this.map.values())
+      for (const m of metrics)
+        for (const c of byMetric.get(m) ?? []) (seen[m] ??= new Set()).add(sourceKey(c.source));
+    return Object.fromEntries(Object.entries(seen).map(([m, set]) => [m, [...set].sort()]));
+  }
+
   collect(pick: (metric: string, candidates: Candidate[]) => Candidate | null): MergedValue[] {
     const out: MergedValue[] = [];
     for (const [date, byMetric] of this.map) {
@@ -121,6 +193,16 @@ class DayTable {
 }
 
 export function mergeDaily(input: MergeInput): MergedValue[] {
+  return mergeDailyDetailed(input).values;
+}
+
+/** The usual winner among candidates: lowest rank, then the highest value. */
+const highest = (cands: Candidate[]) =>
+  cands.reduce((best, c) =>
+    c.rank < best.rank || (c.rank === best.rank && c.value > best.value) ? c : best,
+  );
+
+export function mergeDailyDetailed(input: MergeInput): MergeResult {
   const t = new DayTable(input.start, input.end);
 
   // Wearable daily summaries (Garmin, Polar, ...).
@@ -138,7 +220,7 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
         : null);
     if (pos(minutes)) t.add(row.entry_date, 'active_minutes', minutes, src);
     if (pos(row.resting_heart_rate))
-      t.add(row.entry_date, 'resting_hr_daily', row.resting_heart_rate, src);
+      t.add(row.entry_date, 'resting_hr', row.resting_heart_rate, src, 0);
   }
 
   // Check-ins (phone sync, Fitbit, Withings). Newest row per day wins.
@@ -161,8 +243,7 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
       for (const [d, v] of dailyCustom(rows, category, 'sum'))
         t.add(d, 'distance', v / 1000, label);
     } else if (RESTING_HR_CATEGORIES.includes(key)) {
-      for (const [d, v] of dailyCustom(rows, category, 'avg'))
-        t.add(d, 'resting_hr_measured', v, label);
+      for (const [d, v] of dailyCustom(rows, category, 'avg')) t.add(d, 'resting_hr', v, label, 1);
     }
     const agg = input.customMetrics[key];
     if (agg) {
@@ -218,26 +299,24 @@ export function mergeDaily(input: MergeInput): MergedValue[] {
     if (pos(row.weight)) t.add(d, 'weight', row.weight, 'check-in');
   }
 
-  const merged = t.collect((metric, cands) => {
-    if (metric === 'resting_hr_daily' || metric === 'resting_hr_measured') return cands[0] ?? null;
+  const prio = input.priorities ?? {};
+  const values = t.collect((metric, cands) => {
+    const order = prio[metric];
+    if (order?.length) {
+      for (const key of order) {
+        const mine = cands.filter((c) => sourceKey(c.source) === key);
+        if (mine.length) return metric === 'resting_hr' ? mine[0]! : highest(mine);
+      }
+    }
+    // Resting HR: the wearable's daily summary first, otherwise a measurement; first one listed.
+    if (metric === 'resting_hr') {
+      const top = Math.min(...cands.map((c) => c.rank));
+      return cands.find((c) => c.rank === top) ?? null;
+    }
     if (metric.startsWith('custom:')) return cands[0] ?? null;
-    return cands.reduce((best, c) =>
-      c.rank < best.rank || (c.rank === best.rank && c.value > best.value) ? c : best,
-    );
+    return highest(cands);
   });
-
-  // Resting HR: wearable daily summary first, otherwise the measured category.
-  const out: MergedValue[] = [];
-  const restingDaily = new Set(
-    merged.filter((m) => m.metric === 'resting_hr_daily').map((m) => m.date),
-  );
-  for (const m of merged) {
-    if (m.metric === 'resting_hr_daily') out.push({ ...m, metric: 'resting_hr' });
-    else if (m.metric === 'resting_hr_measured') {
-      if (!restingDaily.has(m.date)) out.push({ ...m, metric: 'resting_hr' });
-    } else out.push(m);
-  }
-  return out;
+  return { values, sources: t.sourcesSeen(PRIORITY_METRICS) };
 }
 
 function addNutrition(t: DayTable, input: MergeInput) {

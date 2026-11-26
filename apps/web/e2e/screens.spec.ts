@@ -570,3 +570,49 @@ test('profiles: trophy board, your own stats, and unfriending', async ({ page })
   await expect(page.getByText('Maya Rodriguez')).toBeVisible();
   await expect(page.getByText('Sam Kim')).toHaveCount(0);
 });
+
+test('fresh data: sync now, pull to refresh, and choosing which source counts', async ({ page }) => {
+  await signIn(page);
+
+  // Pull down from the top of Today to sync.
+  await page.evaluate(async () => {
+    const fire = (type: string, y: number) => {
+      const t = new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y });
+      document.body.dispatchEvent(
+        new TouchEvent(type, {
+          bubbles: true,
+          touches: type === 'touchend' ? [] : [t],
+          changedTouches: [t],
+        }),
+      );
+    };
+    fire('touchstart', 100);
+    for (let y = 120; y <= 300; y += 30) fire('touchmove', y);
+    fire('touchend', 300);
+  });
+  await expect(page.locator('.toast')).toHaveText(/Up to date|Updated/);
+
+  await page.goto('/sources');
+  await expect(page.getByText('Fresh data')).toBeVisible();
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await expect(page.locator('.toast')).toHaveText(/Up to date|Updated/);
+
+  // Distance comes from the watch and from logged workouts: pick one, then go back to automatic.
+  const distance = page.getByRole('group', { name: 'Distance source' });
+  await expect(distance).toBeVisible();
+  await expect(distance.getByRole('button', { name: 'Automatic' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await distance.getByRole('button', { name: 'Logged workouts' }).click();
+  await expect(distance.getByRole('button', { name: 'Logged workouts' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await snap(page, '43-source-priority');
+  await distance.getByRole('button', { name: 'Automatic' }).click();
+  await expect(distance.getByRole('button', { name: 'Automatic' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});
