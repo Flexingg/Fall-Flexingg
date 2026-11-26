@@ -894,58 +894,111 @@ svg {
   transform: translateY(110%);
 }
 .splash-tagline {
-  margin-top: 1.8cqh;
-  font-size: min(4.2cqw, 21px);
-  font-weight: 500;
-  color: var(--muted);
+  margin-top: 2.2cqh;
+  font-size: min(6.2cqw, 30px);
+  font-weight: 700;
+  color: #f2f4ec;
   opacity: 0;
   text-align: center;
+  white-space: nowrap;
 }
-.splash-tagline b {
+/* The action word's slot: every word stacked in one cell, as wide as the widest, right-aligned so
+   " it up." never moves. Only the words inside it animate. */
+.splash-words {
+  display: inline-grid;
+  justify-items: end;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-block: 0.08em;
+  margin-block: -0.08em;
+}
+.splash-words b {
+  grid-area: 1 / 1;
   color: var(--lime);
-  font-weight: 600;
-}
-.splash-loader {
-  position: absolute;
-  left: 14%;
-  right: 14%;
-  bottom: 9cqh;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: center;
+  font-weight: 900;
+  transform: translateY(110%);
   opacity: 0;
 }
-.splash-track {
-  width: 100%;
+.splash-words b.first {
+  transform: none;
+  opacity: 1;
+}
+/* THROW IT DOWN: hurled from above at the end. */
+.splash-throw {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 56%;
+  height: 0;
+  pointer-events: none;
+}
+.splash-throw b {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  display: block;
+  font-stretch: 125%;
+  font-weight: 900;
+  font-size: min(13cqw, 66px);
+  line-height: 0.86;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--lime);
+  text-shadow:
+    0 0.06em 0 var(--olive),
+    0 0.14em 0.4em rgba(0, 0, 0, 0.6);
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -170cqh) rotate(-38deg) scale(2.2);
+}
+.splash-impact {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 70cqw;
+  height: 14cqw;
+  margin: -7cqw 0 0 -35cqw;
+  border: 3px solid var(--lime);
+  border-radius: 50%;
+  opacity: 0;
+}
+.splash-dust i {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  width: 16cqw;
   height: 3px;
   border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
-}
-.splash-bar {
-  height: 100%;
-  width: 100%;
   background: var(--lime);
-  transform-origin: left;
-  transform: scaleX(0);
+  opacity: 0;
+  transform-origin: 50% 50%;
 }
-.splash-sync {
+.splash-wait {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 9cqh;
+  text-align: center;
   font-family: ui-monospace, Menlo, monospace;
   font-size: min(2.9cqw, 13px);
-  color: var(--muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  height: 1.3em;
-  position: relative;
-  width: 100%;
-  text-align: center;
-}
-.splash-sync i {
-  position: absolute;
-  inset: 0;
-  font-style: normal;
+  color: var(--muted);
   opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+.splash.waiting .splash-wait {
+  opacity: 1;
+}
+.splash.waiting .splash-wait span {
+  animation: sp-dot 1.2s ease-in-out infinite;
+}
+.splash-wait span:nth-child(2) {
+  animation-delay: 0.2s !important;
+}
+.splash-wait span:nth-child(3) {
+  animation-delay: 0.4s !important;
 }
 
 /* Timeline (seconds x --s) */
@@ -990,22 +1043,149 @@ svg {
     calc((1.5s + var(--i) * 0.045s) * var(--s)) both;
 }
 .play .splash-tagline {
-  animation: sp-fadeup calc(0.5s * var(--s)) ease-out calc(2s * var(--s)) both;
+  animation:
+    sp-fadeup calc(0.5s * var(--s)) ease-out calc(2s * var(--s)) both,
+    sp-out calc(0.22s * var(--s)) ease-in calc(7.12s * var(--s)) forwards;
 }
-.play .splash-loader {
-  animation: sp-fade calc(0.3s * var(--s)) ease-out calc(2.25s * var(--s)) both;
+/* The intro has settled by 3.3; from 3.4 only the word changes, every 0.52. */
+.play .splash-words b.first {
+  animation: sp-word-out calc(0.07s * var(--s)) ease-in calc(3.33s * var(--s)) forwards;
 }
-.play .splash-bar {
-  animation: sp-bar calc(1.5s * var(--s)) cubic-bezier(0.5, 0, 0.2, 1) calc(2.35s * var(--s)) both;
+.play .splash-words b {
+  animation: sp-word calc(0.52s * var(--s)) cubic-bezier(0.3, 0.7, 0.3, 1)
+    calc((3.4s + (var(--k) - 1) * 0.52s) * var(--s)) both;
 }
-.play .splash-sync i:nth-child(1) {
-  animation: sp-ticker calc(0.5s * var(--s)) linear calc(2.35s * var(--s)) both;
+.play .splash-words b.last {
+  animation: sp-word-in calc(0.07s * var(--s)) cubic-bezier(0.3, 0.7, 0.3, 1)
+    calc((3.4s + (var(--k) - 1) * 0.52s) * var(--s)) both;
 }
-.play .splash-sync i:nth-child(2) {
-  animation: sp-ticker calc(0.5s * var(--s)) linear calc(2.85s * var(--s)) both;
+/* Then the throw: the logo steps back, the words fade, THROW IT DOWN lands at 7.56 and holds. */
+.play .splash-center {
+  animation: sp-dim calc(0.35s * var(--s)) ease-out calc(7.12s * var(--s)) forwards;
 }
-.play .splash-sync i:nth-child(3) {
-  animation: sp-ticker-last calc(0.5s * var(--s)) linear calc(3.35s * var(--s)) both;
+.play .splash-throw b {
+  animation: sp-throw calc(0.62s * var(--s)) cubic-bezier(0.55, 0, 0.75, 0.4) calc(7.13s * var(--s))
+    both;
+}
+.play .splash-impact {
+  animation: sp-impact calc(0.6s * var(--s)) cubic-bezier(0.1, 0.6, 0.3, 1) calc(7.56s * var(--s))
+    forwards;
+}
+.play .splash-dust i {
+  animation: sp-dust calc(0.5s * var(--s)) cubic-bezier(0.1, 0.6, 0.3, 1) calc(7.56s * var(--s))
+    forwards;
+}
+.play .splash-stage {
+  animation: sp-shake calc(0.36s * var(--s)) linear calc(7.56s * var(--s)) both;
+}
+@keyframes sp-word {
+  0% {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+  13%,
+  87% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+}
+@keyframes sp-word-in {
+  from {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes sp-word-out {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+}
+@keyframes sp-out {
+  to {
+    opacity: 0;
+    transform: translateY(-0.4em);
+  }
+}
+@keyframes sp-dim {
+  to {
+    opacity: 0.22;
+    transform: scale(0.94);
+  }
+}
+@keyframes sp-throw {
+  0% {
+    transform: translate(-50%, -170cqh) rotate(-38deg) scale(2.2);
+  }
+  70% {
+    transform: translate(-50%, 0) rotate(-3deg) scale(1.12, 0.82);
+  }
+  84% {
+    transform: translate(-50%, -4%) rotate(-7deg) scale(0.96, 1.05);
+  }
+  100% {
+    transform: translate(-50%, 0) rotate(-6deg) scale(1);
+  }
+}
+@keyframes sp-impact {
+  0% {
+    transform: scale(0.15);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+@keyframes sp-dust {
+  0% {
+    transform: translateX(-50%) rotate(calc(var(--d) * 7deg)) scaleX(0.2);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(calc(-50% + var(--d) * 11cqw)) translateY(-3cqh)
+      rotate(calc(var(--d) * 7deg)) scaleX(0.6);
+    opacity: 0;
+  }
+}
+@keyframes sp-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  15% {
+    transform: translate(-1.2%, 0.9%);
+  }
+  35% {
+    transform: translate(1%, -0.7%);
+  }
+  55% {
+    transform: translate(-0.6%, 0.4%);
+  }
+  75% {
+    transform: translate(0.3%, -0.2%);
+  }
+}
+@keyframes sp-dot {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 @keyframes sp-startline {
   0% {
@@ -1108,35 +1288,6 @@ svg {
     opacity: 1;
   }
 }
-@keyframes sp-bar {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-@keyframes sp-ticker {
-  0% {
-    opacity: 0;
-  }
-  15%,
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes sp-ticker-last {
-  0% {
-    opacity: 0;
-  }
-  15%,
-  100% {
-    opacity: 1;
-  }
-}
 /* Reduced motion: the final frame, no movement. */
 @media (prefers-reduced-motion: reduce) {
   .splash *,
@@ -1149,16 +1300,14 @@ svg {
   .splash-wordmark span {
     transform: none;
   }
-  .splash-glow,
-  .splash-tagline,
-  .splash-loader {
+  .splash-glow {
     opacity: 1;
   }
-  .splash-bar {
-    transform: scaleX(1);
+  .splash-center {
+    opacity: 0.22;
   }
-  .splash-sync i:nth-child(3) {
-    opacity: 1;
+  .splash-throw b {
+    transform: translate(-50%, 0) rotate(-6deg);
   }
 }
 

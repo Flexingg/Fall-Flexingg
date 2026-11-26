@@ -457,6 +457,18 @@ test('plays the launch splash, then hands off to the app', async ({ page }) => {
   await snap(page, '30-splash-early');
   await page.waitForTimeout(700);
   await snap(page, '31-splash-landed');
+  // While the action word changes (step, burn, lift, ...), nothing else moves: the word's slot,
+  // and so " it up.", stay exactly where they are.
+  const slot = page.locator('.splash-words');
+  await page.waitForTimeout(1200);
+  const a = await slot.boundingBox();
+  await snap(page, '32-splash-words');
+  await page.waitForTimeout(900);
+  const b = await slot.boundingBox();
+  expect(b).toEqual(a);
+  // Then THROW IT DOWN is hurled in (it lands at about 6 s).
+  await page.waitForTimeout(2600);
+  await snap(page, '33-splash-throw');
   // It gets out of the way by itself, and the sign-in screen is there underneath.
   await expect(splash).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('heading', { name: 'Gauntlet' })).toBeVisible();
