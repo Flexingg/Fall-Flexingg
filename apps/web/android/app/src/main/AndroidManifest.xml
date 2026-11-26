@@ -103,6 +103,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Phone notifications (GauntletPushPlugin): Android 13+ asks the person when they turn them on. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- In-app updates (AppUpdaterPlugin): hand a downloaded release to Android's installer. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 

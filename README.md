@@ -36,6 +36,8 @@ Profiles are **private by default** (only friends and challenge-mates see you). 
 found by name or @handle and to join **public challenges** from Discover; server admins
 (`ADMIN_EMAILS`) can feature them. Public profiles show name, handle and challenge record only.
 
+**Notifications:** friend requests, challenge invites, lead changes, results, nudges, new personal records and a Monday weekly recap show up under the bell on Today, and people choose which ones they want under Me → Notifications. Nothing goes through a third-party service. Browsers and the installed web app get pushes through Web Push signed with keys that belong to your server: run `npx web-push generate-vapid-keys` once and set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (for example `mailto:you@example.com`); without them the settings page says push isn't set up and the in-app list still works. The Android app has no Google services to receive pushes with, so it checks the server every ~15 minutes in the background (turn it on under Me → Notifications → Phone notifications). Notifications older than 60 days are deleted.
+
 **Demo account:** the sign-in screen has a "Try the demo" button. It signs into a built-in account with five made-up friends, 70 days of sample stats and a few challenges (including solo ones), all rebuilt every day. It has no SparkyFitness behind it, so linking apps, fasting and Health Connect are switched off, and it can't add real friends, go public or be deleted. Switch it off with `DEMO_ACCOUNT=false`.
 
 - **PWA** (installable web app) and **Android app** from one React codebase (Capacitor).

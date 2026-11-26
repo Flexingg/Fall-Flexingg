@@ -40,6 +40,8 @@ export default defineConfig(({ mode }) => ({
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//, /^\/(privacy|terms|delete-account|downloads)/],
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+          // Web Push: show notifications and open the app when one is tapped (public/push-sw.js).
+          importScripts: ['/push-sw.js'],
           // API responses are live data; never serve them from cache.
           runtimeCaching: [{ urlPattern: /\/api\//, handler: 'NetworkOnly' }],
         },

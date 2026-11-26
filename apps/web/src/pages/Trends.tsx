@@ -14,9 +14,11 @@ import { useTrends, useTrendsOverview } from '../lib/queries';
 import { useAuth } from '../lib/auth';
 import { useWorkouts, workoutPath } from '../lib/statsQueries';
 import '../styles/stats.css';
+import { previousIsoWeek, todayIn } from '@gauntlet/shared';
+import { timezone } from '../lib/platform';
 
 export function TrendsPage() {
-  const { mode } = useAuth();
+  const { mode, user } = useAuth();
   const [range, setRange] = useState<'day' | 'week' | 'month'>('week');
   const [metric, setMetric] = useState<string>('steps');
   const q = useTrends(range, metric);
@@ -62,7 +64,19 @@ export function TrendsPage() {
 
   return (
     <Screen>
-      <Header title="Trends" />
+      <Header
+        title="Trends"
+        action={
+          mode !== 'direct' && (
+            <Link
+              to={`/recap/${previousIsoWeek(todayIn(user?.timezone ?? timezone))}`}
+              className="btn secondary sm"
+            >
+              Last week
+            </Link>
+          )
+        }
+      />
       <Seg
         label="Range"
         value={range}

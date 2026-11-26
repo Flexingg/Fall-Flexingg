@@ -160,6 +160,10 @@ export async function feedFor(
       case 'challenge_created':
         text = `${name} started ${challenge?.name ?? 'a challenge'}`;
         break;
+      case 'personal_record':
+        text = `${name} set a new ${typeof p.label === 'string' ? p.label : 'personal record'}`;
+        badge = typeof p.badge === 'string' ? p.badge : null;
+        break;
       default:
         text = `${name} was active`;
     }

@@ -39,6 +39,7 @@ import {
 import { notify } from './notify.js';
 import { createNextRound, loadSeriesInfo, notifyNewRound, type NextRound } from './recurring.js';
 import { buildTeams, getTeams, getTeamsFor, type TeamRow } from './teams.js';
+import { notifyLeadChange } from './notifyEvents.js';
 import { getUsers, toPublicUser, type UserRow } from './users.js';
 
 export type ChallengeRow = typeof challenges.$inferSelect;
@@ -528,6 +529,8 @@ export async function openChallengesForUser(
  * loaded earlier: a stale row would carry an out-of-date leader.
  */
 export async function refreshChallenge(ctx: AppContext, challengeId: string): Promise<void> {
+  // Who just lost the lead; told once the transaction (and its lock) is done.
+  let overtaken: { name: string; newLeaderId: string; previousLeaderId: string } | null = null;
   await ctx.db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`challenge:${challengeId}`}, 0))`,
@@ -568,8 +571,15 @@ export async function refreshChallenge(ctx: AppContext, challengeId: string): Pr
         kind: 'took_lead',
         payload: { previousLeaderId: ch.leaderId },
       });
+      overtaken = { name: ch.name, newLeaderId: top.userId, previousLeaderId: ch.leaderId };
     }
   });
+  if (overtaken) {
+    const o = overtaken as { name: string; newLeaderId: string; previousLeaderId: string };
+    await notifyLeadChange(ctx, { id: challengeId, name: o.name }, o.newLeaderId, [
+      o.previousLeaderId,
+    ]).catch((err) => ctx.log.warn({ err: String(err) }, 'lead change notification failed'));
+  }
 }
 
 /**
@@ -635,7 +645,11 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
     return { next };
   });
   if (!result) return false;
-  if (!ch.solo) await announceFinish(ctx, ch, standings, teamList);
+  // The single place results are announced, once, by whoever closed the challenge (team-aware).
+  if (!ch.solo)
+    await announceFinish(ctx, ch, standings, teamList).catch((err) =>
+      ctx.log.warn({ err: String(err) }, 'challenge result notification failed'),
+    );
   if (result.next) await notifyNewRound(ctx, ch, result.next satisfies NextRound);
   return true;
 }

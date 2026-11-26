@@ -133,6 +133,10 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # Shared with the backup service, for the admin page's Backups section.
       BACKUP_DIR: /backups
+      # Browser and installed-app notifications (Web Push). Generate once: npx web-push generate-vapid-keys
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     volumes:
       - gauntlet-downloads:/app/downloads
       - backups:/backups

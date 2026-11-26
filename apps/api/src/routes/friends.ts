@@ -12,6 +12,7 @@ import { badRequest, HttpError, notFound } from '../context.js';
 import { friendships, users } from '../db/schema.js';
 import { listForUser, loadDetail } from '../services/challenges.js';
 import { pair } from '../services/friends.js';
+import { notifyFriendRequest } from '../services/notifyEvents.js';
 import { canSeeUser } from '../services/privacy.js';
 import { getUsers, toPublicUser } from '../services/users.js';
 
@@ -108,8 +109,10 @@ export function friendRoutes(app: FastifyInstance, ctx: AppContext) {
         .where(and(eq(friendships.userLow, p.userLow), eq(friendships.userHigh, p.userHigh)));
       return { status: 'friends' };
     }
-    if (!existing)
+    if (!existing) {
       await ctx.db.insert(friendships).values({ ...p, requestedBy: req.userId, status: 'pending' });
+      await notifyFriendRequest(ctx, req.userId, target.id);
+    }
     return { status: 'requested' };
   });
 

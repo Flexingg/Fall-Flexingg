@@ -17,6 +17,7 @@ import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics, feedEvents, users } from '../db/schema.js';
 import { fetchMerged, SparkyError, type GoalsRow, type MergedValue } from '@gauntlet/sparky';
+import { checkPersonalRecords } from './records.js';
 import { openChallengesForUser, refreshChallenge, type ChallengeRow } from './challenges.js';
 import { getUser, markKeyInvalid, sparkyToken } from './users.js';
 
@@ -173,6 +174,9 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
 
   // First sync pulls weeks of history at once; don't post that as "progress".
   if (user.lastSyncedAt) await postProgress(ctx, userId, open, changes);
+  await checkPersonalRecords(ctx, userId).catch((err) =>
+    ctx.log.warn({ err: String(err), userId }, 'personal record check failed'),
+  );
   if (opts.settle !== false) for (const ch of open) await refreshChallenge(ctx, ch.id);
   return { userId, ok: true, changed: changes.length };
 }
