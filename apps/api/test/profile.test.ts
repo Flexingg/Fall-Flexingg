@@ -241,7 +241,16 @@ describe('profiles', () => {
   });
 
   it('unfriending ends the friendship', async () => {
-    await call('ben', 'DELETE', `/api/friends/${ids.ana}`);
+    // Exactly what the Android app sends: its native HTTP labels a body-less DELETE as a form.
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/friends/${ids.ana}`,
+      headers: {
+        authorization: `Bearer ${access.ben}`,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+    });
+    expect(res.statusCode).toBe(200);
     // They still shared a challenge, so Ben can see her, just not as a friend.
     expect((await profile('ben', 'ana')).user.friendship).toBe('none');
     const friends = await call<{ friends: { id: string }[] }>('ben', 'GET', '/api/friends');

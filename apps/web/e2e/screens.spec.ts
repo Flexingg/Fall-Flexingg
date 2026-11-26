@@ -441,7 +441,7 @@ test('Trends covers every stat, not just the built-in activity ones', async ({ p
   await expect(all.getByText('Calorie goal')).toBeVisible();
   await snap(page, '24-trends-overview');
   await all.getByRole('button', { name: /Mood/ }).click();
-  await expect(page.getByRole('img', { name: 'Mood per day' })).toBeVisible();
+  await expect(page.getByRole('listbox', { name: 'Mood per day' })).toBeVisible();
   await metric.selectOption('weight');
   await expect(page.getByText(/kg latest/).first()).toBeVisible();
   await metric.selectOption('lift_max:squat');
@@ -571,7 +571,9 @@ test('profiles: trophy board, your own stats, and unfriending', async ({ page })
   await expect(page.getByText('Sam Kim')).toHaveCount(0);
 });
 
-test('fresh data: sync now, pull to refresh, and choosing which source counts', async ({ page }) => {
+test('fresh data: sync now, pull to refresh, and choosing which source counts', async ({
+  page,
+}) => {
   await signIn(page);
 
   // Pull down from the top of Today to sync.
@@ -615,4 +617,40 @@ test('fresh data: sync now, pull to refresh, and choosing which source counts', 
     'aria-pressed',
     'true',
   );
+});
+
+test('Trends chart: tap or drag to see a day, arrows to step, Show total to go back', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Trends' }).click();
+  const days = page.getByRole('listbox', { name: 'Steps per day' });
+  await expect(days).toBeVisible();
+  const bars = days.getByRole('option');
+  const n = await bars.count();
+  expect(n).toBeGreaterThan(3);
+
+  // Tap today's bar: the big number shows that day.
+  const today = days.getByRole('option', { name: /, today$/ });
+  await today.click();
+  await expect(today).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.big')).toContainText(/on (Mon|Tue|Wed|Thu|Fri|Sat|Sun), /);
+  await snap(page, '44-trends-picked');
+
+  // Drag across to the first bar.
+  const box = (await days.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 5, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 3, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(bars.first()).toHaveAttribute('aria-selected', 'true');
+
+  // Keyboard: one step right.
+  await days.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(bars.nth(1)).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('button', { name: 'Show total' }).click();
+  await expect(page.locator('.big')).toContainText('vs last');
+  await expect(days.locator('[aria-selected="true"]')).toHaveCount(0);
 });

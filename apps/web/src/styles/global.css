@@ -474,40 +474,80 @@ svg {
   letter-spacing: 0;
   margin-left: 6px;
 }
-.bars {
+.big .chart-clear {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--volt);
+  vertical-align: middle;
+}
+/* Daily bar chart (components/BarChart.tsx): bars in their own area, dates on their own row, so
+   every bar starts from the same baseline. */
+.chart {
+  margin-top: 14px;
+  --gap: 8px;
+}
+.chart.dense {
+  --gap: 3px;
+}
+.chart-plot {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  height: 110px;
-  margin-top: 14px;
+  gap: var(--gap);
+  height: 120px;
+  touch-action: pan-y;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 6px;
+  outline-offset: 4px;
 }
-.bars > div {
+.chart-col {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
   height: 100%;
-  font-size: 11px;
-  color: var(--muted);
-  font-weight: 600;
-  gap: 6px;
+  display: flex;
+  align-items: flex-end;
 }
-.bars i {
+.chart-col i {
   display: block;
   width: 100%;
   border-radius: 6px;
   background: var(--line-2);
-  min-height: 4px;
+  transition: background 0.12s;
 }
-.bars .today i {
+.chart.dense .chart-col i {
+  border-radius: 3px;
+}
+.chart-col.today i {
   background: var(--volt);
 }
-.bars.dense {
-  gap: 3px;
+.chart.picking .chart-col i {
+  background: var(--line);
 }
-.bars.dense i {
-  border-radius: 3px;
+.chart.picking .chart-col.today i {
+  background: color-mix(in srgb, var(--volt) 45%, var(--line));
+}
+.chart.picking .chart-col.on i {
+  background: var(--volt);
+}
+.chart-x {
+  display: flex;
+  gap: var(--gap);
+  margin-top: 6px;
+}
+.chart-x span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  overflow: visible;
+  white-space: nowrap;
+}
+.chart-x span.on {
+  color: var(--volt);
 }
 
 .track {
