@@ -463,25 +463,36 @@ test('plays the launch splash, then hands off to the app', async ({ page }) => {
     }, ms);
   await at(400);
   await snap(page, '30-splash-early');
+  // "Step it up." holds for a beat once the logo has formed.
+  await at(1000);
+  await snap(page, '31-splash-hold');
+  await expect(page.locator('.splash-words b.first')).toHaveCSS('opacity', '1');
   // While the action word changes (step, burn, lift, ...), nothing else moves: the word's slot,
   // and so " it up.", stay exactly where they are.
   const slot = page.locator('.splash-words');
-  await at(800);
   const a = await slot.boundingBox();
+  await at(1350);
   await snap(page, '32-splash-words');
-  await at(1300);
+  await at(1650);
   const b = await slot.boundingBox();
   expect(a).not.toBeNull();
   expect(b).toEqual(a);
-  // Then THROW IT DOWN lands (about 1.5 s in).
-  await at(1650);
+  // Then THROW IT DOWN lands mid-screen (about 2.4 s in)...
+  const text = page.locator('.splash-throw b');
+  await at(2500);
   await snap(page, '33-splash-throw');
-  await expect(page.locator('.splash-throw b')).toBeInViewport();
+  await expect(text).toBeInViewport();
+  const landed = await text.boundingBox();
+  // ...and drives on down the screen, wiping the splash away to the app behind it.
+  await at(2950);
+  await snap(page, '34-splash-wipe');
+  const lower = await text.boundingBox();
+  expect(lower!.y).toBeGreaterThan(landed!.y + 100);
 
-  // Played normally it gets out of the way by itself in under 2 seconds or so.
+  // Played normally it gets out of the way by itself in a little over 3 seconds.
   await page.goto('/login?splash=1');
   await expect(splash).toBeVisible();
-  await expect(splash).toHaveCount(0, { timeout: 4000 });
+  await expect(splash).toHaveCount(0, { timeout: 6000 });
   await expect(page.getByRole('heading', { name: 'Gauntlet' })).toBeVisible();
   // Played once per app start: no splash again in this page session.
   await page.getByRole('link', { name: 'Create an account' }).click();
