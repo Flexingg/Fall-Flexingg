@@ -16,6 +16,7 @@ import { friendRoutes } from './routes/friends.js';
 import { userRoutes } from './routes/users.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
+import { statsRoutes } from './routes/stats.js';
 import { miscRoutes } from './routes/misc.js';
 import { SparkyError } from '@gauntlet/sparky';
 import { markKeyInvalid } from './services/users.js';
@@ -86,6 +87,7 @@ export async function buildApp(
 
   authRoutes(app, full);
   meRoutes(app, full);
+  statsRoutes(app, full);
   friendRoutes(app, full);
   userRoutes(app, full);
   inviteRoutes(app, full);

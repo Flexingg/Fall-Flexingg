@@ -64,6 +64,33 @@ describe('trends', () => {
     expect(t.bars.find((b) => b.isToday)!.date).toBe(today);
   });
 
+  it('lines up the previous period with the current one, slot for slot', () => {
+    const week = buildTrends({ rows, range: 'week', metric: 'steps', today });
+    expect(week.previousBars).toHaveLength(week.bars.length);
+    expect(week.previousBars!.map((b) => b.date)).toEqual([
+      '2026-09-21',
+      '2026-09-22',
+      '2026-09-23',
+      '2026-09-24',
+      '2026-09-25',
+      '2026-09-26',
+      '2026-09-27',
+    ]);
+    // Tuesday this week (3,000) sits over Tuesday last week (1,000).
+    expect(week.previousBars![1]).toEqual({ date: '2026-09-22', value: 1000 });
+    expect(week.previousBars!.map((b) => b.value)).toEqual([1000, 1000, 1000, 1000, 0, 0, 0]);
+    for (const range of ['day', 'month'] as const) {
+      const t = buildTrends({ rows, range, metric: 'steps', today });
+      expect(t.previousBars).toHaveLength(t.bars.length);
+      // The previous period ends the day before this one starts.
+      const last = t.previousBars!.at(-1)!.date;
+      const first = t.bars[0]!.date;
+      expect(
+        new Date(`${first}T00:00:00Z`).getTime() - new Date(`${last}T00:00:00Z`).getTime(),
+      ).toBe(86_400_000);
+    }
+  });
+
   it('averages sleep and resting heart rate instead of adding them', () => {
     const t = buildTrends({
       rows: [row('2026-09-28', 'sleep', 6), row('2026-09-29', 'sleep', 8)],

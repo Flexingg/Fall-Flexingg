@@ -96,6 +96,13 @@ export interface ExerciseEntryRow {
   duration_minutes?: number | string | null;
   exercise_source?: string | null;
   exercise_category?: string | null;
+  /** SparkyFitness' own id for the entry, when the report carries one. */
+  id?: string | null;
+  /** Kilometres, when the source recorded a route. */
+  distance?: number | string | null;
+  avg_heart_rate?: number | string | null;
+  /** When the session started (ISO), if known. */
+  start_time?: string | null;
   /** Strength sets (Liftosaur, Hevy, SparkyFitness' own log). Weight in kg. */
   sets?: ExerciseSetRow[] | null;
 }

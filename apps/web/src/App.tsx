@@ -28,6 +28,7 @@ import { SourcesPage } from './pages/Sources';
 import { TodayPage } from './pages/Today';
 import { TrendsPage } from './pages/Trends';
 import { WallpaperPage } from './pages/Wallpaper';
+import { WorkoutPage } from './pages/Workout';
 
 function Private({ children }: { children: ReactNode }) {
   const { status } = useAuth();
@@ -226,6 +227,16 @@ export function App() {
               <Private>
                 <NeedsServer what="Profiles">
                   <ProfilePage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/workouts/:id"
+            element={
+              <Private>
+                <NeedsServer what="Workout details">
+                  <WorkoutPage />
                 </NeedsServer>
               </Private>
             }

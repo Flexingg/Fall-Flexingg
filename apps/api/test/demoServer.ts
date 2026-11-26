@@ -107,6 +107,8 @@ for (const [id, p] of Object.entries(profile)) {
         duration_minutes: Math.round(km * 6),
         calories_burned: Math.round(km * 60),
         exercise_source: p.source,
+        distance: km,
+        avg_heart_rate: 138 + (i % 5) * 4,
       });
     }
     u.sleep.push({
@@ -166,6 +168,17 @@ for (let i = 0; i < 14; i += 2) {
     ],
   });
 }
+// One session with a second lift, so the workout detail has more than one exercise.
+users.you!.exerciseEntries.push({
+  entry_date: d(-1),
+  exercise_name: 'Bench Press',
+  exercise_source: 'liftosaur',
+  duration_minutes: 0,
+  sets: [
+    { set_type: 'Warm-up', reps: 8, weight: 40 },
+    ...[0, 1, 2].map(() => ({ set_type: 'Working Set', reps: 6, weight: 70 })),
+  ],
+});
 // A custom measurement and weigh-ins, so Trends has more than the built-ins to show.
 users.you!.categories.push({
   id: 'cat-mood',
@@ -298,7 +311,9 @@ for (const id of ['maya', 'dre', 'sam'])
   await call(id, 'POST', `/api/challenges/${live.id}/respond`, { accept: true });
 // Show Events on the main challenge; Dre keeps his workouts private.
 await call('you', 'PATCH', `/api/challenges/${live.id}`, { showEvents: true });
-await call('dre', 'PATCH', '/api/me', { settings: { shareEvents: false } });
+await call('dre', 'PATCH', '/api/me', {
+  settings: { shareEvents: false, shareProfileStats: true },
+});
 const cup = await call<{ id: string }>('dre', 'POST', '/api/challenges', {
   name: 'Active Minutes Cup',
   metric: 'active_minutes',

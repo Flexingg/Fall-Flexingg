@@ -654,3 +654,119 @@ test('Trends chart: tap or drag to see a day, arrows to step, Show total to go b
   await expect(page.locator('.big')).toContainText('vs last');
   await expect(days.locator('[aria-selected="true"]')).toHaveCount(0);
 });
+
+test('head to head on a friend: shared stats side by side, or just the record', async ({
+  page,
+}) => {
+  await signIn(page);
+
+  // Dre shares his stats: numbers for both of you, and the Step Wars record.
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Dre Thomas/ }).click();
+  const h2h = page.getByLabel('Head to head');
+  await expect(h2h).toBeVisible();
+  await expect(h2h.getByLabel('Challenge record')).toContainText(/You \d+ – \d+ Dre/);
+  await expect(h2h.getByRole('group', { name: /^Steps: you [\d,]+, Dre [\d,]+/ })).toBeVisible();
+  await h2h.getByRole('button', { name: 'Month' }).click();
+  await expect(h2h.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(h2h.getByRole('group', { name: /^Steps:/ })).toBeVisible();
+  await snap(page, '60-head-to-head');
+
+  // Maya keeps her stats to herself: only the record and a note.
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Maya Rodriguez/ }).click();
+  const hidden = page.getByLabel('Head to head');
+  await expect(hidden.getByText(/keeps their stats private/)).toBeVisible();
+  await expect(hidden.getByRole('group')).toHaveCount(0);
+  await snap(page, '60-head-to-head-private');
+
+  // Your own profile has no head to head.
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Your profile/ }).click();
+  await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
+  await expect(page.getByLabel('Head to head')).toHaveCount(0);
+});
+
+test('Trends Compare overlays the previous period and the picked day shows both', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Trends' }).click();
+  const days = page.getByRole('listbox', { name: 'Steps per day' });
+  await expect(days).toBeVisible();
+  await expect(days.locator('.ghost')).toHaveCount(0);
+
+  const compare = page.getByRole('button', { name: 'Compare' });
+  await expect(compare).toHaveAttribute('aria-pressed', 'false');
+  await compare.click();
+  await expect(compare).toHaveAttribute('aria-pressed', 'true');
+  await expect(days.locator('.ghost')).toHaveCount(await days.getByRole('option').count());
+  await expect(page.locator('.chart-legend')).toContainText('This week');
+  await expect(page.locator('.chart-legend')).toContainText('Last week');
+
+  // Pick the first bar (a past day): the headline has this week and last week.
+  await days.getByRole('option').first().click();
+  await expect(page.locator('.big')).toContainText(
+    /on (Mon|Tue|Wed|Thu|Fri|Sat|Sun), .* · [\d,]+ last week/,
+  );
+  await snap(page, '61-trends-compare');
+
+  // It is remembered across visits.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Compare' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Compare' }).click();
+  await expect(page.getByRole('listbox', { name: 'Steps per day' }).locator('.ghost')).toHaveCount(
+    0,
+  );
+});
+
+test('workout detail: from Trends and from What counted', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Trends' }).click();
+  await page.getByLabel('Metric').selectOption('lift_volume');
+  const recent = page.getByLabel('Recent workouts');
+  await expect(recent).toBeVisible();
+
+  // The newest session has Squat and Bench Press, with a warm-up in each.
+  await recent
+    .getByRole('link', { name: /Strength workout · 2 exercises/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: /Strength workout/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Squat' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Bench Press' })).toBeVisible();
+  await expect(page.getByText('Warm-up').first()).toBeVisible();
+  await expect(page.getByText('Best est. 1RM').first()).toBeVisible();
+  await expect(page.getByText('Liftosaur')).toBeVisible();
+  await snap(page, '62-workout-strength');
+
+  // A run from the challenge's What counted list.
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  const section = page.getByLabel('What counted');
+  await section.getByRole('button', { name: 'Previous day' }).click();
+  await section.getByRole('button', { name: 'You' }).click();
+  await section
+    .getByRole('link', { name: /Running/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: 'Running' })).toBeVisible();
+  await expect(page.getByText('avg heart rate (bpm)')).toBeVisible();
+  await expect(page.getByText('minutes', { exact: true })).toBeVisible();
+  await snap(page, '63-workout-run');
+
+  // Someone else's, where Show Events lets you see it.
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  await section.getByRole('button', { name: 'Previous day' }).click();
+  await section.getByRole('button', { name: 'Maya', exact: true }).click();
+  await section
+    .getByRole('link', { name: /Running/ })
+    .first()
+    .click();
+  await expect(page.getByText(/Maya Rodriguez ·/)).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+});

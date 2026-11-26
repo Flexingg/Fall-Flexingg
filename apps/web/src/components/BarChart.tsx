@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import '../styles/stats.css';
 
 export interface Bar {
   date: string;
@@ -17,6 +18,7 @@ export function BarChart({
   onSelect,
   describe,
   label,
+  ghost,
 }: {
   /** What the chart shows, e.g. "Steps per day". */
   label: string;
@@ -25,11 +27,14 @@ export function BarChart({
   onSelect: (date: string | null) => void;
   /** Spoken label for one bar, e.g. "Nov 10: 3,204 kg". */
   describe: (bar: Bar) => string;
+  /** The previous period, one value per bar in the same order, drawn as an outline behind each. */
+  ghost?: number[];
 }) {
   const plot = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const moved = useRef(false);
-  const max = Math.max(...bars.map((b) => b.value), 0) || 1;
+  // One scale for both periods, so a ghost taller than its bar really is taller.
+  const max = Math.max(...bars.map((b) => b.value), ...(ghost ?? []), 0) || 1;
   const dense = bars.length > 10;
   const idx = bars.findIndex((b) => b.date === selected);
 
@@ -82,7 +87,7 @@ export function BarChart({
         onPointerUp={up}
         onPointerCancel={() => (dragging.current = false)}
       >
-        {bars.map((b) => (
+        {bars.map((b, i) => (
           <div
             key={b.date}
             id={`bar-${b.date}`}
@@ -92,6 +97,13 @@ export function BarChart({
             className={`chart-col${b.isToday ? ' today' : ''}${b.date === selected ? ' on' : ''}`}
           >
             <i style={{ height: b.value > 0 ? `max(4px, ${(b.value / max) * 100}%)` : '4px' }} />
+            {ghost && (
+              <b
+                className="ghost"
+                aria-hidden="true"
+                style={{ height: ghost[i]! > 0 ? `max(4px, ${(ghost[i]! / max) * 100}%)` : '4px' }}
+              />
+            )}
           </div>
         ))}
       </div>

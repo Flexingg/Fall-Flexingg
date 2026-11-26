@@ -432,19 +432,45 @@ function addFasting(t: DayTable, input: MergeInput) {
 const MAX_WORKOUT_MINUTES = 6 * 60;
 const MIN_WORKOUT_MINUTES = 3;
 
+export interface CleanWorkout {
+  name: string;
+  minutes: number;
+  kcal: number;
+  source: string | null;
+  /** The SparkyFitness entry it came from (for the detail view). */
+  entry: ExerciseEntryRow;
+}
+
+/** Letters, digits, dash and underscore only, so an id is safe in a URL path. */
+export const idPart = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '');
+
+/** Each entry's key within its day: SparkyFitness' own id, else its position among that day's entries. */
+export function entryKeys(entries: ExerciseEntryRow[]): Map<ExerciseEntryRow, string> {
+  const seen = new Map<string, number>();
+  const out = new Map<ExerciseEntryRow, string>();
+  for (const e of entries) {
+    const d = normDate(e.entry_date) ?? '';
+    const i = seen.get(d) ?? 0;
+    seen.set(d, i + 1);
+    out.set(e, (e.id != null && idPart(String(e.id))) || `n${i}`);
+  }
+  return out;
+}
+
+/** Strength entries from one app on one day are one session: its key. */
+export const strengthKey = (e: ExerciseEntryRow) =>
+  `s-${idPart((e.exercise_source ?? 'log').toLowerCase()) || 'log'}`;
+
+export const hasWorkingSets = (e: ExerciseEntryRow) => (e.sets ?? []).some(isWorkingSet);
+
 /**
  * Real workouts per day: drops SparkyFitness' "Active Calories" entries,
  * sessions too short or too long to be real, and duplicates: the same session
  * written by two apps, sometimes under different activity names, so it is
  * matched on near-identical duration and calories.
  */
-export function cleanWorkouts(
-  entries: ExerciseEntryRow[],
-): Map<string, { name: string; minutes: number; kcal: number; source: string | null }[]> {
-  const byDay = new Map<
-    string,
-    { name: string; minutes: number; kcal: number; source: string | null }[]
-  >();
+export function cleanWorkouts(entries: ExerciseEntryRow[]): Map<string, CleanWorkout[]> {
+  const byDay = new Map<string, CleanWorkout[]>();
   for (const e of entries) {
     const name = (e.exercise_name ?? '').trim().toLowerCase();
     if (name === ACTIVE_CALORIES_ENTRY) continue;
@@ -457,7 +483,7 @@ export function cleanWorkouts(
       (w) =>
         Math.abs(w.minutes - minutes) <= 2 && Math.abs(w.kcal - kcal) <= Math.max(5, kcal * 0.05),
     );
-    if (!dup) list.push({ name, minutes, kcal, source: e.exercise_source ?? null });
+    if (!dup) list.push({ name, minutes, kcal, source: e.exercise_source ?? null, entry: e });
     byDay.set(d, list);
   }
   for (const [d, list] of byDay) if (!list.length) byDay.delete(d);
@@ -553,6 +579,7 @@ export function buildEvents(input: {
   const out: { date: string; event: ChallengeEvent }[] = [];
   const inWindow = (d: string) => d >= input.start && d <= input.end;
 
+  const keys = entryKeys(input.exerciseEntries);
   for (const [date, list] of cleanWorkouts(input.exerciseEntries)) {
     if (!inWindow(date)) continue;
     list.forEach((w, i) => {
@@ -565,6 +592,7 @@ export function buildEvents(input: {
           title: titleCase(w.name),
           detail: bits.join(' · '),
           source: w.source,
+          workoutId: `${date}.${hasWorkingSets(w.entry) ? strengthKey(w.entry) : keys.get(w.entry)}`,
         },
       });
     });
@@ -597,6 +625,7 @@ export function buildEvents(input: {
         title: titleCase((e.exercise_name ?? 'Lift').trim()),
         detail: bits.join(' · '),
         source: e.exercise_source ?? null,
+        workoutId: `${date}.${strengthKey(e)}`,
       },
     });
   }

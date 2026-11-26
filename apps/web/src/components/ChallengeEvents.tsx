@@ -1,5 +1,7 @@
 import { addDays, eventKindsFor, minDate, todayIn, type ChallengeDetail } from '@gauntlet/shared';
 import { useState } from 'react';
+import { Link } from 'react-router';
+import { workoutPath } from '../lib/statsQueries';
 import { dateRange } from '../lib/format';
 import { useEvents } from '../lib/queries';
 import { shortName } from '../lib/format';
@@ -81,16 +83,34 @@ export function ChallengeEvents({ c }: { c: ChallengeDetail }) {
                       <small className="muted">Nothing counted</small>
                     )}
                   </div>
-                  {g.events.map((e) => (
-                    <div key={e.id} className="item" style={{ paddingLeft: 52 }}>
-                      <Icon name={ICON[e.kind]} size={18} />
-                      <div className="grow">
-                        <div className="t">{e.title}</div>
-                        <small>{e.detail}</small>
+                  {g.events.map((e) => {
+                    const body = (
+                      <>
+                        <Icon name={ICON[e.kind]} size={18} />
+                        <div className="grow">
+                          <div className="t">{e.title}</div>
+                          <small>{e.detail}</small>
+                        </div>
+                        {e.source && <span className="pill plain">{e.source}</span>}
+                        {e.workoutId && <Icon name="chevron" size={14} />}
+                      </>
+                    );
+                    // Workouts and lift sessions open their detail (yours, or theirs via Show Events).
+                    return e.workoutId ? (
+                      <Link
+                        key={e.id}
+                        to={workoutPath(e.workoutId, g.isMe ? null : g.user.id)}
+                        className="item"
+                        style={{ paddingLeft: 52 }}
+                      >
+                        {body}
+                      </Link>
+                    ) : (
+                      <div key={e.id} className="item" style={{ paddingLeft: 52 }}>
+                        {body}
                       </div>
-                      {e.source && <span className="pill plain">{e.source}</span>}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ))}
               {q.data.more > 0 && (

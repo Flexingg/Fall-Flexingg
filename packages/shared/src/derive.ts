@@ -164,6 +164,11 @@ export function buildTrends(opts: {
       value: byDate.get(d) ?? 0,
       isToday: d === today,
     })),
+    // Same day-of-period slot, one period earlier: bar i here lines up with bars[i] above.
+    previousBars: listDates(start, end).map((_, i) => {
+      const date = addDays(prevStart, i);
+      return { date, value: byDate.get(date) ?? 0 };
+    }),
   };
 }
 
