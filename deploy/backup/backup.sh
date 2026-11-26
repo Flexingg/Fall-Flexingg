@@ -227,8 +227,10 @@ handle_request() {
 
 setup_dirs() {
   mkdir -p "$REQ" "$STATUS"
-  # The Gauntlet API runs as another user and needs to write requests and delete backups.
-  chmod 777 "$BACKUPS" "$REQ" "$STATUS" 2>/dev/null
+  # The Gauntlet API runs as the image's `node` user (uid 1000) and needs to write requests and
+  # delete backups. Give that user the folders rather than opening them to everyone.
+  chown "${API_UID:-1000}:${API_UID:-1000}" "$BACKUPS" "$REQ" "$STATUS" 2>/dev/null
+  chmod 770 "$BACKUPS" "$REQ" "$STATUS" 2>/dev/null
   return 0
 }
 

@@ -36,8 +36,8 @@ async function writeJsonAtomic(path: string, data: unknown) {
 }
 
 export async function prepareBackupDir(dir: string, appVersion: string) {
-  await mkdir(join(dir, REQUESTS), { recursive: true, mode: 0o777 });
-  await mkdir(join(dir, STATUS), { recursive: true, mode: 0o777 });
+  await mkdir(join(dir, REQUESTS), { recursive: true, mode: 0o770 });
+  await mkdir(join(dir, STATUS), { recursive: true, mode: 0o770 });
   // Lets the backup service put the app version in each backup's manifest.
   await writeFile(join(dir, '.app-version'), appVersion).catch(() => undefined);
 }
