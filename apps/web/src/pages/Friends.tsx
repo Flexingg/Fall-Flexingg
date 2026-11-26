@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import { timeAgo } from '../lib/format';
 import { useFriends, useUserSearch } from '../lib/queries';
 import { shareLink } from '../lib/share';
+import { QrSheet } from '../components/QrSheet';
 
 export function FriendsPage() {
   const q = useFriends();
@@ -22,6 +23,7 @@ export function FriendsPage() {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
+  const [qr, setQr] = useState(false);
   const incoming = q.data?.requests.filter((r) => r.direction === 'incoming') ?? [];
   const outgoing = q.data?.requests.filter((r) => r.direction === 'outgoing') ?? [];
 
@@ -40,6 +42,15 @@ export function FriendsPage() {
         inv.url,
       );
       if (r === 'copied') toast('Invite link copied');
+    } catch (err) {
+      setError(err);
+    }
+  }
+
+  async function showQr() {
+    try {
+      await getInvite();
+      setQr(true);
     } catch (err) {
       setError(err);
     }
@@ -262,6 +273,17 @@ export function FriendsPage() {
           </b>
         </div>
       </button>
+      <button className="btn secondary" style={{ marginTop: 8 }} onClick={showQr}>
+        Show QR code
+      </button>
+      {qr && invite && (
+        <QrSheet
+          title={`Add ${user?.displayName ?? 'me'} as a friend`}
+          url={invite.url}
+          expiresAt={invite.expiresAt}
+          onClose={() => setQr(false)}
+        />
+      )}
     </Screen>
   );
 }

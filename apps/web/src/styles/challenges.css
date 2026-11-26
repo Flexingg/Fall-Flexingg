@@ -1,0 +1,110 @@
+/* Side bets, rematch series and the invite QR sheet. */
+.stake-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.stake-chip small {
+  display: block;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.stake-chip b {
+  display: block;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.stake-chip.paid b {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.stake-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.stake-suggest button {
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.stake-suggest button[aria-pressed='true'] {
+  border-color: var(--volt);
+  color: var(--volt);
+}
+.series-record {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-weight: 700;
+}
+.series-record small {
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.series-record .score {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.75);
+}
+.qr-sheet {
+  width: 100%;
+  max-width: 400px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  text-align: center;
+}
+@media (min-width: 640px) {
+  .qr-overlay {
+    align-items: center;
+  }
+}
+/* Always dark on white with a quiet zone, so a phone camera reads it in the dark theme too. */
+.qr-frame {
+  display: inline-block;
+  padding: 14px;
+  background: #fff;
+  border-radius: 16px;
+  line-height: 0;
+}
+.qr-frame canvas {
+  /* qrcode writes inline pixel sizes onto the canvas; the sheet's size wins. */
+  width: min(260px, 68vw) !important;
+  height: min(260px, 68vw) !important;
+  image-rendering: pixelated;
+}
+.qr-link {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  user-select: all;
+}

@@ -16,6 +16,7 @@ import {
   progressSeries,
   soloGraph,
   soloScoring,
+  rematchName,
   respondChallengeSchema,
   updateChallengeSchema,
   todayIn,
@@ -147,6 +148,8 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     if (body.solo && (body.teams || body.recurrence))
       throw badRequest('A solo challenge is just for you: no teams, and it does not repeat.');
+    if (body.solo && body.stake)
+      throw badRequest('A side bet needs someone to lose to. Solo challenges cannot have one.');
     const problem = validateRules({ scoring, aggregate, goal });
     if (problem) throw badRequest(problem);
     const params = checkParams(metric, body.params);
@@ -189,6 +192,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           createdBy: req.userId,
           visibility: body.visibility,
           showEvents: body.showEvents,
+          stake: body.stake ?? null,
         })
         .returning({ id: challenges.id });
       const teamRows = body.teams ? await insertTeams(txCtx, ch!.id, body.teams.teams) : [];
@@ -320,6 +324,12 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       if (me.visibility !== 'public')
         throw badRequest('Make your profile public to make a challenge public.', 'needs_public');
     }
+    if (body.stake !== undefined) {
+      if (ch.solo && body.stake)
+        throw badRequest('A side bet needs someone to lose to. Solo challenges cannot have one.');
+      if (challengeStatus(ctx, ch) !== 'upcoming' && body.stake !== ch.stake)
+        throw badRequest('The side bet can only be changed before the challenge starts.');
+    }
     const visibility = body.visibility ?? ch.visibility;
     await ctx.db
       .update(challenges)
@@ -329,6 +339,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         // A challenge that leaves Discover can't stay pinned there.
         ...(visibility === 'private' ? { featured: false } : {}),
         ...(body.showEvents != null ? { showEvents: body.showEvents } : {}),
+        ...(body.stake !== undefined ? { stake: body.stake, stakeSettledAt: null } : {}),
         // null stops repeating; a challenge that starts repeating becomes round 1 of a series.
         ...(body.recurrence !== undefined ? { recurrence: body.recurrence } : {}),
         ...(body.recurrence && !ch.seriesId ? { seriesId: ch.id, seriesRound: 1 } : {}),
@@ -559,7 +570,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       const [copy] = await tx
         .insert(challenges)
         .values({
-          name: ch.name.startsWith('Rematch: ') ? ch.name : `Rematch: ${ch.name}`.slice(0, 60),
+          name: rematchName(ch.name),
           metric: ch.metric,
           customLabel: ch.customLabel,
           customUnit: ch.customUnit,
@@ -576,6 +587,8 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           showEvents: ch.showEvents,
           solo: ch.solo,
           teamScoring: ch.teamScoring,
+          // The side bet carries over, unsettled.
+          stake: ch.stake,
         })
         .returning({ id: challenges.id });
       // Same teams, nobody on them yet; people are suggested the team they were on.

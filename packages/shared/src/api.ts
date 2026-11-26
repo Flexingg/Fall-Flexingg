@@ -11,6 +11,7 @@ import { SCORING_MODES, type ScoringMode } from './scoring.js';
 import { recurrenceSchema, type Reaction, type Recurrence } from './notify.js';
 import { teamsInputSchema, type ChallengeTeam, type TeamScoring } from './teams.js';
 import type { SeriesInfo } from './recurring.js';
+import { stakeSchema, type RematchSeries, type StakeInfo } from './stakes.js';
 
 const dateString = z.string().refine(isDateString, 'Expected a YYYY-MM-DD date');
 
@@ -175,6 +176,8 @@ export interface InvitePreview {
     startDate: string;
     endDate: string;
     showEvents: boolean;
+    /** The side bet, if the challenge has one. */
+    stake?: string | null;
   };
 }
 
@@ -237,6 +240,8 @@ export const createChallengeSchema = z
     teams: teamsInputSchema.optional(),
     /** Start a new round when this one ends. Not for solo challenges. */
     recurrence: recurrenceSchema.optional(),
+    /** A plain-text side bet, e.g. "Loser buys coffee". Not for solo challenges. */
+    stake: stakeSchema.optional(),
   })
   .refine((v) => v.endDate >= v.startDate, {
     message: 'End date must be on or after start date',
@@ -284,6 +289,8 @@ export interface ChallengeSummary {
   seriesRound?: number | null;
   /** Set for team challenges: how a team's score is worked out. */
   teamScoring?: TeamScoring | null;
+  /** The plain-text side bet, if any. */
+  stake?: string | null;
 }
 
 export interface StandingRow {
@@ -316,6 +323,10 @@ export interface ChallengeDetail extends ChallengeSummary {
   myTeamId?: string | null;
   /** Round number, earlier rounds and the season table, for a recurring series. */
   series?: SeriesInfo | null;
+  /** Who owes the side bet and whether it is settled; set once a challenge with a side bet is over. */
+  stakeInfo?: StakeInfo | null;
+  /** Wins per person across a chain of rematches; set when the challenge is part of one. */
+  rematchSeries?: RematchSeries | null;
 }
 
 export interface ChallengeResult {
@@ -342,6 +353,8 @@ export const updateChallengeSchema = z
     showEvents: z.boolean().optional(),
     /** Null stops a recurring challenge from starting another round. */
     recurrence: recurrenceSchema.nullable().optional(),
+    /** Null removes the side bet. Only before the challenge starts. */
+    stake: stakeSchema.optional(),
   })
   .strict();
 export type UpdateChallengeRequest = z.input<typeof updateChallengeSchema>;

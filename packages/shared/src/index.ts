@@ -16,3 +16,4 @@ export * from './recurring.js';
 export * from './stats.js';
 export * from './notifications.js';
 export * from './review.js';
+export * from './stakes.js';

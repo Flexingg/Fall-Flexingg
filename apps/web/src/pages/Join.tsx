@@ -2,6 +2,7 @@ import type { InvitePreview } from '@gauntlet/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
+import { StakeChip } from '../components/Stake';
 import { Avatar, ErrorBox, Screen, ShowEventsNotice, Skeleton } from '../components/ui';
 import { post, publicGet } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -72,6 +73,7 @@ export function JoinPage() {
                 Accept to add each other as friends on Gauntlet.
               </p>
             )}
+            {p.challenge?.stake && <StakeChip stake={p.challenge.stake} />}
             {p.challenge?.showEvents && (
               <div style={{ marginTop: 14 }}>
                 <ShowEventsNotice />

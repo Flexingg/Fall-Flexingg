@@ -1225,3 +1225,78 @@ test('profile calendar heatmap: renders your year and a tapped day shows its val
   await expect(page.getByRole('group', { name: /Distance by day/ })).toBeVisible();
   await expect(page.locator('.error')).toHaveCount(0);
 });
+
+test('a side bet: set on create, shown on the challenge, owed and paid up at the end', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/c/new');
+  await page.getByLabel('Challenge name').fill('Coffee Sprint');
+  await page.getByRole('button', { name: 'Steps' }).click();
+  await page.getByRole('button', { name: 'Loser picks the next challenge' }).click();
+  await expect(page.getByLabel('Side bet', { exact: true })).toHaveValue(
+    'Loser picks the next challenge',
+  );
+  await snap(page, '90-new-side-bet');
+  await page.getByLabel('Side bet', { exact: true }).fill('Loser buys coffee');
+  await page.getByRole('button', { name: 'Start challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Coffee Sprint' })).toBeVisible();
+  await expect(
+    page.getByLabel('Side bet', { exact: true }).getByText('Loser buys coffee'),
+  ).toBeVisible();
+  await snap(page, '91-side-bet-detail');
+
+  // A finished challenge: Dre lost, Alex won and marks it paid up.
+  await page.goto('/challenges');
+  await page.getByRole('button', { name: 'Finished' }).click();
+  await page.getByText('Coffee Run').click();
+  const result = page.getByLabel('Side bet result');
+  await expect(result.getByText('Dre owes it')).toBeVisible();
+  await page.getByRole('button', { name: 'Mark as paid up' }).click();
+  await expect(result.getByText('Paid up ✓')).toBeVisible();
+  await snap(page, '92-side-bet-paid');
+
+  // Rematch from the detail page carries the bet and starts a series.
+  await page.getByRole('button', { name: 'Rematch' }).click();
+  await expect(page.getByRole('heading', { name: 'Rematch: Coffee Run' })).toBeVisible();
+  await expect(
+    page.getByLabel('Side bet', { exact: true }).getByText('Loser buys coffee'),
+  ).toBeVisible();
+  const series = page.getByLabel('Rematch series');
+  await expect(series).toContainText('You 1 – 0 Dre');
+  await snap(page, '93-rematch-series');
+});
+
+test('the invite QR sheet shows a code and the link', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  await page.getByRole('button', { name: 'Show QR code' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Invite QR code' });
+  await expect(sheet.getByText('Weekend 100K')).toBeVisible();
+  await expect(sheet.locator('canvas')).toBeVisible();
+  await expect(sheet.getByText(/https?:\/\/\S+\/j\/\S+/)).toBeVisible();
+  await expect(sheet.getByText(/Link expires/)).toBeVisible();
+  // The code is actually drawn: dark modules on a white ground.
+  const dark = await sheet.locator('canvas').evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    const px = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i]! < 60) n++;
+    return n;
+  });
+  expect(dark).toBeGreaterThan(1000);
+  await snap(page, '94-qr-sheet');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet).toHaveCount(0);
+
+  // The friend invite has one too.
+  await page.goto('/friends');
+  await page.getByRole('button', { name: 'Show QR code' }).click();
+  await expect(page.getByRole('dialog', { name: 'Invite QR code' })).toContainText(
+    'Add Alex Morgan as a friend',
+  );
+  await expect(
+    page.getByRole('dialog', { name: 'Invite QR code' }).locator('canvas'),
+  ).toBeVisible();
+});

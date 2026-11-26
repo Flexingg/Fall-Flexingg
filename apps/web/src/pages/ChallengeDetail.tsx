@@ -25,7 +25,9 @@ import { keys, useChallenge, useProgress, useToday } from '../lib/queries';
 import { ProgressChart } from '../components/ProgressChart';
 import { shareLink } from '../lib/share';
 import { deferAction } from '../lib/undo';
-import type { Invite } from '@gauntlet/shared';
+import { QrSheet } from '../components/QrSheet';
+import { SeriesRecord, StakeChip, StakeResult } from '../components/Stake';
+import type { ChallengeDetail, Invite } from '@gauntlet/shared';
 
 export function ChallengeDetailPage() {
   const { id = '' } = useParams();
@@ -38,6 +40,7 @@ export function ChallengeDetailPage() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [weightGoal, setWeightGoal] = useState<WeightGoalParams | null>(null);
+  const [qr, setQr] = useState<Invite | null>(null);
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const c = q.data;
@@ -71,6 +74,17 @@ export function ChallengeDetailPage() {
       inv.url,
     );
     if (r === 'copied') toast('Invite link copied');
+  }
+
+  async function showQr() {
+    setQr(await post<Invite>('/api/invites', { kind: 'challenge', challengeId: id }));
+  }
+
+  async function rematch() {
+    await act(async () => {
+      const next = await post<ChallengeDetail>(`/api/challenges/${id}/rematch`);
+      navigate(`/c/${next.id}`);
+    });
   }
 
   return (
@@ -108,6 +122,9 @@ export function ChallengeDetailPage() {
             {c.visibility === 'public' ? ' · Public' : ''}
             {c.featured ? ' · Featured' : ''}
           </p>
+
+          {c.stake && !c.stakeInfo && <StakeChip stake={c.stake} />}
+          <SeriesRecord c={c} />
 
           {(c.myState == null || c.myState === 'declined') &&
             c.visibility === 'public' &&
@@ -186,6 +203,8 @@ export function ChallengeDetailPage() {
             </Link>
           )}
 
+          {c.stakeInfo && <StakeResult c={c} />}
+
           {c.myParams?.weightGoal && (
             <p className="muted" style={{ fontSize: 13, marginTop: -6, marginBottom: 12 }}>
               Your target: {c.myParams.weightGoal.direction} {c.myParams.weightGoal.target}
@@ -255,6 +274,11 @@ export function ChallengeDetailPage() {
                   <Icon name="share" size={18} /> Invite friends
                 </button>
               )}
+              {!solo && (
+                <button className="btn secondary" onClick={() => showQr().catch(setError)}>
+                  Show QR code
+                </button>
+              )}
               {c.createdBy === user?.id && (c.status === 'upcoming' || solo) ? (
                 <button
                   className="btn ghost"
@@ -291,6 +315,19 @@ export function ChallengeDetailPage() {
                 </button>
               )}
             </div>
+          )}
+          {c.status === 'completed' && c.myState === 'joined' && (
+            <button className="btn" style={{ marginTop: 14 }} disabled={busy} onClick={rematch}>
+              {busy ? <span className="spinner" /> : solo ? 'Run it again' : 'Rematch'}
+            </button>
+          )}
+          {qr && (
+            <QrSheet
+              title={c.name}
+              url={qr.url}
+              expiresAt={qr.expiresAt}
+              onClose={() => setQr(null)}
+            />
           )}
           {user?.isAdmin && c.visibility === 'public' && c.status !== 'completed' && (
             <button

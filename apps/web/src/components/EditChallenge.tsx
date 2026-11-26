@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange } from '../lib/format';
+import { StakeField } from './Stake';
 import { ErrorBox, toast, Toggle } from './ui';
 
 /** What the creator can change after a challenge exists. Dates stay as they were created. */
@@ -14,10 +15,13 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
   const [name, setName] = useState(c.name);
   const [isPublic, setPublic] = useState(c.visibility === 'public');
   const [showEvents, setShowEvents] = useState(c.showEvents);
+  const [stake, setStake] = useState(c.stake ?? '');
   const [repeats, setRepeats] = useState(!!c.recurrence);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const others = c.participantCount - 1;
+  // A side bet is set before the start, so nobody joins under one rule and plays under another.
+  const canEditStake = !c.soloConfig && c.status === 'upcoming';
   const canGoPublic = user?.visibility === 'public' || c.visibility === 'public';
 
   async function save() {
@@ -25,6 +29,8 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
     if (name.trim() && name.trim() !== c.name) body.name = name.trim();
     if (isPublic !== (c.visibility === 'public')) body.visibility = isPublic ? 'public' : 'private';
     if (showEvents !== c.showEvents) body.showEvents = showEvents;
+    if (canEditStake && stake.trim().replace(/\s+/g, ' ') !== (c.stake ?? ''))
+      body.stake = stake.trim() || null;
     if (c.recurrence && !repeats) body.recurrence = null;
     if (!Object.keys(body).length) return onDone();
     if (
@@ -93,6 +99,7 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
         </div>
         <Toggle checked={showEvents} onChange={setShowEvents} label="Show events" />
       </div>
+      {canEditStake && <StakeField value={stake} onChange={setStake} />}
       {c.recurrence && (
         <div className="row">
           <div className="grow">
