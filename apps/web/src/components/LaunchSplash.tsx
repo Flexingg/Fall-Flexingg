@@ -13,19 +13,29 @@ import { useEffect, useRef, useState } from 'react';
 /** The action words, in order. The first shows as the line appears. */
 export const SPLASH_WORDS = ['Step', 'Burn', 'Lift', 'Run', 'Eat', 'Drink', 'Fast', 'Sleep'];
 
-/** Playback speed: 1 is the design timeline (8.6 s); 0.8 hands off at about 6.9 s. */
-const SPEED = 0.8;
+/** Playback speed: 1 is the design timeline (8.6 s); 0.2 hands off at about 1.7 s. */
+const SPEED = 0.2;
 const PLAY_MS = 8600 * SPEED;
 const REDUCED_MS = 700;
-const FADE_MS = 280;
+const FADE_MS = 200;
 
 let played = false;
+
+/** `?splash=hold` (tests only): stay until tapped, so frames can be inspected at exact times. */
+const hold = () => {
+  try {
+    return new URLSearchParams(window.location.search).get('splash') === 'hold';
+  } catch {
+    return false;
+  }
+};
 
 /** Browser automation skips it so tests don't wait for it (`?splash=1` forces it, for its own test). */
 export function shouldShowSplash(): boolean {
   if (played) return false;
   try {
-    if (new URLSearchParams(window.location.search).get('splash') === '1') return true;
+    const q = new URLSearchParams(window.location.search).get('splash');
+    if (q === '1' || q === 'hold') return true;
   } catch {
     /* no window.location.search */
   }
@@ -57,7 +67,7 @@ export function LaunchSplash({ ready, onDone }: { ready: boolean; onDone: () => 
   };
 
   useEffect(() => {
-    if (ready && elapsed) finish();
+    if (ready && elapsed && !hold()) finish();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, elapsed]);
 
@@ -67,7 +77,7 @@ export function LaunchSplash({ ready, onDone }: { ready: boolean; onDone: () => 
       style={{ ['--s' as string]: SPEED, ['--fade' as string]: `${FADE_MS}ms` }}
       onPointerDown={() => {
         // Tap to skip, once the logo has landed and the app is ready to show.
-        if (ready && performance.now() - started.current > 1500) finish();
+        if (ready && performance.now() - started.current > 600) finish();
       }}
       role="img"
       aria-label={`Gauntlet. Throw it down. ${SPLASH_WORDS.map((w) => `${w} it up.`).join(' ')}`}

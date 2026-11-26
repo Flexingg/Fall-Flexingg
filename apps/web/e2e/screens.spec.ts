@@ -450,27 +450,38 @@ test('Trends covers every stat, not just the built-in activity ones', async ({ p
 });
 
 test('plays the launch splash, then hands off to the app', async ({ page }) => {
-  await page.goto('/login?splash=1');
+  // Frames at exact times: hold the splash, pause every animation and jump to a moment (ms).
+  await page.goto('/login?splash=hold');
   const splash = page.getByRole('img', { name: /^Gauntlet\. Throw it down/ });
   await expect(splash).toBeVisible();
-  await page.waitForTimeout(900);
+  const at = (ms: number) =>
+    page.evaluate((t) => {
+      for (const a of document.getAnimations()) {
+        a.pause();
+        a.currentTime = t;
+      }
+    }, ms);
+  await at(400);
   await snap(page, '30-splash-early');
-  await page.waitForTimeout(700);
-  await snap(page, '31-splash-landed');
   // While the action word changes (step, burn, lift, ...), nothing else moves: the word's slot,
   // and so " it up.", stay exactly where they are.
   const slot = page.locator('.splash-words');
-  await page.waitForTimeout(1200);
+  await at(800);
   const a = await slot.boundingBox();
   await snap(page, '32-splash-words');
-  await page.waitForTimeout(900);
+  await at(1300);
   const b = await slot.boundingBox();
+  expect(a).not.toBeNull();
   expect(b).toEqual(a);
-  // Then THROW IT DOWN is hurled in (it lands at about 6 s).
-  await page.waitForTimeout(2600);
+  // Then THROW IT DOWN lands (about 1.5 s in).
+  await at(1650);
   await snap(page, '33-splash-throw');
-  // It gets out of the way by itself, and the sign-in screen is there underneath.
-  await expect(splash).toHaveCount(0, { timeout: 8000 });
+  await expect(page.locator('.splash-throw b')).toBeInViewport();
+
+  // Played normally it gets out of the way by itself in under 2 seconds or so.
+  await page.goto('/login?splash=1');
+  await expect(splash).toBeVisible();
+  await expect(splash).toHaveCount(0, { timeout: 4000 });
   await expect(page.getByRole('heading', { name: 'Gauntlet' })).toBeVisible();
   // Played once per app start: no splash again in this page session.
   await page.getByRole('link', { name: 'Create an account' }).click();
