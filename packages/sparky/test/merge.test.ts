@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mergeDaily, type MergeInput } from '../src/merge.js';
+import {
+  mergeDaily,
+  mergeDailyDetailed,
+  sourceKey,
+  sourceLabel,
+  type MergeInput,
+} from '../src/merge.js';
 
 const empty: MergeInput = {
   start: '2026-10-01',
@@ -236,5 +242,67 @@ describe('mergeDaily', () => {
     });
     expect(pick(rows, '2026-10-01', 'custom:pushups')!.value).toBe(50);
     expect(rows.some((r) => r.date === '2026-09-30')).toBe(false);
+  });
+});
+
+describe('source priorities', () => {
+  const watchAndPhone: MergeInput = {
+    ...empty,
+    daily: [
+      { entry_date: '2026-10-01', source_provider: 'garmin', total_steps: 9000 },
+      { entry_date: '2026-10-02', source_provider: 'garmin', total_steps: 4000 },
+    ],
+    checkIns: [
+      { entry_date: '2026-10-01', steps: 9500, updated_at: '2026-10-01T20:00:00Z' },
+      { entry_date: '2026-10-02', steps: 6000, updated_at: '2026-10-02T20:00:00Z' },
+      { entry_date: '2026-10-03', steps: 3000, updated_at: '2026-10-03T20:00:00Z' },
+    ],
+    custom: {
+      resting_heart_rate: {
+        category: { id: 'c2', name: 'resting_heart_rate', frequency: 'All' },
+        rows: [{ date: '2026-10-01', value: '58', timestamp: '2026-10-01T08:00:00Z' }],
+      },
+    },
+  };
+
+  it('groups SparkyFitness labels into sources people recognise', () => {
+    expect(sourceKey('check-in')).toBe('health_connect');
+    expect(sourceKey('Health Connect')).toBe('health_connect');
+    expect(sourceKey('Distance')).toBe('health_connect');
+    expect(sourceKey('resting_heart_rate')).toBe('health_connect');
+    expect(sourceKey('garmin')).toBe('garmin');
+    expect(sourceKey('Garmin')).toBe('garmin');
+    expect(sourceKey('workouts')).toBe('workouts');
+    expect(sourceLabel('health_connect')).toBe('Health Connect & phone');
+    expect(sourceLabel('garmin')).toBe('Garmin');
+  });
+
+  it('without a preference, the highest single source still wins', () => {
+    const { values, sources } = mergeDailyDetailed(watchAndPhone);
+    expect(pick(values, '2026-10-01', 'steps')).toMatchObject({ value: 9500 });
+    expect(pick(values, '2026-10-02', 'steps')).toMatchObject({ value: 6000 });
+    expect(sources.steps).toEqual(['garmin', 'health_connect']);
+    expect(sources.resting_hr).toEqual(['health_connect']);
+  });
+
+  it('uses the preferred source on days it has data, and falls back otherwise', () => {
+    const { values } = mergeDailyDetailed({ ...watchAndPhone, priorities: { steps: ['garmin'] } });
+    expect(pick(values, '2026-10-01', 'steps')).toMatchObject({ value: 9000, source: 'garmin' });
+    expect(pick(values, '2026-10-02', 'steps')).toMatchObject({ value: 4000, source: 'garmin' });
+    // Garmin has nothing on the 3rd: the phone's number is used rather than none.
+    expect(pick(values, '2026-10-03', 'steps')).toMatchObject({ value: 3000 });
+  });
+
+  it('only changes the metric it was set for', () => {
+    const { values } = mergeDailyDetailed({
+      ...watchAndPhone,
+      daily: [
+        ...watchAndPhone.daily,
+        { entry_date: '2026-10-01', source_provider: 'garmin', resting_heart_rate: 50 },
+      ],
+      priorities: { resting_hr: ['health_connect'] },
+    });
+    expect(pick(values, '2026-10-01', 'resting_hr')).toMatchObject({ value: 58 });
+    expect(pick(values, '2026-10-01', 'steps')).toMatchObject({ value: 9500 });
   });
 });

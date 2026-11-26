@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { AppBanner } from './components/AppBanner';
+import { PullToRefresh } from './components/PullToRefresh';
+import { AutoRefresh } from './lib/freshness';
 import { ConnectServer } from './components/ConnectServer';
 import { LaunchSplash, shouldShowSplash } from './components/LaunchSplash';
 import { ToastHost } from './components/ui';
@@ -112,6 +114,8 @@ export function App() {
       {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
+        <AutoRefresh />
+        {status === 'signedIn' && <PullToRefresh />}
         <AppBanner />
         <Routes>
           <Route

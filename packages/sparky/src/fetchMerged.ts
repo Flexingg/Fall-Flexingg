@@ -5,7 +5,7 @@ import {
   buildEvents,
   DISTANCE_CATEGORIES,
   liftOptions,
-  mergeDaily,
+  mergeDailyDetailed,
   RESTING_HR_CATEGORIES,
   wantedCategoryNames,
   type MergedValue,
@@ -39,6 +39,8 @@ export interface FetchOptions {
   /** Track the heaviest set and estimated 1RM of every exercise with weighted sets (most trained first). */
   allLifts?: boolean;
   onSkip?: (label: string, err: Error) => void;
+  /** Preferred sources per metric (see MergeInput.priorities). */
+  priorities?: Record<string, string[]>;
 }
 
 /** At most this many goal look-ups per sync; the rest come on later syncs. */
@@ -53,7 +55,7 @@ export async function fetchMerged(
   start: string,
   end: string,
   opts: FetchOptions = {},
-): Promise<{ merged: MergedValue[]; partial: boolean }> {
+): Promise<{ merged: MergedValue[]; sources: Record<string, string[]>; partial: boolean }> {
   const customMetrics = opts.customMetrics ?? {};
   const onSkip = opts.onSkip ?? (() => {});
   let partial = false;
@@ -143,35 +145,34 @@ export async function fetchMerged(
     }
   }
 
-  return {
-    merged: mergeDaily({
-      start,
-      end,
-      daily,
-      checkIns,
-      custom,
-      exerciseDays,
-      exerciseEntries: report.exerciseEntries,
-      sleep,
-      customMetrics: effectiveCustom,
-      nutrition: report.nutrition,
-      water,
-      goals,
-      fasts,
-      lifts: [
-        ...new Set([
-          ...(opts.lifts ?? []),
-          ...(opts.allLifts
-            ? liftOptions(report.exerciseEntries)
-                .slice(0, MAX_LIFTS)
-                .map((l) => l.key)
-            : []),
-        ]),
-      ],
-      timezone: opts.timezone,
-    }),
-    partial,
-  };
+  const result = mergeDailyDetailed({
+    start,
+    end,
+    daily,
+    checkIns,
+    custom,
+    exerciseDays,
+    exerciseEntries: report.exerciseEntries,
+    sleep,
+    customMetrics: effectiveCustom,
+    nutrition: report.nutrition,
+    water,
+    goals,
+    fasts,
+    lifts: [
+      ...new Set([
+        ...(opts.lifts ?? []),
+        ...(opts.allLifts
+          ? liftOptions(report.exerciseEntries)
+              .slice(0, MAX_LIFTS)
+              .map((l) => l.key)
+          : []),
+      ]),
+    ],
+    timezone: opts.timezone,
+    priorities: opts.priorities,
+  });
+  return { merged: result.values, sources: result.sources, partial };
 }
 
 /**

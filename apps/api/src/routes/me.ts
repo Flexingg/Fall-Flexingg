@@ -5,6 +5,12 @@ import {
   buildTrends,
   buildWallpaper,
   isMetricKey,
+  metricDef,
+  PRIORITY_METRIC_KEYS,
+  setSourcePrioritySchema,
+  syncRequestSchema,
+  type SourcePriorityResponse,
+  type SyncResponse,
   personalBests,
   todayIn,
   trendsNeedFrom,
@@ -43,9 +49,30 @@ import {
   listConnections,
   RESTING_HR_CATEGORIES,
   SparkyError,
+  sourceLabel,
   type FastRow,
 } from '@gauntlet/sparky';
 import { connectionsEnv } from './connections.js';
+import { pullConnectedApps } from '../services/pull.js';
+
+/** The choices on Data sources → Which source counts. */
+function sourcePriorities(user: UserRow): SourcePriorityResponse {
+  return {
+    metrics: PRIORITY_METRIC_KEYS.map((key) => {
+      const preferred = user.sourcePriorities[key]?.[0] ?? null;
+      const seen = user.seenSources[key] ?? [];
+      const keys = [...new Set([...seen, ...(preferred ? [preferred] : [])])].filter(
+        (k) => k !== 'unknown',
+      );
+      return {
+        key,
+        label: metricDef(key).label,
+        sources: keys.map((k) => ({ key: k, label: sourceLabel(k) })),
+        preferred,
+      };
+    }),
+  };
+}
 
 const WALLPAPER_METRICS = [
   'calories_in',
@@ -101,11 +128,44 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** Pull fresh data from SparkyFitness now (pull-to-refresh). */
+  /**
+   * Pull fresh data now: re-read SparkyFitness straight away, and with { providers: true } also ask
+   * every connected app (Garmin, Fitbit, ...) to pull its latest; those land a minute or so later.
+   */
   app.post(
     '/api/me/sync',
     { ...auth, config: { rateLimit: { max: 6, timeWindow: '1 minute' } } },
-    async (req) => {
-      return syncUser(ctx, req.userId);
+    async (req): Promise<SyncResponse> => {
+      const body = syncRequestSchema.parse(req.body ?? {});
+      const pulling = body.providers
+        ? await pullConnectedApps(ctx, req.userId).catch((err) => {
+            ctx.log.warn({ err: String(err) }, 'could not list apps to pull from');
+            return [] as string[];
+          })
+        : [];
+      const r = await syncUser(ctx, req.userId);
+      return { ok: r.ok, changed: r.changed, ...(r.error ? { error: r.error } : {}), pulling };
+    },
+  );
+
+  /** Which source counts for each metric that more than one source reports. */
+  app.get('/api/me/source-priority', auth, async (req): Promise<SourcePriorityResponse> =>
+    sourcePriorities(await getUser(ctx, req.userId)),
+  );
+
+  /** Prefer one source for a metric (or go back to automatic), then re-sync with it. */
+  app.put(
+    '/api/me/source-priority',
+    { ...auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req): Promise<SourcePriorityResponse> => {
+      const body = setSourcePrioritySchema.parse(req.body);
+      const user = await getUser(ctx, req.userId);
+      const next = { ...user.sourcePriorities };
+      if (body.preferred) next[body.metric] = [body.preferred];
+      else delete next[body.metric];
+      await ctx.db.update(users).set({ sourcePriorities: next }).where(eq(users.id, user.id));
+      await syncUser(ctx, user.id);
+      return sourcePriorities(await getUser(ctx, user.id));
     },
   );
 

@@ -35,6 +35,13 @@ export const users = pgTable('users', {
   healthConnectSync: boolean('health_connect_sync').notNull().default(false),
   /** Show my trophies, milestones and all-time stats to people who can see my profile. */
   shareProfileStats: boolean('share_profile_stats').notNull().default(false),
+  /** Preferred sources per metric (source keys, most preferred first), e.g. { steps: ['garmin'] }. */
+  sourcePriorities: jsonb('source_priorities')
+    .$type<Record<string, string[]>>()
+    .notNull()
+    .default({}),
+  /** Sources the last sync saw per metric, so the app only offers real choices. */
+  seenSources: jsonb('seen_sources').$type<Record<string, string[]>>().notNull().default({}),
   /** public: findable by name/handle and can join public challenges. */
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()

@@ -1253,3 +1253,65 @@ svg {
   height: 100%;
   background: var(--volt);
 }
+
+/* ---------- Fresh data (lib/freshness.ts, components/PullToRefresh.tsx) ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+svg.spin {
+  animation: spin 0.9s linear infinite;
+}
+.sync-btn {
+  color: var(--muted);
+  font-weight: 600;
+}
+.ptr {
+  position: fixed;
+  top: calc(var(--safe-top) + 8px);
+  left: 50%;
+  z-index: 60;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--card-2);
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.ptr.ready {
+  color: var(--volt);
+  border-color: var(--volt);
+}
+.ptr > span {
+  display: grid;
+}
+.source-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.source-pick button {
+  padding: 7px 12px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  background: var(--card-2);
+}
+.source-pick button[aria-pressed='true'] {
+  background: var(--volt);
+  border-color: var(--volt);
+  color: var(--volt-ink);
+}
+.source-pick button:disabled {
+  opacity: 0.5;
+}
