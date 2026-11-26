@@ -34,6 +34,7 @@ import type { AppContext } from '../context.js';
 import { badRequest, HttpError } from '../context.js';
 import { challengeParticipants, dailyMetrics, rankSnapshots, users } from '../db/schema.js';
 import { listForUser } from '../services/challenges.js';
+import { displayOf, saveDisplay } from '../services/display.js';
 import { syncUser } from '../services/sync.js';
 import {
   demoBlocked,
@@ -104,27 +105,33 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
         .where(and(eq(users.handle, body.handle), ne(users.id, req.userId)));
       if (taken) throw new HttpError(409, 'That handle is taken', 'handle_taken');
     }
-    const [u] = await ctx.db
-      .update(users)
-      .set({
-        ...(body.displayName ? { displayName: body.displayName } : {}),
-        ...(body.timezone ? { timezone: body.timezone } : {}),
-        ...(body.settings?.shareWorkoutDetails != null
-          ? { shareWorkoutDetails: body.settings.shareWorkoutDetails }
-          : {}),
-        ...(body.settings?.shareEvents != null ? { shareEvents: body.settings.shareEvents } : {}),
-        ...(body.settings?.healthConnectSync != null
-          ? { healthConnectSync: body.settings.healthConnectSync }
-          : {}),
-        ...(body.settings?.shareProfileStats != null
-          ? { shareProfileStats: body.settings.shareProfileStats }
-          : {}),
-        ...(body.visibility ? { visibility: body.visibility } : {}),
-        ...(body.handle !== undefined ? { handle: body.handle || null } : {}),
-      })
-      .where(eq(users.id, req.userId))
-      .returning();
-    return toMe(u!, ctx);
+    const changes = {
+      ...(body.displayName ? { displayName: body.displayName } : {}),
+      ...(body.timezone ? { timezone: body.timezone } : {}),
+      ...(body.settings?.shareWorkoutDetails != null
+        ? { shareWorkoutDetails: body.settings.shareWorkoutDetails }
+        : {}),
+      ...(body.settings?.shareEvents != null ? { shareEvents: body.settings.shareEvents } : {}),
+      ...(body.settings?.healthConnectSync != null
+        ? { healthConnectSync: body.settings.healthConnectSync }
+        : {}),
+      ...(body.settings?.shareProfileStats != null
+        ? { shareProfileStats: body.settings.shareProfileStats }
+        : {}),
+      ...(body.visibility ? { visibility: body.visibility } : {}),
+      ...(body.handle !== undefined ? { handle: body.handle || null } : {}),
+    };
+    // Units, clock and number format live in a JSON column, so they are saved separately.
+    const display = body.settings;
+    if (display?.units || display?.clock || display?.locale)
+      await saveDisplay(ctx, req.userId, {
+        units: display.units,
+        clock: display.clock,
+        locale: display.locale,
+      });
+    if (Object.keys(changes).length)
+      await ctx.db.update(users).set(changes).where(eq(users.id, req.userId));
+    return toMe(await getUser(ctx, req.userId), ctx);
   });
 
   /** Pull fresh data from SparkyFitness now (pull-to-refresh). */
@@ -249,6 +256,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       personalBests: personalBests(await bestsRows(ctx, user.id), {
         today,
         challengesWon: await challengesWon(ctx, user.id),
+        display: displayOf(user),
       }),
     };
   });

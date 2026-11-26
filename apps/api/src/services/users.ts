@@ -5,6 +5,7 @@ import { HttpError, notFound } from '../context.js';
 import { decrypt, encrypt } from '../crypto.js';
 import { users } from '../db/schema.js';
 import type { SparkyUser } from '@gauntlet/sparky';
+import { savedDisplay } from './display.js';
 
 export type UserRow = typeof users.$inferSelect;
 
@@ -42,6 +43,9 @@ export function toMe(u: UserRow, ctx: Pick<AppContext, 'cfg'>): MeUser {
       shareEvents: u.shareEvents,
       healthConnectSync: u.healthConnectSync,
       shareProfileStats: u.shareProfileStats,
+      units: savedDisplay(u).units ?? null,
+      clock: savedDisplay(u).clock ?? null,
+      locale: savedDisplay(u).locale ?? null,
     },
     sparkyKeyStatus: u.keyStatus,
     visibility: u.visibility,

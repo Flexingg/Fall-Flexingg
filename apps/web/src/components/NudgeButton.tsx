@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ApiError, post } from '../lib/api';
 import { socialKeys, useNudgeStatus } from '../lib/social';
+import { fmtDateTime } from '../lib/format';
 import '../styles/social.css';
 import { toast } from './ui';
 
@@ -52,7 +53,7 @@ export function NudgeButton({
       className="btn sm secondary nudge-btn"
       disabled
       aria-label={name ? `Nudged ${name}` : 'Nudged'}
-      title={s.retryAt ? `You can nudge again ${new Date(s.retryAt).toLocaleString()}` : undefined}
+      title={s.retryAt ? `You can nudge again ${fmtDateTime(s.retryAt)}` : undefined}
     >
       Nudged
     </button>

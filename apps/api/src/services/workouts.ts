@@ -8,6 +8,7 @@
 import {
   addDays,
   eventKindsFor,
+  formatQuantityFlexible,
   liftExercise,
   minDate,
   todayIn,
@@ -19,6 +20,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { notFound } from '../context.js';
 import { challengeParticipants, challenges } from '../db/schema.js';
+import { displayFor } from './display.js';
 import { getUser, getUsers, sparkyToken, type UserRow } from './users.js';
 
 const ID = /^(\d{4}-\d{2}-\d{2})\.([A-Za-z0-9_-]{1,80})$/;
@@ -39,7 +41,8 @@ export async function listOwnWorkouts(
   const today = todayIn(user.timezone, ctx.now());
   const start = addDays(today, -(days - 1));
   const entries = await entriesFor(ctx, user, start, today);
-  return { workouts: buildWorkouts(entries, { start, end: today }).map(toSummary) };
+  const display = await displayFor(ctx, userId);
+  return { workouts: buildWorkouts(entries, { start, end: today, display }).map(toSummary) };
 }
 
 /**
@@ -124,9 +127,10 @@ export async function getWorkout(
   }
 
   let found: WorkoutFull | undefined;
+  const display = await displayFor(ctx, viewerId);
   try {
     const entries = await entriesFor(ctx, owner, date, date);
-    found = buildWorkouts(entries, { start: date, end: date }).find((w) => w.id === id);
+    found = buildWorkouts(entries, { start: date, end: date, display }).find((w) => w.id === id);
   } catch (err) {
     if (isMe) throw err;
     ctx.log.warn({ err: String(err), userId: owner.id }, 'workout: SparkyFitness unavailable');
@@ -151,7 +155,7 @@ export async function getWorkout(
         volumeKg: volume > 0 ? volume : null,
         minutes: null,
         kcal: null,
-        summary: `${sets} ${sets === 1 ? 'set' : 'sets'}${volume > 0 ? ` · ${Math.round(volume).toLocaleString('en-US')} kg volume` : ''}`,
+        summary: `${sets} ${sets === 1 ? 'set' : 'sets'}${volume > 0 ? ` · ${formatQuantityFlexible(volume, 'kg', 0, display)} volume` : ''}`,
       };
     }
     // Source names and heart rate follow the "show my data sources" choice, as in the feed.

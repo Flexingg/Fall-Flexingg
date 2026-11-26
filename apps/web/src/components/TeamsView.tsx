@@ -9,6 +9,7 @@ import { Link } from 'react-router';
 import '../styles/challenges-teams.css';
 import { patch, post } from '../lib/api';
 import { fmt, shortName } from '../lib/format';
+import { CountUp, useFlip } from './RankMotion';
 import { Avatar, ErrorBox, toast } from './ui';
 
 const tc = (color: string) => ({ '--tc': color }) as CSSProperties;
@@ -51,6 +52,7 @@ export function TeamPicker({
 
 /** Teams best first: name, colour, team score and how many people are on it. */
 export function TeamLeaderboard({ c, showScores }: { c: ChallengeDetail; showScores: boolean }) {
+  const listRef = useFlip((c.teams ?? []).map((t) => t.id).join());
   if (!c.teams?.length) return null;
   return (
     <>
@@ -60,12 +62,13 @@ export function TeamLeaderboard({ c, showScores }: { c: ChallengeDetail; showSco
           {c.teamScoring ? TEAM_SCORING_LABELS[c.teamScoring] : ''}
         </span>
       </div>
-      <div className="list team-board" aria-label="Team leaderboard">
+      <div className="list team-board" aria-label="Team leaderboard" ref={listRef}>
         {c.teams.map((t) => {
           const mine = t.id === c.myTeamId;
           return (
             <div
               key={t.id}
+              data-flip={t.id}
               className={`item${mine ? ' me' : ''}${t.rank === 1 && t.score != null ? ' first' : ''}`}
               style={tc(t.color)}
             >
@@ -79,7 +82,11 @@ export function TeamLeaderboard({ c, showScores }: { c: ChallengeDetail; showSco
                   {mine ? ' · your team' : ''}
                 </small>
               </div>
-              {showScores && <div className="v num">{fmt(t.score, c)}</div>}
+              {showScores && (
+                <div className="v num">
+                  <CountUp value={t.score} format={(v) => fmt(v, c)} />
+                </div>
+              )}
             </div>
           );
         })}

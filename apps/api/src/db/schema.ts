@@ -60,6 +60,12 @@ export const users = pgTable('users', {
   notificationPrefs: jsonb('notification_prefs').$type<NotificationPrefs>().notNull().default({}),
   /** ISO week (e.g. 2026-W48) of the last weekly recap sent, so each goes out once. */
   lastRecapWeek: text('last_recap_week'),
+  /** The last month (YYYY-MM) a "month in review" notification was sent for. */
+  lastReviewMonth: text('last_review_month'),
+  /** How numbers are written for this person; null = not chosen yet (the app saves its device default). */
+  displayUnits: text('display_units', { enum: ['metric', 'imperial'] }),
+  displayClock: text('display_clock', { enum: ['12h', '24h'] }),
+  displayLocale: text('display_locale'),
   createdAt: createdAt(),
 });
 
@@ -135,6 +141,10 @@ export const challenges = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     rematchOf: uuid('rematch_of'),
+    /** Side bet: what the loser owes, as plain text ("Loser buys coffee"). Never money handled here. */
+    stake: text('stake'),
+    /** When the side bet was marked paid up (by the winner or the creator). */
+    stakeSettledAt: timestamp('stake_settled_at', { withTimezone: true }),
     /** public: listed in Discover, and public users can join without an invite. */
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()

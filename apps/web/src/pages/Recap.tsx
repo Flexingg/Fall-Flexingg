@@ -1,16 +1,13 @@
 import { isWeekId, ordinal, type RecapTotal } from '@gauntlet/shared';
 import { Link, Navigate, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
-import { Empty, ErrorBox, Header, Screen, Skeleton } from '../components/ui';
-import { dateRange } from '../lib/format';
+import { Empty, ErrorBox, Header, Screen } from '../components/ui';
+import { SkeletonCard, SkeletonGroup, SkeletonList } from '../components/Skeleton';
+import { dateRange, fmtDate, fmtInt, fmtNum, fmtQty, unitLabel } from '../lib/format';
 import { useRecap } from '../lib/notifyQueries';
 import '../styles/notify.css';
 
-const amount = (t: RecapTotal) =>
-  t.value.toLocaleString('en-US', {
-    minimumFractionDigits: t.decimals,
-    maximumFractionDigits: t.decimals,
-  });
+const amount = (t: RecapTotal) => fmtQty(t.value, t.unit, t.decimals, false);
 
 function Change({ t }: { t: RecapTotal }) {
   if (t.changePct == null) return <small className="recap-change flat">New this week</small>;
@@ -18,7 +15,7 @@ function Change({ t }: { t: RecapTotal }) {
   const up = t.changePct > 0;
   return (
     <small className={`recap-change ${up ? 'up' : 'down'}`}>
-      {up ? '▲' : '▼'} {Math.abs(t.changePct)}% vs the week before
+      {up ? '▲' : '▼'} {fmtNum(Math.abs(t.changePct))}% vs the week before
     </small>
   );
 }
@@ -31,20 +28,17 @@ export function RecapPage() {
   const r = q.data;
   const steps = r?.totals.find((t) => t.key === 'steps');
   const others = r?.totals.filter((t) => t.key !== 'steps' && t.value > 0) ?? [];
-  const dayName = (d: string) =>
-    new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'UTC',
-    });
+  const dayName = (d: string) => fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' });
 
   return (
     <Screen tabs={false}>
       <Header title="Your week" back="/trends" />
       <ErrorBox error={q.error} />
       {q.isPending ? (
-        <Skeleton height={260} />
+        <SkeletonGroup>
+          <SkeletonCard lines={2} />
+          <SkeletonList rows={4} avatar={null} />
+        </SkeletonGroup>
       ) : r && !r.hasData ? (
         <div className="list">
           <Empty title="A quiet week">
@@ -67,7 +61,7 @@ export function RecapPage() {
                   <small>{t.label}</small>
                   <b className="num">
                     {amount(t)}
-                    {t.unit && <span> {t.unit}</span>}
+                    {t.unit && <span> {unitLabel(t.unit)}</span>}
                   </b>
                   <Change t={t} />
                 </div>
@@ -82,7 +76,7 @@ export function RecapPage() {
                 <small>Best day</small>
                 <b>{dayName(r.bestDay.date)}</b>
               </div>
-              <b className="num">{Math.round(r.bestDay.steps).toLocaleString('en-US')}</b>
+              <b className="num">{fmtInt(r.bestDay.steps)}</b>
             </div>
           )}
 

@@ -1,3 +1,4 @@
+import { DEFAULT_DISPLAY, formatQuantity, type DisplayPrefs } from './format.js';
 import type { ScoringMode } from './scoring.js';
 
 /**
@@ -436,23 +437,17 @@ export function relativeSeries(
     .map((r) => ({ date: r.date, value: Math.round((r.value / base - 1) * 1000) / 10 }));
 }
 
+/**
+ * A metric value as text, in the viewer's units and number format (metric and en-US by default).
+ * km, kg and L become mi, lb and fl oz for people who chose imperial.
+ */
 export function formatMetricValue(
   value: number | null | undefined,
   def: Pick<MetricDef, 'decimals' | 'unit'>,
   withUnit = true,
+  prefs: Pick<DisplayPrefs, 'units' | 'locale'> = DEFAULT_DISPLAY,
 ): string {
-  if (value == null || !Number.isFinite(value)) return '–';
-  const text = value.toLocaleString('en-US', {
-    minimumFractionDigits: def.decimals,
-    maximumFractionDigits: def.decimals,
-  });
-  return withUnit && def.unit ? `${text} ${def.unit}` : text;
-}
-
-/** Compact form for tight spots: 12,400 -> 12.4k. */
-export function formatCompact(value: number, decimals = 1): string {
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(decimals).replace(/\.0$/, '')}k`;
-  return value.toLocaleString('en-US', { maximumFractionDigits: decimals });
+  return formatQuantity(value, def.unit, def.decimals, prefs, withUnit);
 }
 
 /** True when everyone joining must pick their own settings first (a weight target). */

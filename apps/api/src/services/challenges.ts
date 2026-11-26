@@ -20,6 +20,7 @@ import {
   type MetricDef,
   type MetricKey,
   type ParticipantState,
+  type RematchSeries,
   type SeriesInfo,
   type Standing,
   type StandingRow,
@@ -37,6 +38,7 @@ import {
   rankSnapshots,
 } from '../db/schema.js';
 import { notify } from './notify.js';
+import { buildStakeInfo, loadRematchSeries, outcomeOf } from './stakes.js';
 import { createNextRound, loadSeriesInfo, notifyNewRound, type NextRound } from './recurring.js';
 import { buildTeams, getTeams, getTeamsFor, type TeamRow } from './teams.js';
 import { notifyLeadChange } from './notifyEvents.js';
@@ -254,6 +256,8 @@ interface BuildArgs {
   teamRows?: TeamRow[];
   /** Round and season info (recurring series only). */
   series?: SeriesInfo | null;
+  /** Wins across a chain of rematches. */
+  rematchSeries?: RematchSeries | null;
 }
 
 /** The team leaderboard, from each person's score (their final score once the challenge is over). */
@@ -375,6 +379,7 @@ export function buildSummary({
     recurrence: recurrenceSchema.safeParse(ch.recurrence).data ?? null,
     seriesRound: ch.seriesRound,
     teamScoring: ch.teamScoring,
+    stake: ch.stake,
   };
 }
 
@@ -410,6 +415,7 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
     .filter((u): u is UserRow => !!u)
     .map(toPublicUser);
   const mine = partByUser.get(viewerId);
+  const teams = teamsFor(ch, args.teamRows, parts, computed);
   return {
     ...summary,
     soloConfig: ch.solo ?? null,
@@ -419,9 +425,18 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
     standings,
     invited,
     rematchOf: ch.rematchOf,
-    teams: teamsFor(ch, args.teamRows, parts, computed),
+    teams,
     myTeamId: mine?.teamId ?? null,
     series: args.series ?? null,
+    stakeInfo: buildStakeInfo({
+      ch,
+      status: summary.status,
+      teams,
+      people: standings.map((s) => ({ userId: s.user.id, rank: s.rank, score: s.score })),
+      usersById,
+      viewerId,
+    }),
+    rematchSeries: args.rematchSeries ?? null,
   };
 }
 
@@ -441,7 +456,19 @@ export async function loadDetail(
   const solo = await soloFor(ctx, ch, computed.byUser);
   const teamRows = ch.teamScoring ? await getTeams(ctx, ch.id) : [];
   const series = await loadSeriesInfo(ctx, ch, viewerId);
-  return buildDetail({ ctx, ch, parts, viewerId, computed, usersById, solo, teamRows, series });
+  const rematchSeries = await loadRematchSeries(ctx, ch, viewerId);
+  return buildDetail({
+    ctx,
+    ch,
+    parts,
+    viewerId,
+    computed,
+    usersById,
+    solo,
+    teamRows,
+    series,
+    rematchSeries,
+  });
 }
 
 export async function listForUser(ctx: AppContext, userId: string): Promise<ChallengeSummary[]> {
@@ -663,6 +690,9 @@ async function announceFinish(
 ) {
   const winningTeams = teamList?.filter((t) => t.rank === 1 && t.score != null) ?? [];
   const n = teamList?.length ?? standings.length;
+  const owes = ch.stake
+    ? new Set(outcomeOf({ teams: teamList, people: standings }).losers)
+    : new Set<string>();
   for (const s of standings) {
     const team = teamList?.find((t) => t.memberIds.includes(s.userId));
     const rank = team?.rank ?? s.rank;
@@ -677,6 +707,8 @@ async function announceFinish(
               winningTeams.length ? `. ${winningTeams.map((t) => t.name).join(' and ')} won` : ''
             }.`;
     else body = rank === 1 ? 'You won!' : `You finished ${ordinal(rank)} of ${n}.`;
+    // One notification, not two: the side bet rides along with the result.
+    if (owes.has(s.userId)) body += ` You owe: ${ch.stake}`;
     await notify(ctx, s.userId, {
       kind: 'challenge_finished',
       title: `${ch.name} is over`,

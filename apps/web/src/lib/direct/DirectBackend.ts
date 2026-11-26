@@ -18,6 +18,8 @@ import {
   type ConnectResult,
   type GarminLoginResult,
   type GarminStatus,
+  displayDefaultsFor,
+  resolveDisplay,
   type ProviderId,
   type MeUser,
   type MetricKey,
@@ -55,6 +57,8 @@ export interface DirectOptions {
   apiKey: string;
   kv: KeyValue;
   timezone: string;
+  /** The device's locale, for the first guess at units and clock when none is saved. */
+  locale?: string;
   fetch?: typeof fetch;
   now?: () => Date;
 }
@@ -182,6 +186,9 @@ export class DirectBackend {
       shareEvents: true,
       healthConnectSync: false,
       shareProfileStats: false,
+      units: null,
+      clock: null,
+      locale: null,
       ...saved,
     };
   }
@@ -276,7 +283,10 @@ export class DirectBackend {
     return {
       ...buildTrends({ rows, range, metric, today }),
       rankHistory: null,
-      personalBests: personalBests(rows, { today }),
+      personalBests: personalBests(rows, {
+        today,
+        display: resolveDisplay(await this.settings(), displayDefaultsFor(this.o.locale)),
+      }),
     };
   }
 

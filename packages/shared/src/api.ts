@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { isDateString } from './dates.js';
+import type { ClockFormat, UnitSystem } from './format.js';
 import { isMetricKey, type MetricAggregate, type MetricGroup, type MetricKey } from './metrics.js';
 import { isTrendMetric } from './derive.js';
 import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
@@ -11,6 +12,7 @@ import { SCORING_MODES, type ScoringMode } from './scoring.js';
 import { recurrenceSchema, type Reaction, type Recurrence } from './notify.js';
 import { teamsInputSchema, type ChallengeTeam, type TeamScoring } from './teams.js';
 import type { SeriesInfo } from './recurring.js';
+import { stakeSchema, type RematchSeries, type StakeInfo } from './stakes.js';
 
 const dateString = z.string().refine(isDateString, 'Expected a YYYY-MM-DD date');
 
@@ -98,6 +100,11 @@ export interface UserSettings {
   healthConnectSync: boolean;
   /** Show my trophies, milestones and all-time stats to people who can see my profile. */
   shareProfileStats: boolean;
+  /** How values are written: null until the person (or their device) picks; see format.ts. */
+  units: UnitSystem | null;
+  clock: ClockFormat | null;
+  /** Number format (digit grouping, decimal mark) as a locale tag such as "de-DE". */
+  locale: string | null;
 }
 
 export const updateMeSchema = z.object({
@@ -109,6 +116,9 @@ export const updateMeSchema = z.object({
       shareEvents: z.boolean().optional(),
       shareProfileStats: z.boolean().optional(),
       healthConnectSync: z.boolean().optional(),
+      units: z.enum(['metric', 'imperial']).optional(),
+      clock: z.enum(['12h', '24h']).optional(),
+      locale: z.string().min(2).max(35).optional(),
     })
     .optional(),
   visibility: z.enum(['private', 'public']).optional(),
@@ -175,6 +185,8 @@ export interface InvitePreview {
     startDate: string;
     endDate: string;
     showEvents: boolean;
+    /** The side bet, if the challenge has one. */
+    stake?: string | null;
   };
 }
 
@@ -237,6 +249,8 @@ export const createChallengeSchema = z
     teams: teamsInputSchema.optional(),
     /** Start a new round when this one ends. Not for solo challenges. */
     recurrence: recurrenceSchema.optional(),
+    /** A plain-text side bet, e.g. "Loser buys coffee". Not for solo challenges. */
+    stake: stakeSchema.optional(),
   })
   .refine((v) => v.endDate >= v.startDate, {
     message: 'End date must be on or after start date',
@@ -284,6 +298,8 @@ export interface ChallengeSummary {
   seriesRound?: number | null;
   /** Set for team challenges: how a team's score is worked out. */
   teamScoring?: TeamScoring | null;
+  /** The plain-text side bet, if any. */
+  stake?: string | null;
 }
 
 export interface StandingRow {
@@ -316,6 +332,10 @@ export interface ChallengeDetail extends ChallengeSummary {
   myTeamId?: string | null;
   /** Round number, earlier rounds and the season table, for a recurring series. */
   series?: SeriesInfo | null;
+  /** Who owes the side bet and whether it is settled; set once a challenge with a side bet is over. */
+  stakeInfo?: StakeInfo | null;
+  /** Wins per person across a chain of rematches; set when the challenge is part of one. */
+  rematchSeries?: RematchSeries | null;
 }
 
 export interface ChallengeResult {
@@ -342,6 +362,8 @@ export const updateChallengeSchema = z
     showEvents: z.boolean().optional(),
     /** Null stops a recurring challenge from starting another round. */
     recurrence: recurrenceSchema.nullable().optional(),
+    /** Null removes the side bet. Only before the challenge starts. */
+    stake: stakeSchema.optional(),
   })
   .strict();
 export type UpdateChallengeRequest = z.input<typeof updateChallengeSchema>;

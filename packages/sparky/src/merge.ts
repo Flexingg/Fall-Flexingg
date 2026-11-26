@@ -14,8 +14,12 @@
  */
 import {
   adherenceScore,
+  DEFAULT_DISPLAY,
   epley1rm,
+  formatFlexible,
+  formatQuantityFlexible,
   todayIn,
+  type DisplayPrefs,
   type ChallengeEvent,
   type MetricAggregate,
 } from '@gauntlet/shared';
@@ -560,8 +564,6 @@ export function liftOptions(
 
 // ---------------------------------------------------------------- events ("what counted")
 
-const nf = (n: number, digits = 0) =>
-  n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 
 /**
@@ -575,7 +577,11 @@ export function buildEvents(input: {
   exerciseEntries: ExerciseEntryRow[];
   fasts?: FastRow[];
   timezone?: string;
+  /** The reader's units and number format (metric / en-US when left out). */
+  display?: Pick<DisplayPrefs, 'units' | 'locale'>;
 }): { date: string; event: ChallengeEvent }[] {
+  const d = input.display ?? DEFAULT_DISPLAY;
+  const nf = (n: number, digits = 0) => formatFlexible(n, d, digits);
   const out: { date: string; event: ChallengeEvent }[] = [];
   const inWindow = (d: string) => d >= input.start && d <= input.end;
 
@@ -614,8 +620,8 @@ export function buildEvents(input: {
     }
     const bits = [
       `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}`,
-      top ? `top ${nf(top.kg, 1)} kg × ${nf(top.reps)}` : '',
-      volume > 0 ? `${nf(volume)} kg volume` : '',
+      top ? `top ${formatQuantityFlexible(top.kg, 'kg', 1, d)} × ${nf(top.reps)}` : '',
+      volume > 0 ? `${formatQuantityFlexible(volume, 'kg', 0, d)} volume` : '',
     ].filter(Boolean);
     out.push({
       date,

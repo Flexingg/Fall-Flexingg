@@ -111,7 +111,7 @@ export interface WeeklyRecap {
   standings: { challengeId: string; name: string; rank: number; of: number }[];
 }
 
-const RECAP_METRICS: Omit<RecapTotal, 'value' | 'previous' | 'changePct'>[] = [
+export const RECAP_METRICS: Omit<RecapTotal, 'value' | 'previous' | 'changePct'>[] = [
   { key: 'steps', label: 'Steps', unit: '', decimals: 0 },
   { key: 'distance', label: 'Distance', unit: 'km', decimals: 1 },
   { key: 'active_minutes', label: 'Active minutes', unit: 'min', decimals: 0 },

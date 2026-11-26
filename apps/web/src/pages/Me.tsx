@@ -1,15 +1,20 @@
 import type { MeUser } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { DisplaySettings } from '../components/DisplaySettings';
 import { Icon } from '../components/Icon';
 import { Avatar, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { loadVibration, setVibration } from '../lib/haptics';
 import { isNative } from '../lib/platform';
+import { fmtDate, fmtNum } from '../lib/format';
 import { LegalLinks } from '../components/LegalLinks';
 import { useAndroidRelease } from '../lib/queries';
 import { AppUpdatesSection } from '../components/AppBanner';
 import { canSelfUpdate } from '../lib/appUpdate';
+import { useReviewList } from '../lib/reviewQueries';
+import { monthName } from '@gauntlet/shared';
 
 export function MePage() {
   const { user, setUser, logout, mode, disconnectServer } = useAuth();
@@ -20,6 +25,10 @@ export function MePage() {
   useEffect(() => setHandle(user?.handle ?? ''), [user?.handle]);
   const [error, setError] = useState<unknown>(null);
   const android = useAndroidRelease(!isNative);
+  const [vibration, setVibrationOn] = useState(true);
+  useEffect(() => {
+    if (isNative) void loadVibration().then(setVibrationOn);
+  }, []);
   if (!user) return null;
 
   async function saveName() {
@@ -180,6 +189,23 @@ export function MePage() {
             <Icon name="chevron" size={18} />
           </Link>
         )}
+        {isNative && (
+          <div className="item">
+            <Icon name="pulse" size={20} />
+            <div className="grow">
+              <div className="t">Vibration</div>
+              <small>A little buzz when you react, refresh or take the lead</small>
+            </div>
+            <Toggle
+              checked={vibration}
+              onChange={(on) => {
+                setVibrationOn(on);
+                void setVibration(on);
+              }}
+              label="Vibration"
+            />
+          </div>
+        )}
         <div className="item">
           <Icon name="today" size={20} />
           <div className="grow">
@@ -188,6 +214,9 @@ export function MePage() {
           </div>
         </div>
       </div>
+
+      <DisplaySettings />
+      {!direct && <PastReviews />}
 
       {android.data && !isNative && (
         <>
@@ -206,10 +235,8 @@ export function MePage() {
                   Gauntlet for Android
                 </div>
                 <small className="muted">
-                  {android.data.version} · {(android.data.sizeBytes / 1048576).toFixed(1)} MB
-                  {android.data.builtAt
-                    ? ` · ${new Date(android.data.builtAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                    : ''}
+                  {android.data.version} · {fmtNum(android.data.sizeBytes / 1048576, 1)} MB
+                  {android.data.builtAt ? ` · ${fmtDate(android.data.builtAt)}` : ''}
                 </small>
               </div>
             </div>
@@ -284,5 +311,36 @@ export function MePage() {
         Gauntlet · powered by SparkyFitness
       </p>
     </Screen>
+  );
+}
+
+/** Every month and year with something to look back on (the last year of months, then all years). */
+function PastReviews() {
+  const list = useReviewList();
+  const [all, setAll] = useState(false);
+  if (!list.data || (!list.data.months.length && !list.data.years.length)) return null;
+  const months = all ? list.data.months : list.data.months.slice(0, 12);
+  const row = (id: string, title: string) => (
+    <Link key={id} to={`/review/${id}`} className="item">
+      <Icon name="trends" size={20} />
+      <div className="grow t">{title}</div>
+      <Icon name="chevron" size={18} />
+    </Link>
+  );
+  return (
+    <>
+      <div className="lbl">Looking back</div>
+      <div className="list">
+        {list.data.years.map((y) => row(y, `${y} in review`))}
+        {months.map((m) => row(m, `${monthName(Number(m.slice(5)))} ${m.slice(0, 4)}`))}
+        {list.data.months.length > 12 && (
+          <button className="item" onClick={() => setAll((a) => !a)}>
+            <div className="grow t muted">
+              {all ? 'Show fewer' : `Show all ${list.data.months.length} months`}
+            </div>
+          </button>
+        )}
+      </div>
+    </>
   );
 }

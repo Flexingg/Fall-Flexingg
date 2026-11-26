@@ -1,4 +1,9 @@
-import { needsWeightGoal, scoringLabel, type WeightGoalParams } from '@gauntlet/shared';
+import {
+  needsWeightGoal,
+  scoringLabel,
+  toDisplayUnit,
+  type WeightGoalParams,
+} from '@gauntlet/shared';
 import { ArrangeTeams, SeriesCard, TeamLeaderboard, TeamPicker } from '../components/TeamsView';
 import { ChallengeEvents } from '../components/ChallengeEvents';
 import { SoloCard } from '../components/SoloCard';
@@ -9,22 +14,19 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Podium, StandingsList } from '../components/Standings';
-import {
-  ErrorBox,
-  Header,
-  NoSourcesNote,
-  Screen,
-  ShowEventsNotice,
-  Skeleton,
-  toast,
-} from '../components/ui';
+import { ErrorBox, Header, NoSourcesNote, Screen, ShowEventsNotice, toast } from '../components/ui';
+import { SkeletonCard, SkeletonChart, SkeletonGroup, SkeletonList } from '../components/Skeleton';
 import { del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { dateRange, daysLeftText, fmt, fmtSolo } from '../lib/format';
+import { getDisplay } from '../lib/display';
+import { dateRange, daysLeftText, fmt, fmtFlex, fmtQtyFlex, fmtSolo } from '../lib/format';
 import { keys, useChallenge, useProgress, useToday } from '../lib/queries';
 import { ProgressChart } from '../components/ProgressChart';
 import { shareLink } from '../lib/share';
-import type { Invite } from '@gauntlet/shared';
+import { deferAction } from '../lib/undo';
+import { QrSheet } from '../components/QrSheet';
+import { SeriesRecord, StakeChip, StakeResult } from '../components/Stake';
+import type { ChallengeDetail, Invite } from '@gauntlet/shared';
 
 export function ChallengeDetailPage() {
   const { id = '' } = useParams();
@@ -37,6 +39,7 @@ export function ChallengeDetailPage() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [weightGoal, setWeightGoal] = useState<WeightGoalParams | null>(null);
+  const [qr, setQr] = useState<Invite | null>(null);
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const c = q.data;
@@ -72,6 +75,17 @@ export function ChallengeDetailPage() {
     if (r === 'copied') toast('Invite link copied');
   }
 
+  async function showQr() {
+    setQr(await post<Invite>('/api/invites', { kind: 'challenge', challengeId: id }));
+  }
+
+  async function rematch() {
+    await act(async () => {
+      const next = await post<ChallengeDetail>(`/api/challenges/${id}/rematch`);
+      navigate(`/c/${next.id}`);
+    });
+  }
+
   return (
     <Screen>
       <Header
@@ -91,7 +105,13 @@ export function ChallengeDetailPage() {
         }
       />
       <ErrorBox error={q.error ?? error} />
-      {q.isPending && <Skeleton height={320} />}
+      {q.isPending && (
+        <SkeletonGroup>
+          <SkeletonCard lines={2} />
+          <SkeletonChart height={150} bars={10} />
+          <SkeletonList rows={4} />
+        </SkeletonGroup>
+      )}
       {c && (
         <>
           <p className="muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
@@ -107,6 +127,9 @@ export function ChallengeDetailPage() {
             {c.visibility === 'public' ? ' · Public' : ''}
             {c.featured ? ' · Featured' : ''}
           </p>
+
+          {c.stake && !c.stakeInfo && <StakeChip stake={c.stake} />}
+          <SeriesRecord c={c} />
 
           {(c.myState == null || c.myState === 'declined') &&
             c.visibility === 'public' &&
@@ -185,10 +208,15 @@ export function ChallengeDetailPage() {
             </Link>
           )}
 
+          {c.stakeInfo && <StakeResult c={c} />}
+
           {c.myParams?.weightGoal && (
             <p className="muted" style={{ fontSize: 13, marginTop: -6, marginBottom: 12 }}>
-              Your target: {c.myParams.weightGoal.direction} {c.myParams.weightGoal.target}
-              {c.myParams.weightGoal.targetType === 'percent' ? '%' : ' kg'}. Only your % is shown.
+              Your target: {c.myParams.weightGoal.direction}{' '}
+              {c.myParams.weightGoal.targetType === 'percent'
+                ? `${fmtFlex(c.myParams.weightGoal.target, 1)}%`
+                : fmtQtyFlex(c.myParams.weightGoal.target, 'kg', 1)}
+              . Only your % is shown.
             </p>
           )}
           {solo ? (
@@ -217,6 +245,11 @@ export function ChallengeDetailPage() {
                 <ProgressChart
                   data={progress.data}
                   format={(v) => fmtSolo(v, progress.data!.valueKind, c)}
+                  scale={
+                    progress.data.valueKind === 'metric'
+                      ? toDisplayUnit(1, c.unit, 0, getDisplay().units).value
+                      : 1
+                  }
                 />
               </div>
             </>
@@ -254,6 +287,11 @@ export function ChallengeDetailPage() {
                   <Icon name="share" size={18} /> Invite friends
                 </button>
               )}
+              {!solo && (
+                <button className="btn secondary" onClick={() => showQr().catch(setError)}>
+                  Show QR code
+                </button>
+              )}
               {c.createdBy === user?.id && (c.status === 'upcoming' || solo) ? (
                 <button
                   className="btn ghost"
@@ -271,19 +309,38 @@ export function ChallengeDetailPage() {
                 <button
                   className="btn ghost"
                   disabled={busy}
-                  onClick={() =>
-                    confirm('Leave this challenge?') &&
-                    act(async () => {
-                      await post(`/api/challenges/${id}/leave`);
-                      qc.removeQueries({ queryKey: keys.challenge(id) });
-                      navigate('/challenges');
-                    })
-                  }
+                  onClick={() => {
+                    // No "Are you sure?": leave now, send it in 5 s unless undone.
+                    deferAction({
+                      key: `leave:${id}`,
+                      message: `Left ${c.name}`,
+                      commit: () => post(`/api/challenges/${id}/leave`),
+                      settle: (err) => {
+                        if (err) toast(err instanceof Error ? err.message : 'Something went wrong');
+                        qc.removeQueries({ queryKey: keys.challenge(id) });
+                        void qc.invalidateQueries();
+                      },
+                    });
+                    navigate('/challenges');
+                  }}
                 >
                   Leave challenge
                 </button>
               )}
             </div>
+          )}
+          {c.status === 'completed' && c.myState === 'joined' && (
+            <button className="btn" style={{ marginTop: 14 }} disabled={busy} onClick={rematch}>
+              {busy ? <span className="spinner" /> : solo ? 'Run it again' : 'Rematch'}
+            </button>
+          )}
+          {qr && (
+            <QrSheet
+              title={c.name}
+              url={qr.url}
+              expiresAt={qr.expiresAt}
+              onClose={() => setQr(null)}
+            />
           )}
           {user?.isAdmin && c.visibility === 'public' && c.status !== 'completed' && (
             <button

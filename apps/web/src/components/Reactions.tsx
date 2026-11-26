@@ -1,6 +1,7 @@
 import { REACTIONS, type FeedEvent } from '@gauntlet/shared';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { tap } from '../lib/haptics';
 import { useToggleReaction } from '../lib/social';
 import '../styles/social.css';
 import { toast } from './ui';
@@ -15,6 +16,7 @@ export function ReactionRow({ event }: { event: FeedEvent }) {
   const mineSet = new Set(event.reactions.filter((r) => r.mine).map((r) => r.emoji));
 
   async function press(emoji: string, mine: boolean) {
+    tap();
     setBusy(true);
     setOpen(false);
     try {

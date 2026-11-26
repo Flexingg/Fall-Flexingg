@@ -5,6 +5,7 @@ import { maintainDemo } from './services/demo.js';
 import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
 import { pruneNotifications } from './services/push.js';
 import { sendWeeklyRecaps } from './services/recap.js';
+import { sendMonthReviews } from './services/review.js';
 import { syncUser } from './services/sync.js';
 import { recordSyncCycle } from './services/syncStatus.js';
 
@@ -68,6 +69,7 @@ async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: numb
   await ctx.db.execute(sql`delete from pending_logins where expires_at < now()`);
   await pruneNotifications(ctx).catch((err) => ctx.log.warn({ err }, 'notification prune failed'));
   await sendWeeklyRecaps(ctx).catch((err) => ctx.log.warn({ err }, 'weekly recap failed'));
+  await sendMonthReviews(ctx).catch((err) => ctx.log.warn({ err }, 'month review failed'));
   return { synced, finalized };
 }
 

@@ -3,10 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 import { ReactionRow } from '../components/Reactions';
-import { Avatar, Empty, ErrorBox, Header, Screen, Skeleton, toast } from '../components/ui';
+import { Avatar, Empty, ErrorBox, Header, Screen, toast } from '../components/ui';
+import { SkeletonCard, SkeletonLine, SkeletonList } from '../components/Skeleton';
 import { ApiError, del, post } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { keys } from '../lib/queries';
+import { deferAction, usePendingUndo } from '../lib/undo';
 import { socialKeys, useComments, useFeedItem } from '../lib/social';
 import '../styles/social.css';
 
@@ -29,7 +31,17 @@ export function FeedItemPage() {
       ) : (
         <ErrorBox error={item.error} />
       )}
-      {item.isPending && <Skeleton height={120} />}
+      {item.isPending && (
+        <SkeletonCard>
+          <div className="row" style={{ gap: 12 }}>
+            <SkeletonLine width={40} height={40} style={{ borderRadius: '50%' }} />
+            <div className="grow stack" style={{ gap: 8 }}>
+              <SkeletonLine width="60%" height={14} />
+              <SkeletonLine width="35%" />
+            </div>
+          </div>
+        </SkeletonCard>
+      )}
       {e && (
         <div className="stack" style={{ gap: 14 }}>
           <div className="card">
@@ -59,6 +71,7 @@ function Comments({ eventId }: { eventId: string }) {
   const q = useComments(eventId);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const waiting = usePendingUndo();
 
   async function refresh() {
     await Promise.all([
@@ -83,13 +96,17 @@ function Comments({ eventId }: { eventId: string }) {
     }
   }
 
-  async function remove(id: string) {
-    try {
-      await del(`/api/comments/${id}`);
-      await refresh();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Something went wrong');
-    }
+  // Deleting is instant and undoable for 5 s; the request goes out after that.
+  function remove(id: string) {
+    deferAction({
+      key: `comment:${id}`,
+      message: 'Comment deleted',
+      commit: () => del(`/api/comments/${id}`),
+      settle: (err) => {
+        if (err) toast(err instanceof Error ? err.message : 'Something went wrong');
+        void refresh();
+      },
+    });
   }
 
   return (
@@ -97,29 +114,31 @@ function Comments({ eventId }: { eventId: string }) {
       <div className="lbl">Comments</div>
       <ErrorBox error={q.error} />
       {q.isPending ? (
-        <Skeleton height={60} />
-      ) : q.data?.length ? (
+        <SkeletonList rows={2} avatar={32} />
+      ) : q.data?.some((c) => !waiting.has(`comment:${c.id}`)) ? (
         <div className="list" style={{ marginBottom: 12 }}>
-          {q.data.map((c) => (
-            <div key={c.id} className="comment">
-              <Avatar user={c.user} size={32} />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <small>
-                  {c.user.displayName.split(' ')[0]} · {timeAgo(c.createdAt)}
-                </small>
-                <div className="body">{c.body}</div>
+          {q.data
+            .filter((c) => !waiting.has(`comment:${c.id}`))
+            .map((c) => (
+              <div key={c.id} className="comment">
+                <Avatar user={c.user} size={32} />
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <small>
+                    {c.user.displayName.split(' ')[0]} · {timeAgo(c.createdAt)}
+                  </small>
+                  <div className="body">{c.body}</div>
+                </div>
+                {c.canDelete && (
+                  <button
+                    className="btn sm ghost"
+                    aria-label={`Delete comment: ${c.body.slice(0, 30)}`}
+                    onClick={() => remove(c.id)}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
-              {c.canDelete && (
-                <button
-                  className="btn sm ghost"
-                  aria-label={`Delete comment: ${c.body.slice(0, 30)}`}
-                  onClick={() => remove(c.id)}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          ))}
+            ))}
         </div>
       ) : (
         <small className="muted" style={{ display: 'block', marginBottom: 12 }}>

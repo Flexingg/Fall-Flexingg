@@ -113,6 +113,7 @@ for (const [id, p] of Object.entries(profile)) {
         exercise_source: p.source,
         distance: km,
         avg_heart_rate: 138 + (i % 5) * 4,
+        start_time: `${date}T07:30:00Z`,
       });
     }
     u.sleep.push({
@@ -326,6 +327,20 @@ await call('you', 'POST', `/api/challenges/${past.id}/respond`, { accept: true }
 await call('maya', 'POST', `/api/challenges/${past.id}/invite`, { userIds: [ids.dre] });
 await call('dre', 'POST', `/api/challenges/${past.id}/respond`, { accept: true });
 
+// A finished challenge with a side bet: Alex beats Dre, so Dre owes the coffee. (Dates are shortened
+// below, like Step Wars; the sync cycle then finalizes it.)
+const coffee = await call<{ id: string }>('you', 'POST', '/api/challenges', {
+  name: 'Coffee Run',
+  metric: 'steps',
+  scoring: 'total',
+  startDate: d(-12),
+  endDate: today,
+  timezone: TZ,
+  inviteUserIds: [ids.dre],
+  stake: 'Loser buys coffee',
+});
+await call('dre', 'POST', `/api/challenges/${coffee.id}/respond`, { accept: true });
+
 // The live one from the mockups.
 const live = await call<{ id: string }>('you', 'POST', '/api/challenges', {
   name: 'Weekend 100K',
@@ -414,7 +429,9 @@ await call('riley', 'PATCH', `/api/challenges/${open.id}/featured`, { featured: 
 await call('maya', 'POST', `/api/challenges/${open.id}/join`);
 
 // The API refuses past end dates, so end the old challenge directly.
-await ctx.db.execute(sql`update challenges set end_date = ${d(-6)} where id = ${past.id}`);
+await ctx.db.execute(
+  sql`update challenges set end_date = ${d(-6)} where id in (${past.id}, ${coffee.id})`,
+);
 
 // Sync everyone, then simulate today's activity so the feed has fresh items.
 await runSyncCycle(ctx);

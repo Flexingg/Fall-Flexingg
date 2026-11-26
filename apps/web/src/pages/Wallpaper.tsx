@@ -8,7 +8,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { GalaxyPreview } from '../components/GalaxyPreview';
 import { ErrorBox, Header, Screen, Seg, Toggle } from '../components/ui';
-import { fmtInt } from '../lib/format';
+import { fmtQty, unitLabel } from '../lib/format';
 import { useWallpaper } from '../lib/queries';
 import {
   GalaxyWallpaper,
@@ -21,8 +21,8 @@ import {
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const amount = (c: WallpaperChannel, unit: string, decimals = 0) => {
-  const f = (v: number | null) => (v == null ? '–' : decimals ? v.toFixed(decimals) : fmtInt(v));
-  return `${f(c.value)} / ${c.goal ? f(c.goal) : 'no goal'} ${unit}`;
+  const f = (v: number | null) => fmtQty(v, unit, decimals, false);
+  return `${f(c.value)} / ${c.goal ? f(c.goal) : 'no goal'} ${unitLabel(unit)}`;
 };
 
 function legend(w: WallpaperResponse) {

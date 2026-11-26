@@ -17,7 +17,7 @@ import type {
 import { DirectBackend } from './direct/DirectBackend';
 import { secret } from './direct/secret';
 import { get, post, patch } from './api';
-import { timezone } from './platform';
+import { deviceLocale, timezone } from './platform';
 import { storage } from './storage';
 import { publishWallpaper } from './wallpaper';
 
@@ -67,7 +67,7 @@ async function clearDirectCaches() {
 }
 
 export function makeDirect(sparkyUrl: string, apiKey: string): DirectBackend {
-  return new DirectBackend({ sparkyUrl, apiKey, kv: storage, timezone });
+  return new DirectBackend({ sparkyUrl, apiKey, kv: storage, timezone, locale: deviceLocale });
 }
 
 export const cleanUrl = (u: string) => u.trim().replace(/\/+$/, '');

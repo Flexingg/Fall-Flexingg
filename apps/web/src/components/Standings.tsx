@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { fmt, shortName } from '../lib/format';
 import '../styles/social.css';
 import { NudgeButton } from './NudgeButton';
+import { CountUp, useFlip, useRankHaptics } from './RankMotion';
 import { Avatar } from './ui';
 
 export function Podium({ challenge }: { challenge: ChallengeDetail }) {
@@ -49,9 +50,11 @@ export function StandingsList({
     challenge.goal && challenge.scoring === 'race_to_goal'
       ? challenge.goal
       : Math.max(...scores, 0);
+  const listRef = useFlip(challenge.standings.map((s) => s.user.id).join());
+  useRankHaptics(challenge.standings.find((s) => s.isMe && s.score != null)?.rank);
   const teamOf = (id: string | null | undefined) => challenge.teams?.find((t) => t.id === id);
   return (
-    <div className="list">
+    <div className="list" ref={listRef}>
       {challenge.standings.map((s) => {
         const team = teamOf(s.teamId);
         const pct = challenge.lowerIsBetter
@@ -64,6 +67,9 @@ export function StandingsList({
         const link = (
           <Link
             key={s.user.id}
+            data-flip={
+              s.isMe || challenge.status !== 'active' || challenge.solo ? s.user.id : undefined
+            }
             to={`/u/${s.user.id}`}
             className={`item${s.isMe ? ' me' : ''}`}
             aria-label={`${s.isMe ? 'You' : s.user.displayName}, profile`}
@@ -95,7 +101,9 @@ export function StandingsList({
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div className="v num">{fmt(s.score, challenge)}</div>
+              <div className="v num">
+                <CountUp value={s.score} format={(v) => fmt(v, challenge)} />
+              </div>
               {showToday && s.todayValue != null && (
                 <small className="muted num">+{fmt(s.todayValue, challenge, false)} today</small>
               )}
@@ -105,7 +113,7 @@ export function StandingsList({
         );
         if (s.isMe || challenge.status !== 'active' || challenge.solo) return link;
         return (
-          <div key={s.user.id} className="standing-row">
+          <div key={s.user.id} data-flip={s.user.id} className="standing-row">
             {link}
             <NudgeButton
               userId={s.user.id}

@@ -2,13 +2,16 @@ import { Link } from 'react-router';
 import { ChallengeHero, FeedList } from '../components/Feed';
 import { Icon } from '../components/Icon';
 import { Rings } from '../components/Rings';
-import { Avatar, Empty, ErrorBox, Screen, Skeleton } from '../components/ui';
+import { Avatar, Empty, ErrorBox, Screen } from '../components/ui';
+import { SkeletonCard, SkeletonLine, SkeletonList } from '../components/Skeleton';
 import { useAuth } from '../lib/auth';
 import { useSyncNow } from '../lib/freshness';
 import { isNative } from '../lib/platform';
-import { fmtInt, timeAgo } from '../lib/format';
+import { fmtInt, fmtQty, timeAgo, unitLabel } from '../lib/format';
 import { useChallenges, useFeed, useToday } from '../lib/queries';
 import { useUnreadCount } from '../lib/notifyQueries';
+import { useReviewList } from '../lib/reviewQueries';
+import { monthName, reviewsToOffer, todayIn } from '@gauntlet/shared';
 import '../styles/notify.css';
 import { FastCard } from '../components/FastCard';
 
@@ -67,7 +70,16 @@ export function TodayPage() {
       <ErrorBox error={today.error} />
       {today.data && !today.data.hasSources && <ConnectSourceHero />}
       {today.isPending ? (
-        <Skeleton height={142} />
+        <SkeletonCard>
+          <div className="row" style={{ gap: 16 }}>
+            <SkeletonLine width={110} height={110} style={{ borderRadius: '50%' }} />
+            <div className="grow stack" style={{ gap: 14 }}>
+              <SkeletonLine />
+              <SkeletonLine />
+              <SkeletonLine />
+            </div>
+          </div>
+        </SkeletonCard>
       ) : (
         <div className="card row" style={{ gap: 16 }}>
           <Rings values={[ring('steps'), ring('active_calories'), ring('active_minutes')]} />
@@ -111,6 +123,8 @@ export function TodayPage() {
         ) : null}
       </div>
 
+      {!direct && <ReviewCards />}
+
       {inFastingChallenge && <FastCard />}
 
       <div className="lbl">
@@ -135,9 +149,9 @@ export function TodayPage() {
                 {x.value == null
                   ? '–'
                   : x.key === 'distance'
-                    ? x.value.toFixed(1)
+                    ? fmtQty(x.value, x.unit, 1, false)
                     : fmtInt(x.value)}
-                {x.unit && x.value != null ? ` ${x.unit}` : ''}
+                {x.unit && x.value != null ? ` ${unitLabel(x.unit)}` : ''}
               </span>
             </div>
           ))}
@@ -146,7 +160,7 @@ export function TodayPage() {
         <>
           <ErrorBox error={feed.error} />
           {feed.isPending ? (
-            <Skeleton height={180} />
+            <SkeletonList rows={3} />
           ) : feed.data?.length ? (
             <FeedList events={feed.data} />
           ) : (
@@ -168,6 +182,47 @@ export function TodayPage() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** "Your October in review" in a month's first week, "Your 2026 in review" from 1 Dec to 7 Jan. */
+function ReviewCards() {
+  const { user } = useAuth();
+  const list = useReviewList(!!user);
+  if (!user || !list.data) return null;
+  const offer = reviewsToOffer(todayIn(user.timezone));
+  const cards = [
+    offer.month && list.data.months.includes(offer.month)
+      ? {
+          to: offer.month,
+          kicker: 'Month in review',
+          title: `Your ${monthName(Number(offer.month.slice(5)))} in review`,
+        }
+      : null,
+    offer.year && list.data.years.includes(offer.year)
+      ? { to: offer.year, kicker: 'Year in review', title: `Your ${offer.year} in review` }
+      : null,
+  ].filter((c): c is { to: string; kicker: string; title: string } => c !== null);
+  return (
+    <>
+      {cards.map((c) => (
+        <Link
+          key={c.to}
+          to={`/review/${c.to}`}
+          className="hero review-card"
+          style={{ marginTop: 12 }}
+        >
+          <div className="badge">
+            <Icon name="trends" />
+          </div>
+          <div className="grow">
+            <small>{c.kicker}</small>
+            <b>{c.title}</b>
+          </div>
+          <Icon name="chevron" size={18} />
+        </Link>
+      ))}
+    </>
   );
 }
 

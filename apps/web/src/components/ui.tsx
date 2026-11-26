@@ -3,7 +3,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
+import { attachToastHost, DEFAULT_TOAST_MS, toast, type ToastState } from '../lib/toast';
 import { Icon } from './Icon';
+import '../styles/feel.css';
 
 export function Avatar({
   user,
@@ -172,26 +174,33 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
-let toastSetter: ((msg: string | null) => void) | null = null;
-export function toast(msg: string) {
-  toastSetter?.(msg);
-}
+export { toast };
 export function ToastHost() {
-  const [msg, setMsg] = useState<string | null>(null);
+  const [t, setT] = useState<ToastState | null>(null);
   useEffect(() => {
-    toastSetter = setMsg;
-    return () => {
-      toastSetter = null;
-    };
+    attachToastHost(setT);
+    return () => attachToastHost(null);
   }, []);
   useEffect(() => {
-    if (!msg) return;
-    const t = setTimeout(() => setMsg(null), 2600);
-    return () => clearTimeout(t);
-  }, [msg]);
-  return msg ? (
-    <div className="toast" role="status">
-      {msg}
+    if (!t) return;
+    const timer = setTimeout(() => setT(null), t.duration ?? DEFAULT_TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [t]);
+  return t ? (
+    <div className={`toast${t.action ? ' with-action' : ''}`} role="status">
+      <span>{t.msg}</span>
+      {t.action && (
+        <button
+          type="button"
+          className="toast-action"
+          onClick={() => {
+            t.action!.onClick();
+            setT(null);
+          }}
+        >
+          {t.action.label}
+        </button>
+      )}
     </div>
   ) : null;
 }

@@ -8,25 +8,34 @@
  * before today (they are still growing); lift records count straight away, since a set is final once
  * it is logged.
  */
-import { addDays, liftExercise, todayIn, type NotificationKind } from '@gauntlet/shared';
+import {
+  addDays,
+  DEFAULT_DISPLAY,
+  formatQuantity,
+  liftExercise,
+  todayIn,
+  type DisplayPrefs,
+  type NotificationKind,
+} from '@gauntlet/shared';
 import { and, eq, inArray, like, or } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics, feedEvents, personalRecords } from '../db/schema.js';
+import { displayOf } from './display.js';
 import { notify } from './notify.js';
 import { getUser } from './users.js';
 
 /** A day total that can set a record, with how to word it. */
 const DAY_RECORDS = [
   { key: 'steps_day', metric: 'steps', label: 'step day', unit: '', decimals: 0 },
-  { key: 'distance_day', metric: 'distance', label: 'distance day', unit: ' km', decimals: 1 },
+  { key: 'distance_day', metric: 'distance', label: 'distance day', unit: 'km', decimals: 1 },
   {
     key: 'active_minutes_day',
     metric: 'active_minutes',
     label: 'active-minutes day',
-    unit: ' min',
+    unit: 'min',
     decimals: 0,
   },
-  { key: 'lift_volume_day', metric: 'lift_volume', label: 'lifting day', unit: ' kg', decimals: 0 },
+  { key: 'lift_volume_day', metric: 'lift_volume', label: 'lifting day', unit: 'kg', decimals: 0 },
 ] as const;
 
 export const STEP_STREAK_TARGET = 10_000;
@@ -50,8 +59,25 @@ interface Row {
   value: number;
 }
 
-const fmtNum = (v: number, decimals: number) =>
-  v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+type Prefs = Pick<DisplayPrefs, 'units' | 'locale'>;
+
+/** A record value in the reader's units: "12.4 km" or "7.7 mi". */
+const q = (v: number, unit: string, decimals: number, prefs: Prefs) =>
+  formatQuantity(v, unit, decimals, prefs);
+
+/**
+ * The short badge for a stored personal-record event, in the viewer's units. Events keep the raw
+ * value and unit so each reader sees their own; events from before that kept only the text.
+ */
+export function recordBadge(
+  payload: Record<string, unknown>,
+  prefs: Prefs = DEFAULT_DISPLAY,
+): string | null {
+  const { value, unit, decimals } = payload;
+  if (typeof value === 'number' && typeof unit === 'string' && typeof decimals === 'number')
+    return q(value, unit, decimals, prefs);
+  return typeof payload.badge === 'string' ? payload.badge : null;
+}
 
 const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -84,6 +110,10 @@ export function bestsFrom(rows: Row[], today: string): Map<string, Candidate> {
 interface Alert {
   text: string;
   badge: string;
+  /** Raw value and unit, so every reader sees the badge in their own units. */
+  value: number;
+  unit: string;
+  decimals: number;
   /** What the record is, e.g. "best step day". */
   label: string;
   /** Lower goes first when there are too many to announce. */
@@ -91,15 +121,32 @@ interface Alert {
   key: string;
 }
 
-function describe(c: Candidate, previous: number): Alert | null {
+/** How a stored record reads in lists ("Best step day", "20,000"); null for keys we don't word. */
+export function describeRecord(
+  key: string,
+  value: number,
+  prefs: Prefs = DEFAULT_DISPLAY,
+): { label: string; badge: string } | null {
+  const a = describe({ key, value, date: '' }, 0, prefs);
+  return a ? { label: a.label.charAt(0).toUpperCase() + a.label.slice(1), badge: a.badge } : null;
+}
+
+export function describe(
+  c: Candidate,
+  previous: number,
+  prefs: Prefs = DEFAULT_DISPLAY,
+): Alert | null {
   const day = DAY_RECORDS.find((d) => d.key === c.key);
   if (day) {
     return {
       key: c.key,
       label: `best ${day.label}`,
       order: 1,
-      badge: `${fmtNum(c.value, day.decimals)}${day.unit}`,
-      text: `New best ${day.label}: ${fmtNum(c.value, day.decimals)}${day.unit} (was ${fmtNum(previous, day.decimals)}${day.unit})`,
+      value: c.value,
+      unit: day.unit,
+      decimals: day.decimals,
+      badge: q(c.value, day.unit, day.decimals, prefs),
+      text: `New best ${day.label}: ${q(c.value, day.unit, day.decimals, prefs)} (was ${q(previous, day.unit, day.decimals, prefs)})`,
     };
   }
   if (c.key === 'step_streak') {
@@ -108,6 +155,9 @@ function describe(c: Candidate, previous: number): Alert | null {
       key: c.key,
       label: 'longest 10k-step streak',
       order: 2,
+      value: c.value,
+      unit: 'days',
+      decimals: 0,
       badge: `${c.value} days`,
       text: `New longest 10k-step streak: ${c.value} days (was ${previous})`,
     };
@@ -120,8 +170,11 @@ function describe(c: Candidate, previous: number): Alert | null {
       key: c.key,
       label: `${name} ${what}`,
       order: 0,
-      badge: `${fmtNum(c.value, 1)} kg`,
-      text: `New ${name} ${what}: ${fmtNum(c.value, 1)} kg (was ${fmtNum(previous, 1)} kg)`,
+      value: c.value,
+      unit: 'kg',
+      decimals: 1,
+      badge: q(c.value, 'kg', 1, prefs),
+      text: `New ${name} ${what}: ${q(c.value, 'kg', 1, prefs)} (was ${q(previous, 'kg', 1, prefs)})`,
     };
   }
   return null;
@@ -132,6 +185,7 @@ export async function checkPersonalRecords(ctx: AppContext, userId: string): Pro
   const user = await getUser(ctx, userId);
   if (user.isDemo) return 0;
   const today = todayIn(user.timezone, ctx.now());
+  const prefs = displayOf(user);
 
   const rows = await ctx.db
     .select({ date: dailyMetrics.date, metric: dailyMetrics.metric, value: dailyMetrics.value })
@@ -171,7 +225,7 @@ export async function checkPersonalRecords(ctx: AppContext, userId: string): Pro
       });
     // First sighting is history, not news. A record that just moved is still moving.
     if (!old || ctx.now().getTime() - old.updatedAt.getTime() < QUIET_MS) continue;
-    const alert = describe(c, old.value);
+    const alert = describe(c, old.value, prefs);
     if (alert) alerts.push(alert);
   }
 
@@ -188,7 +242,14 @@ export async function checkPersonalRecords(ctx: AppContext, userId: string): Pro
       actorId: userId,
       challengeId: null,
       kind: 'personal_record',
-      payload: { key: a.key, label: a.label, badge: a.badge },
+      payload: {
+        key: a.key,
+        label: a.label,
+        badge: a.badge,
+        value: a.value,
+        unit: a.unit,
+        decimals: a.decimals,
+      },
     });
   }
   return alerts.length;

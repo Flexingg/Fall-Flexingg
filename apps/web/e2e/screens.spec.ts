@@ -16,6 +16,19 @@ async function signIn(page: Page, email = 'you@example.com') {
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 }
 
+// People in a US locale get miles and pounds by default; these tests were written in metric, so each
+// browser starts with that choice (unless a test has already picked something else).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem('gauntlet.display'))
+        localStorage.setItem('gauntlet.display', JSON.stringify({ units: 'metric' }));
+    } catch {
+      /* storage blocked */
+    }
+  });
+});
+
 // When a test fails, keep a picture and the on-screen error text: CI only uploads the screenshots folder.
 test.afterEach(async ({ page }, info) => {
   if (info.status === info.expectedStatus) return;
@@ -264,10 +277,25 @@ test('goes public, joins a public challenge from Discover, and finds people by n
   await expect(page.locator('.item .t', { hasText: 'Riley P.' })).toBeVisible();
   await snap(page, '15-joined-public');
 
-  // Put things back so the test can run again.
-  page.once('dialog', (d) => d.accept());
+  // Leaving has no "Are you sure?": it happens at once, with an Undo for 5 seconds.
   await page.getByRole('button', { name: 'Leave challenge' }).click();
   await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+  await expect(page.getByRole('status').getByText(/^Left October Step Open/)).toBeVisible();
+  await snap(page, '81-leave-undo-toast');
+  // Undo brings it back (and nothing was sent to the server).
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByText('October Step Open', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('October Step Open', { exact: true })).toBeVisible();
+  // Put things back so the test can run again: leave for real and let the 5 seconds run out.
+  await page.getByText('October Step Open', { exact: true }).click();
+  await page.getByRole('button', { name: 'Leave challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+  await expect(page.getByText('October Step Open', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0, { timeout: 9000 });
+  await page.reload();
+  await page.getByRole('button', { name: 'Discover' }).click();
+  await expect(page.getByText('October Step Open', { exact: true })).toBeVisible();
   await page.goto('/friends');
   await page.getByRole('button', { name: /Requests/ }).click();
   await page.getByRole('button', { name: 'Cancel' }).click();
@@ -593,16 +621,67 @@ test('profiles: trophy board, your own stats, and unfriending', async ({ page })
   await expect(page.getByRole('switch', { name: 'Share stats and milestones' })).toBeVisible();
   await snap(page, '41-profile-me');
 
-  // Unfriend from the profile, after confirming.
+  // Unfriend from the profile: no confirm dialog, an Undo toast instead, and it really happens
+  // once the 5 seconds are up.
   await page.goto('/friends');
   await page.getByRole('link', { name: /Sam Kim/ }).click();
   await expect(page.getByRole('heading', { name: 'Sam Kim' })).toBeVisible();
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Unfriend' }).click();
+  await expect(page.getByRole('button', { name: 'Add friend' })).toBeVisible();
+  await expect(page.getByRole('status').getByText('Unfriended Sam Kim')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0, { timeout: 9000 });
+  await page.reload();
   await expect(page.getByRole('button', { name: 'Add friend' })).toBeVisible();
   await page.goto('/friends');
   await expect(page.getByText('Maya Rodriguez')).toBeVisible();
   await expect(page.getByText('Sam Kim')).toHaveCount(0);
+});
+
+test('undo: unfriending can be taken back, and the crew list follows', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Dre/ }).first().click();
+  await page.getByRole('button', { name: 'Unfriend' }).click();
+  await expect(page.getByRole('button', { name: 'Add friend' })).toBeVisible();
+  await snap(page, '80-unfriend-undo-toast');
+  // While the toast is up, the crew list already leaves them out.
+  await page.getByRole('button', { name: 'Back' }).click();
+  await expect(page.getByRole('link', { name: /Dre/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('link', { name: /Dre/ }).first()).toBeVisible();
+  // Nothing was sent: still friends after a reload.
+  await page.waitForTimeout(5500);
+  await page.reload();
+  await expect(page.getByRole('link', { name: /Dre/ }).first()).toBeVisible();
+});
+
+test('standings: rank animations leave the leaderboard intact (also with reduced motion)', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/challenges');
+  await page.locator('a[href^="/c/"]:not([href="/c/new"])').first().click();
+  const rows = page.locator('[data-flip]');
+  await expect(rows.first()).toBeVisible();
+  const before = await rows.locator('.v').allTextContents();
+  expect(before.length).toBeGreaterThan(1);
+  await expect(page.locator('.error')).toHaveCount(0);
+  // Fresh numbers arrive: nothing breaks, order and scores settle to what the server says.
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.reload();
+  await expect(rows.first()).toBeVisible();
+  expect(await rows.locator('.v').allTextContents()).toEqual(before);
+  // No leftover slide transforms once settled.
+  await page.waitForTimeout(800);
+  expect(
+    await rows.evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform)),
+  ).toEqual(before.map(() => ''));
+  await snap(page, '82-standings');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(rows.first()).toBeVisible();
+  await snap(page, '83-standings-reduced-motion');
 });
 
 test('fresh data: sync now, pull to refresh, and choosing which source counts', async ({
@@ -709,6 +788,13 @@ test('reacts to and comments on a feed item', async ({ page }) => {
 
   // The author can delete it again.
   await page.getByRole('button', { name: /^Delete comment: Strong work/ }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toHaveCount(0);
+  // Undo brings it back; deleting again and waiting makes it stick.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toBeVisible();
+  await page.getByRole('button', { name: /^Delete comment: Strong work/ }).click();
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0, { timeout: 9000 });
+  await page.reload();
   await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toHaveCount(0);
 });
 
@@ -1022,4 +1108,326 @@ test('the demo account can open its weekly recap', async ({ page }) => {
   await page.goto('/trends');
   await page.getByRole('link', { name: 'Last week' }).click();
   await expect(page).toHaveURL(/\/recap\/\d{4}-W\d{2}$/);
+});
+
+// ---------- Month / year in review, calendar heatmap ----------
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+async function demoSignIn(page: Page) {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Try the demo' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+}
+
+test('month in review: open from Me, step through the cards with taps and keys, close', async ({
+  page,
+}) => {
+  await demoSignIn(page);
+  const now = new Date();
+  const month = now.toISOString().slice(0, 7);
+  const label = `${MONTH_NAMES[now.getUTCMonth()]} ${now.getUTCFullYear()}`;
+
+  // Past reviews are listed on Me.
+  await page.goto('/me');
+  await page.getByRole('link', { name: label }).click();
+  await expect(page).toHaveURL(new RegExp(`/review/${month}$`));
+  const story = page.getByRole('dialog', { name: `${label} in review` });
+  await expect(story).toBeVisible();
+  await expect(story.getByTestId('story-card')).toContainText('in review');
+  await snap(page, '95-review-intro');
+
+  // Tap right: the headline numbers.
+  await page.getByRole('button', { name: 'Next card' }).click();
+  await expect(story.getByTestId('story-card')).toContainText('You took');
+  await expect(story.getByTestId('story-card')).toContainText('steps');
+  await snap(page, '96-review-steps');
+  // Tap left goes back; the arrow keys do the same.
+  await page.getByRole('button', { name: 'Previous card' }).click();
+  await expect(story.getByTestId('story-card')).toContainText('Tap to begin');
+  await page.keyboard.press('ArrowRight');
+  await expect(story.getByTestId('story-card')).toContainText('You took');
+  await page.keyboard.press('ArrowLeft');
+  await expect(story.getByTestId('story-card')).toContainText('Tap to begin');
+
+  // Step through to the closing card, which has Share.
+  const share = story.getByRole('button', { name: 'Share' });
+  for (let i = 0; i < 15 && !(await share.isVisible()); i++)
+    await page.keyboard.press('ArrowRight');
+  await expect(share).toBeVisible();
+  await expect(story.getByTestId('story-card')).toContainText('That was');
+  await snap(page, '97-review-end');
+  await expect(page.locator('.error')).toHaveCount(0);
+
+  // Close goes back to where we came from.
+  await story.getByRole('button', { name: 'Close' }).first().click();
+  await expect(page).toHaveURL(/\/me$/);
+});
+
+test('year in review opens and tells the year, and a bad period goes home', async ({ page }) => {
+  await demoSignIn(page);
+  const year = String(new Date().getUTCFullYear());
+  await page.goto(`/review/${year}`);
+  const story = page.getByRole('dialog', { name: `${year} in review` });
+  await expect(story).toBeVisible();
+  await expect(story.getByTestId('story-card')).toContainText(`Your ${year}`);
+  await page.getByRole('button', { name: 'Next card' }).click();
+  await expect(story.getByTestId('story-card')).toContainText('You took');
+  const share = story.getByRole('button', { name: 'Share' });
+  for (let i = 0; i < 15 && !(await share.isVisible()); i++)
+    await page.keyboard.press('ArrowRight');
+  await expect(share).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+
+  await page.goto('/review/not-a-month');
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+});
+
+test("Today offers last month's review during the first week of a month", async ({ page }) => {
+  await demoSignIn(page);
+  // Pretend it is the 3rd of next month: the demo's data month is "last month".
+  const now = new Date();
+  const fake = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 3, 12));
+  await page.clock.setFixedTime(fake);
+  await page.goto('/');
+  await expect(
+    page.getByRole('link', {
+      name: new RegExp(`Your ${MONTH_NAMES[now.getUTCMonth()]} in review`),
+    }),
+  ).toBeVisible();
+  await snap(page, '98-review-today-card');
+});
+
+test('profile calendar heatmap: renders your year and a tapped day shows its value', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Your profile, trophies/ }).click();
+  const heat = page.getByRole('group', { name: /Steps by day/ });
+  await expect(heat).toBeVisible();
+  await expect(page.locator('.hm-cell[data-l="4"]').first()).toBeVisible();
+  // One tab stop for the whole grid, not 365.
+  await expect(page.locator('.hm-grid [tabindex="0"]')).toHaveCount(1);
+  await snap(page, '99-profile-heatmap');
+
+  // Tap a day with steps: the readout shows its date and number.
+  const day = page.getByRole('button', { name: /: 9,412 steps$/ });
+  await day.click();
+  await expect(page.getByTestId('heatmap-readout')).toContainText('9,412 steps');
+  // The arrow keys move between days (up = the day before).
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('heatmap-readout')).toContainText('12,100 steps');
+
+  // Another stat from the picker.
+  await page.getByLabel('Show on the calendar').selectOption('distance');
+  await expect(page.getByRole('group', { name: /Distance by day/ })).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+});
+
+test('a side bet: set on create, shown on the challenge, owed and paid up at the end', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/c/new');
+  await page.getByLabel('Challenge name').fill('Coffee Sprint');
+  await page.getByRole('button', { name: 'Steps' }).click();
+  await page.getByRole('button', { name: 'Loser picks the next challenge' }).click();
+  await expect(page.getByLabel('Side bet', { exact: true })).toHaveValue(
+    'Loser picks the next challenge',
+  );
+  await snap(page, '90-new-side-bet');
+  await page.getByLabel('Side bet', { exact: true }).fill('Loser buys coffee');
+  await page.getByRole('button', { name: 'Start challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Coffee Sprint' })).toBeVisible();
+  await expect(
+    page.getByLabel('Side bet', { exact: true }).getByText('Loser buys coffee'),
+  ).toBeVisible();
+  await snap(page, '91-side-bet-detail');
+
+  // A finished challenge: Dre lost, Alex won and marks it paid up.
+  await page.goto('/challenges');
+  await page.getByRole('button', { name: 'Finished' }).click();
+  await page.getByText('Coffee Run').click();
+  const result = page.getByLabel('Side bet result');
+  await expect(result.getByText('Dre owes it')).toBeVisible();
+  await page.getByRole('button', { name: 'Mark as paid up' }).click();
+  await expect(result.getByText('Paid up ✓')).toBeVisible();
+  await snap(page, '92-side-bet-paid');
+
+  // Rematch from the detail page carries the bet and starts a series.
+  await page.getByRole('button', { name: 'Rematch' }).click();
+  await expect(page.getByRole('heading', { name: 'Rematch: Coffee Run' })).toBeVisible();
+  await expect(
+    page.getByLabel('Side bet', { exact: true }).getByText('Loser buys coffee'),
+  ).toBeVisible();
+  const series = page.getByLabel('Rematch series');
+  await expect(series).toContainText('You 1 – 0 Dre');
+  await snap(page, '93-rematch-series');
+});
+
+test('the invite QR sheet shows a code and the link', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  await page.getByRole('button', { name: 'Show QR code' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Invite QR code' });
+  await expect(sheet.getByText('Weekend 100K')).toBeVisible();
+  await expect(sheet.locator('canvas')).toBeVisible();
+  await expect(sheet.getByText(/https?:\/\/\S+\/j\/\S+/)).toBeVisible();
+  await expect(sheet.getByText(/Link expires/)).toBeVisible();
+  // The code is actually drawn: dark modules on a white ground.
+  const dark = await sheet.locator('canvas').evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    const px = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i]! < 60) n++;
+    return n;
+  });
+  expect(dark).toBeGreaterThan(1000);
+  await snap(page, '94-qr-sheet');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet).toHaveCount(0);
+
+  // The friend invite has one too.
+  await page.goto('/friends');
+  await page.getByRole('button', { name: 'Show QR code' }).click();
+  await expect(page.getByRole('dialog', { name: 'Invite QR code' })).toContainText(
+    'Add Alex Morgan as a friend',
+  );
+  await expect(
+    page.getByRole('dialog', { name: 'Invite QR code' }).locator('canvas'),
+  ).toBeVisible();
+});
+
+test('units and clock: imperial and 24-hour show up on the screens, and survive a reload', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/me');
+  await page.getByRole('button', { name: 'Imperial (mi, lb)' }).click();
+  await page.getByRole('button', { name: '24-hour' }).click();
+  await expect(page.getByTestId('display-preview')).toContainText('mi');
+  await expect(page.getByTestId('display-preview')).toContainText('lb');
+  await expect(page.getByTestId('display-preview')).toContainText('19:05');
+  await snap(page, '85-settings-units');
+
+  // A distance challenge reads in miles now.
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  await expect(page.getByLabel('Top three')).toBeVisible();
+  await expect(
+    page
+      .locator('.v.num')
+      .filter({ hasText: /\bmi\b/ })
+      .first(),
+  ).toBeVisible();
+  await expect(page.locator('.v.num').filter({ hasText: /\bkm\b/ })).toHaveCount(0);
+  await snap(page, '86-challenge-miles');
+
+  // Weights in pounds and the start time on a 24-hour clock.
+  await page.goto('/trends');
+  await page.getByLabel('Metric').selectOption('lift_volume');
+  await page
+    .getByLabel('Recent workouts')
+    .getByRole('link', { name: /Strength workout · 2 exercises/ })
+    .first()
+    .click();
+  await expect(page.getByRole('region', { name: 'Squat' })).toBeVisible();
+  await expect(page.getByText(/\blb\b/).first()).toBeVisible();
+  await expect(page.getByText(/\bkg\b/)).toHaveCount(0);
+  await snap(page, '87-workout-pounds');
+
+  // A run's start time is on the 24-hour clock ("at 23:30"), distance in miles.
+  await page.goto('/trends');
+  await page.getByLabel('Metric').selectOption('workouts');
+  await page
+    .getByLabel('Recent workouts')
+    .getByRole('link', { name: /Running/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: 'Running' })).toBeVisible();
+  await expect(page.getByText(/ at \d{2}:\d{2}$/)).toBeVisible();
+  await expect(page.getByText('mi', { exact: true })).toBeVisible();
+
+  // The choice is saved on the account, not just in this tab.
+  await page.reload();
+  await page.goto('/me');
+  await expect(page.getByRole('button', { name: 'Imperial (mi, lb)' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: '24-hour' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  // Put it back, so the other tests that share this account still read in kilometres.
+  await page.getByRole('button', { name: 'Metric (km, kg)' }).click();
+  await page.getByRole('button', { name: '12-hour' }).click();
+  await expect(page.getByTestId('display-preview')).toContainText('km');
+});
+
+// The installed web app's service worker would answer these requests itself, past the delay below.
+test.describe('loading placeholders', () => {
+  test.use({ serviceWorkers: 'block' });
+
+  test('a skeleton shows while a slow request is pending, but not over cached data', async ({
+    page,
+  }) => {
+    await signIn(page);
+    let slow = true;
+    await page.route(/\/api\/friends(\?.*)?$/, async (route) => {
+      if (slow) await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await page.getByRole('link', { name: 'Friends' }).click();
+    const loading = page.getByRole('status', { name: 'Loading' });
+    await expect(loading.first()).toBeVisible();
+    await expect(loading.first()).toHaveAttribute('aria-busy', 'true');
+    // (a plain screenshot, not snap(): snap waits for the network to go quiet, which ends the skeleton)
+    if (shots) await page.screenshot({ path: `${shots}/88-skeleton-friends.png` });
+    await expect(page.getByText('Maya Rodriguez')).toBeVisible();
+    await expect(loading).toHaveCount(0);
+
+    // Back again with the data cached: a refresh happens quietly, with no skeleton.
+    await page.getByRole('link', { name: 'Today' }).click();
+    await page.getByRole('link', { name: 'Friends' }).click();
+    await expect(page.getByText('Maya Rodriguez')).toBeVisible();
+    await expect(loading).toHaveCount(0);
+
+    // Reduced motion: the same placeholder, held still.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    slow = true;
+    await page.route(/\/api\/notifications(\?.*)?$/, async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    // Open it from inside the app: after a full reload the service worker, not this route, answers.
+    await page.evaluate(() => {
+      history.pushState({}, '', '/notifications');
+      dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await expect(loading.first()).toBeVisible();
+    const anim = await page.evaluate(() => {
+      const el = document.querySelector('.sk-bar, .sk-circle');
+      return el ? getComputedStyle(el).animationName : 'missing';
+    });
+    expect(anim).toBe('none');
+    if (shots) await page.screenshot({ path: `${shots}/89-skeleton-reduced-motion.png` });
+  });
 });

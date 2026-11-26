@@ -4,12 +4,15 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { WidgetBridge } from './components/WidgetBridge';
 import { AppBanner } from './components/AppBanner';
+import { DisplaySync } from './components/DisplaySync';
 import { PullToRefresh } from './components/PullToRefresh';
+import { Shortcuts } from './components/Shortcuts';
 import { AutoRefresh } from './lib/freshness';
 import { ConnectServer } from './components/ConnectServer';
 import { LaunchSplash, shouldShowSplash } from './components/LaunchSplash';
 import { ToastHost } from './components/ui';
 import { useAuth } from './lib/auth';
+import { useDisplay } from './lib/display';
 import { syncHealthConnect } from './lib/health';
 import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
@@ -25,6 +28,7 @@ import { MePage } from './pages/Me';
 import { NotificationSettingsPage } from './pages/NotificationSettings';
 import { NotificationsPage } from './pages/Notifications';
 import { RecapPage } from './pages/Recap';
+import { ReviewPage } from './pages/Review';
 import { OAuthReturnPage } from './pages/OAuthReturn';
 import { ProfilePage } from './pages/Profile';
 import { NewChallengePage } from './pages/NewChallenge';
@@ -81,7 +85,7 @@ function Splash() {
 
 /** Where a tapped notification may take the app (the Android job opens https://<server>/<path>). */
 const NOTIFICATION_PATH =
-  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|u\/[\w-]+|trends|challenges)$/;
+  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|review\/[\d-]+|u\/[\w-]+|trends|challenges)$/;
 
 /** Android: open invite links in-app, and push Health Connect data when the app comes to the front. */
 function NativeBridge() {
@@ -149,12 +153,15 @@ function NativeBridge() {
 
 export function App() {
   const { status } = useAuth();
+  useDisplay(); // a change of units or clock re-renders every screen
   const [splash, setSplash] = useState(shouldShowSplash);
   return (
     <BrowserRouter>
       {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
+        <Shortcuts />
+        <DisplaySync />
         <WidgetBridge />
         <AutoRefresh />
         {status === 'signedIn' && <PullToRefresh />}
@@ -352,6 +359,16 @@ export function App() {
               <Private>
                 <NeedsServer what="Weekly recap">
                   <RecapPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/review/:period"
+            element={
+              <Private>
+                <NeedsServer what="Year in review">
+                  <ReviewPage />
                 </NeedsServer>
               </Private>
             }

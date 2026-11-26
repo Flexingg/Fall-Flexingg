@@ -88,6 +88,7 @@ export function inviteRoutes(app: FastifyInstance, ctx: AppContext) {
           startDate: ch.startDate,
           endDate: ch.endDate,
           showEvents: ch.showEvents,
+          stake: ch.solo ? null : ch.stake,
         };
       }
       return preview;

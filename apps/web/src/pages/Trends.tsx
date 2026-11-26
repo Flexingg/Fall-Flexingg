@@ -1,15 +1,20 @@
 import {
   BUILTIN_METRICS,
   METRIC_GROUPS,
+  toDisplayUnit,
   trendDef,
   type TrendDefInfo,
+  type TrendsResponse,
   type TrendOverviewItem,
 } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { BarChart } from '../components/BarChart';
 import { Icon } from '../components/Icon';
-import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
+import { Empty, ErrorBox, Header, Screen, Seg } from '../components/ui';
+import { SkeletonChart, SkeletonGroup, SkeletonList } from '../components/Skeleton';
+import { useDisplay } from '../lib/display';
+import { fmtDate, fmtNum } from '../lib/format';
 import { useTrends, useTrendsOverview } from '../lib/queries';
 import { useAuth } from '../lib/auth';
 import { useWorkouts, workoutPath } from '../lib/statsQueries';
@@ -23,8 +28,12 @@ export function TrendsPage() {
   const [metric, setMetric] = useState<string>('steps');
   const q = useTrends(range, metric);
   const overview = useTrendsOverview(range);
-  const t = q.data;
-  const def: TrendDefInfo = t?.def ?? trendDef(metric) ?? trendDef('steps')!;
+  const { units } = useDisplay();
+  const base: TrendDefInfo = q.data?.def ?? trendDef(metric) ?? trendDef('steps')!;
+  // Values arrive in metric; show them in the person's units (km -> mi, kg -> lb).
+  const shown = toDisplayUnit(1, base.unit, base.decimals, units);
+  const def: TrendDefInfo = { ...base, unit: shown.unit, decimals: shown.decimals };
+  const t = q.data && shown.value !== 1 ? scaleTrends(q.data, shown.value) : q.data;
   // The day picked on the chart, if any; switching stat or range lets go.
   const [picked, setPicked] = useState<string | null>(null);
   // Compare lays the period before over each bar; remembered between visits.
@@ -36,8 +45,7 @@ export function TrendsPage() {
   // Days after today in "this week/month" have no data yet; don't show them as a real zero.
   const todayDate = t?.bars.find((b) => b.isToday)?.date ?? null;
   const upcoming = (d: string) => todayDate != null && d > todayDate;
-  const num = (v: number) =>
-    def.decimals ? v.toFixed(def.decimals) : Math.round(v).toLocaleString('en-US');
+  const num = (v: number) => fmtNum(v, def.decimals);
   const unit = def.unit ?? '';
   // Every stat a challenge can use, then whatever else the person has data for (each exercise,
   // custom measurements, weight).
@@ -90,7 +98,10 @@ export function TrendsPage() {
       <div style={{ height: 12 }} />
       <ErrorBox error={q.error} />
       {q.isPending ? (
-        <Skeleton height={210} />
+        <SkeletonGroup>
+          <SkeletonChart height={150} />
+          <SkeletonList rows={3} avatar={null} />
+        </SkeletonGroup>
       ) : (
         t && (
           <div className="card">
@@ -144,7 +155,7 @@ export function TrendsPage() {
                 <small>
                   {suffix(def)}
                   {t.changePct != null &&
-                    ` ${t.changePct >= 0 ? '+' : ''}${Math.round(t.changePct)}% vs last`}
+                    ` ${t.changePct >= 0 ? '+' : ''}${fmtNum(t.changePct)}% vs last`}
                 </small>
               </div>
             )}
@@ -209,11 +220,11 @@ export function TrendsPage() {
                   <small>{GROUP_LABEL.get(i.group)}</small>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div className="v num">{overviewValue(i)}</div>
+                  <div className="v num">{overviewValue(i, units)}</div>
                   {i.changePct != null && (
                     <small className="muted num">
                       {i.changePct >= 0 ? '+' : ''}
-                      {Math.round(i.changePct)}%
+                      {fmtNum(i.changePct)}%
                     </small>
                   )}
                 </div>
@@ -299,13 +310,20 @@ function saveCompare(on: boolean) {
 function vsPct(now: number, before: number): string {
   if (!(before > 0)) return '';
   const pct = Math.round(((now - before) / before) * 100);
-  return ` (${pct >= 0 ? '+' : ''}${pct}%)`;
+  return ` (${pct >= 0 ? '+' : ''}${fmtNum(pct)}%)`;
 }
 
 const GROUP_LABEL = new Map(METRIC_GROUPS.map((g) => [g.key, g.label]));
 
-const fmtValue = (v: number, d: Pick<TrendDefInfo, 'decimals'>) =>
-  d.decimals ? v.toFixed(d.decimals) : Math.round(v).toLocaleString('en-US');
+/** The same series with every value multiplied (for unit conversion). */
+function scaleTrends(t: TrendsResponse, k: number): TrendsResponse {
+  return {
+    ...t,
+    total: t.total * k,
+    bars: t.bars.map((b) => ({ ...b, value: b.value * k })),
+    previousBars: t.previousBars?.map((b) => ({ ...b, value: b.value * k })) ?? t.previousBars,
+  };
+}
 
 /** "km", "bpm avg", "kg best" … how the headline number is combined over the range. */
 function suffix(d: Pick<TrendDefInfo, 'unit' | 'aggregate'>): string {
@@ -313,8 +331,9 @@ function suffix(d: Pick<TrendDefInfo, 'unit' | 'aggregate'>): string {
   return [d.unit, word].filter(Boolean).join(' ');
 }
 
-function overviewValue(i: TrendOverviewItem): string {
-  return `${fmtValue(i.total, i)} ${suffix(i)}`.trim();
+function overviewValue(i: TrendOverviewItem, units: 'metric' | 'imperial'): string {
+  const q = toDisplayUnit(i.total, i.unit, i.decimals, units);
+  return `${fmtNum(q.value, q.decimals)} ${suffix({ ...i, unit: q.unit })}`.trim();
 }
 
 function RankLine({ points }: { points: { date: string; rank: number }[] }) {
@@ -353,10 +372,4 @@ function RankLine({ points }: { points: { date: string; rank: number }[] }) {
   );
 }
 
-const longDay = (d: string) =>
-  new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+const longDay = (d: string) => fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' });

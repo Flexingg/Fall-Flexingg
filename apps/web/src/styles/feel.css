@@ -1,0 +1,30 @@
+/* Rank movement, the Undo toast. */
+.toast.with-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: 8px;
+}
+.toast-action {
+  background: var(--volt);
+  color: var(--volt-ink);
+  border: 0;
+  border-radius: 99px;
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* A row that just moved up flashes lime for a moment. */
+@keyframes rank-up-flash {
+  0% {
+    background: color-mix(in srgb, var(--volt) 28%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.rank-up {
+  animation: rank-up-flash 1.2s ease-out;
+}

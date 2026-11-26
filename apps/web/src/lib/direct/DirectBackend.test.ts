@@ -131,10 +131,15 @@ describe('DirectBackend', () => {
       shareEvents: true,
       healthConnectSync: false,
       shareProfileStats: false,
+      units: null,
+      clock: null,
+      locale: null,
     });
     const updated = await backend.updateSettings({ healthConnectSync: true });
     expect(updated.settings.healthConnectSync).toBe(true);
     expect((await backend.me()).settings.healthConnectSync).toBe(true);
+    const imperial = await backend.updateSettings({ units: 'imperial' });
+    expect(imperial.settings.units).toBe('imperial');
   });
 
   it('caches on the phone and only refetches when asked or stale', async () => {
