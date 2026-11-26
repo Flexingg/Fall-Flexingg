@@ -23,8 +23,9 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY --from=build /out ./
 COPY --from=build /app/apps/web/dist ./web
-# The release APK (deploy/fly/downloads, filled in by the release workflow) ships in the image.
-COPY deploy/fly/downloads/ ./downloads/
+# The release APK (deploy/fly/downloads, filled in by the release workflow) ships in the image;
+# with GITHUB_RELEASES_REPO set the server also keeps it current from GitHub, so node owns it.
+COPY --chown=node:node deploy/fly/downloads/ ./downloads/
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1:8080/api/health || exit 1
