@@ -123,6 +123,7 @@ export function isNativeClient(req: FastifyRequest): boolean {
  */
 export function demoRouteBlocked(method: string, url: string): boolean {
   const path = url.split('?')[0]!;
+  if (/^\/api\/admin(\/|$)/.test(path)) return true;
   if (/^\/api\/(connections|garmin|ingest)(\/|$)/.test(path)) return true;
   if (/^\/api\/(friends|invites)/.test(path)) return method !== 'GET';
   if (/^\/api\/challenges\/[^/]+\/(join|invite)/.test(path)) return true;

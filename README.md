@@ -132,6 +132,42 @@ reads them back (CI does this on every push).
 Keep `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET` and the SparkyFitness encryption key stable: changing
 them makes stored keys unreadable and signs everyone out.
 
+## Backups
+
+On a home server nothing else keeps your data safe, so the compose stack includes a `backup` service.
+Every night at `BACKUP_TIME` (default 03:30, in `TZ`) it saves everything that matters into one file,
+and keeps the newest `BACKUP_KEEP` (default 14) of them. If there is no backup yet, it takes one as soon as
+it starts.
+
+- **What is in a backup:** `gauntlet-backup-YYYYMMDD-HHMMSS.tar` holding both Postgres databases
+  (`gauntlet` and `sparkyfitness_db`), the database roles, and SparkyFitness' uploads folder, plus a
+  `manifest.json` (when, Postgres and app version, sizes). Manual backups end in `-manual` (the newest 20
+  are kept), the automatic safety backup taken before a restore ends in `-pre-restore`, and files you upload
+  end in `-uploaded`. Those last two stay until you delete them.
+- **Where they are:** the Docker volume `backups` (at `/backups` in the `backup` and `gauntlet`
+  containers). A volume on the same disk does not protect you from that disk failing, so copy backups off
+  the machine now and then. Download one from **Profile > Server admin** in the app, or run
+  `docker run --rm -v <project>_backups:/b -v "$PWD":/out alpine cp /b/gauntlet-backup-XXXX.tar /out/`
+  (`docker volume ls` shows the project name), or bind-mount a folder instead of the volume in
+  `deploy/docker-compose.yml` (`- /srv/gauntlet-backups:/backups`) and sync that with rsync or a NAS.
+- **The admin page** (`/admin`, only for emails in `ADMIN_EMAILS`) shows when the last backup ran and
+  how big it was, lets you back up now, download, upload, delete and restore.
+- **Restoring** replaces all current data with the backup's. A `-pre-restore` safety backup is taken first,
+  each database is restored in one transaction (a failure leaves it as it was), then the uploads folder is
+  swapped. Afterwards restart the stack, because SparkyFitness caches data:
+  `docker compose -f deploy/docker-compose.yml --env-file deploy/.env restart`.
+- **Restoring from the command line** (works even when the app is down, as long as `db` is up):
+
+  ```bash
+  docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm backup restore gauntlet-backup-YYYYMMDD-HHMMSS.tar
+  docker compose -f deploy/docker-compose.yml --env-file deploy/.env restart
+  ```
+
+  To restore onto a brand-new machine, bring the stack up once with the same `.env` (so the databases and
+  roles exist), copy the backup file into the `backups` volume, then run the command above. Passwords of
+  roles that already exist are kept from the current `.env`, so keep it with your backups (it is not
+  inside them).
+
 ## Android
 
 ```bash

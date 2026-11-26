@@ -4,6 +4,7 @@ import { challengeParticipants, challenges, users } from './db/schema.js';
 import { maintainDemo } from './services/demo.js';
 import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
 import { syncUser } from './services/sync.js';
+import { recordSyncCycle } from './services/syncStatus.js';
 
 /** Only one API instance runs the background loop at a time. */
 const LOCK_ID = 7_340_112;
@@ -58,6 +59,7 @@ async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: numb
   for (const ch of open) await refreshChallenge(ctx, ch.id);
   let finalized = 0;
   for (const ch of open) if (await finalizeChallenge(ctx, ch)) finalized++;
+  recordSyncCycle({ at: ctx.now(), ok: synced, failed: competitors.length - synced });
   await ctx.db.execute(
     sql`delete from refresh_tokens where expires_at < now() - interval '7 days'`,
   );

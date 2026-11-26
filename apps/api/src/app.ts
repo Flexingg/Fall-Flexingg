@@ -8,6 +8,7 @@ import { ZodError } from 'zod';
 import type { AppContext } from './context.js';
 import { HttpError } from './context.js';
 import { downloadRoutes } from './downloads.js';
+import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { challengeRoutes } from './routes/challenges.js';
 import { connectionRoutes } from './routes/connections.js';
@@ -85,6 +86,7 @@ export async function buildApp(
   });
 
   authRoutes(app, full);
+  adminRoutes(app, full);
   meRoutes(app, full);
   friendRoutes(app, full);
   userRoutes(app, full);

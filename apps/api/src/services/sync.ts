@@ -94,7 +94,7 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   const user = await getUser(ctx, userId);
   if (user.isDemo) return { userId, ok: true, changed: 0 };
   if (user.keyStatus !== 'active' || !user.sparkyKeyEnc)
-    return { userId, ok: false, changed: 0, error: 'sparky_key_invalid' };
+    return failSync(ctx, userId, 'sparky_key_invalid', 'SparkyFitness key is not valid');
   const token = sparkyToken(ctx, user);
   const open = await openChallengesForUser(ctx, userId);
 
@@ -146,10 +146,10 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   } catch (err) {
     if (err instanceof SparkyError && err.status === 401) {
       await markKeyInvalid(ctx, userId);
-      return { userId, ok: false, changed: 0, error: 'sparky_key_invalid' };
+      return failSync(ctx, userId, 'sparky_key_invalid', 'SparkyFitness key is not valid');
     }
     ctx.log.warn({ err, userId }, 'sync failed');
-    return { userId, ok: false, changed: 0, error: (err as Error).message };
+    return failSync(ctx, userId, (err as Error).message);
   }
 
   // Metrics this sync is responsible for: a value it no longer sees was deleted in SparkyFitness.
@@ -163,13 +163,33 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   const changes = await store(ctx, userId, start, end, merged, isManaged, partial);
   await ctx.db
     .update(users)
-    .set({ lastSyncedAt: ctx.now(), seenSources: sources })
+    .set({
+      lastSyncedAt: ctx.now(),
+      seenSources: sources,
+      lastSyncError: null,
+      lastSyncErrorAt: null,
+    })
     .where(eq(users.id, userId));
 
   // First sync pulls weeks of history at once; don't post that as "progress".
   if (user.lastSyncedAt) await postProgress(ctx, userId, open, changes);
   if (opts.settle !== false) for (const ch of open) await refreshChallenge(ctx, ch.id);
   return { userId, ok: true, changed: changes.length };
+}
+
+/** Remember why a sync failed, so the admin page can show it. */
+async function failSync(
+  ctx: AppContext,
+  userId: string,
+  error: string,
+  shown = error,
+): Promise<SyncResult> {
+  await ctx.db
+    .update(users)
+    .set({ lastSyncError: shown.slice(0, 300), lastSyncErrorAt: ctx.now() })
+    .where(eq(users.id, userId))
+    .catch(() => undefined);
+  return { userId, ok: false, changed: 0, error };
 }
 
 /** Goals already stored for settled days, so they aren't looked up again. */

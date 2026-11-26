@@ -8,6 +8,9 @@
  * Connect screens: Hevy key good-hevy-key; Strava/Fitbit sign-in code good-code.
  * Garmin screen: runner@garmin.demo / demo, or mfa@garmin.demo / demo with code 123456.
  */
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { addDays, todayIn } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
 import { buildApp } from '../src/app.js';
@@ -195,6 +198,31 @@ users.you!.fasts.push({
 
 fake.garminAccounts.set('mfa@garmin.demo', { password: 'demo', mfaCode: '123456' });
 
+// A pretend backup service for the admin page (Riley is the admin): two old backups and a heartbeat.
+const backupDir = mkdtempSync(join(tmpdir(), 'gauntlet-demo-backups-'));
+mkdirSync(join(backupDir, '.status'), { recursive: true });
+writeFileSync(join(backupDir, 'gauntlet-backup-20260101-033000.tar'), Buffer.alloc(3_400_000, 1));
+writeFileSync(join(backupDir, 'gauntlet-backup-20260102-033000.tar'), Buffer.alloc(3_500_000, 1));
+writeFileSync(
+  join(backupDir, '.status', 'last-backup.json'),
+  JSON.stringify({
+    file: 'gauntlet-backup-20260102-033000.tar',
+    sizeBytes: 3_500_000,
+    createdAt: new Date(Date.now() - 6 * 3600_000).toISOString(),
+  }),
+);
+writeFileSync(
+  join(backupDir, '.status', 'schedule.json'),
+  JSON.stringify({ nextAt: new Date(Date.now() + 18 * 3600_000).toISOString(), keep: 14 }),
+);
+const beat = () =>
+  writeFileSync(
+    join(backupDir, '.status', 'heartbeat.json'),
+    JSON.stringify({ at: Math.floor(Date.now() / 1000) }),
+  );
+beat();
+setInterval(beat, 15_000).unref();
+
 const { db, client } = createDb(DB_URL);
 await db.execute(
   sql`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public;`,
@@ -215,6 +243,7 @@ const cfg = loadConfig({
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY ?? Buffer.alloc(32, 3).toString('base64'),
   SYNC_INTERVAL_MINUTES: '0',
   ADMIN_EMAILS: 'riley@example.com',
+  BACKUP_DIR: backupDir,
   // The browser tests sign in many times a minute.
   LOGIN_RATE_LIMIT_MAX: '1000',
   // All the browser tests share one address.
