@@ -8,6 +8,7 @@ import { ErrorBox, Header, Screen, Skeleton } from '../components/ui';
 import { post } from '../lib/api';
 import { fmt, shortName } from '../lib/format';
 import { useResult } from '../lib/queries';
+import { SeriesRecord, StakeResult } from '../components/Stake';
 
 function headline(rank: number | null, n: number): string {
   if (rank == null) return 'No data';
@@ -121,6 +122,10 @@ export function ResultPage() {
           <p className="muted" style={{ fontSize: 15, margin: '8px 0 22px' }}>
             {sub}
           </p>
+          <div style={{ textAlign: 'left' }}>
+            <SeriesRecord c={c} />
+            <StakeResult c={c} />
+          </div>
           {c.teams && (
             <div style={{ textAlign: 'left', marginBottom: 14 }}>
               <TeamLeaderboard c={c} showScores />

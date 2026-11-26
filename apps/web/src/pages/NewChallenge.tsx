@@ -24,6 +24,7 @@ import {
   type ScoringMode,
 } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { StakeField } from '../components/Stake';
 import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Icon } from '../components/Icon';
@@ -142,6 +143,7 @@ export function NewChallengePage() {
   const [customStart, setCustomStart] = useState(today);
   const [customEnd, setCustomEnd] = useState(addDays(today, 6));
   const [showEvents, setShowEvents] = useState(false);
+  const [stake, setStake] = useState('');
   const [teams, setTeams] = useState<TeamsDraft | null>(null);
   const [repeat, setRepeat] = useState<RepeatDraft | null>(null);
   const { start, end } = window(duration, today, { start: customStart, end: customEnd });
@@ -284,6 +286,7 @@ export function NewChallengePage() {
         inviteUserIds: solo ? [] : [...invited],
         visibility: isPublic && !solo ? 'public' : 'private',
         showEvents,
+        stake: !solo && stake.trim() ? stake.trim() : undefined,
         teams: !solo && teams ? teamsRequest(teams) : undefined,
         recurrence: !solo && repeat ? repeatRequest(repeat) : undefined,
         params: needsTarget && weightGoal ? { weightGoal } : undefined,
@@ -727,6 +730,8 @@ export function NewChallengePage() {
 
         {!solo && (
           <>
+            <div className="lbl">Side bet</div>
+            <StakeField value={stake} onChange={setStake} />
             <div className="lbl">Who can join</div>
             <div className="card stack" style={{ gap: 8 }}>
               <div className="row">

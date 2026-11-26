@@ -15,3 +15,4 @@ export * from './teams.js';
 export * from './recurring.js';
 export * from './stats.js';
 export * from './notifications.js';
+export * from './stakes.js';
