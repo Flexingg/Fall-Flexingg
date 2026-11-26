@@ -89,6 +89,9 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
         ...(body.settings?.healthConnectSync != null
           ? { healthConnectSync: body.settings.healthConnectSync }
           : {}),
+        ...(body.settings?.shareProfileStats != null
+          ? { shareProfileStats: body.settings.shareProfileStats }
+          : {}),
         ...(body.visibility ? { visibility: body.visibility } : {}),
         ...(body.handle !== undefined ? { handle: body.handle || null } : {}),
       })

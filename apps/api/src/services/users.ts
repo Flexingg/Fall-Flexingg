@@ -41,6 +41,7 @@ export function toMe(u: UserRow, ctx: Pick<AppContext, 'cfg'>): MeUser {
       shareWorkoutDetails: u.shareWorkoutDetails,
       shareEvents: u.shareEvents,
       healthConnectSync: u.healthConnectSync,
+      shareProfileStats: u.shareProfileStats,
     },
     sparkyKeyStatus: u.keyStatus,
     visibility: u.visibility,

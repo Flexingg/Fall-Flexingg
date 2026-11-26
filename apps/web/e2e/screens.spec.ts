@@ -536,3 +536,37 @@ test('the demo account: one tap in, sample data, nothing that needs SparkyFitnes
   await expect(page.getByText('Demo account.')).toBeVisible();
   await expect(page.locator('.error')).toHaveCount(0);
 });
+
+test('profiles: trophy board, your own stats, and unfriending', async ({ page }) => {
+  await signIn(page);
+
+  // A friend's profile: their record and trophies (Maya won Step Wars).
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Maya Rodriguez/ }).click();
+  await expect(page.getByRole('heading', { name: 'Maya Rodriguez' })).toBeVisible();
+  await expect(page.getByText('Trophy board')).toBeVisible();
+  await expect(page.getByText('Step Wars').first()).toBeVisible();
+  // Maya hasn't shared her stats.
+  await expect(page.getByText(/keeps their stats and milestones to themselves/)).toBeVisible();
+  await snap(page, '40-profile-friend');
+
+  // Your own profile always shows your stats, with the switch to share them.
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Your profile/ }).click();
+  await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
+  await expect(page.getByText('All-time stats')).toBeVisible();
+  await expect(page.getByText('Best step day')).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Share stats and milestones' })).toBeVisible();
+  await snap(page, '41-profile-me');
+
+  // Unfriend from the profile, after confirming.
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Sam Kim/ }).click();
+  await expect(page.getByRole('heading', { name: 'Sam Kim' })).toBeVisible();
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Unfriend' }).click();
+  await expect(page.getByRole('button', { name: 'Add friend' })).toBeVisible();
+  await page.goto('/friends');
+  await expect(page.getByText('Maya Rodriguez')).toBeVisible();
+  await expect(page.getByText('Sam Kim')).toHaveCount(0);
+});

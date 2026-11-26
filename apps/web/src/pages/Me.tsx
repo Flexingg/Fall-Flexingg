@@ -147,6 +147,13 @@ export function MePage() {
 
       <div className="lbl">Settings</div>
       <div className="list">
+        {!direct && (
+          <Link to={`/u/${user.id}`} className="item">
+            <Icon name="trophy" size={20} />
+            <div className="grow t">Your profile, trophies & stats</div>
+            <Icon name="chevron" size={18} />
+          </Link>
+        )}
         <Link to="/sources" className="item">
           <Icon name="settings" size={20} />
           <div className="grow t">Data sources & privacy</div>

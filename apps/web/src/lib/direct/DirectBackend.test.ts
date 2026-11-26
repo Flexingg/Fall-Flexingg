@@ -130,6 +130,7 @@ describe('DirectBackend', () => {
       shareWorkoutDetails: true,
       shareEvents: true,
       healthConnectSync: false,
+      shareProfileStats: false,
     });
     const updated = await backend.updateSettings({ healthConnectSync: true });
     expect(updated.settings.healthConnectSync).toBe(true);

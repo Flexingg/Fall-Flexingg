@@ -33,6 +33,8 @@ export const users = pgTable('users', {
   /** Other participants can see this person's workouts in challenges that have Show Events on. */
   shareEvents: boolean('share_events').notNull().default(true),
   healthConnectSync: boolean('health_connect_sync').notNull().default(false),
+  /** Show my trophies, milestones and all-time stats to people who can see my profile. */
+  shareProfileStats: boolean('share_profile_stats').notNull().default(false),
   /** public: findable by name/handle and can join public challenges. */
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()
