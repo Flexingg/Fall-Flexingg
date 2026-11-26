@@ -1,0 +1,45 @@
+// Wear OS companion: a steps tile (and a small launcher activity) fed by the phone app through the
+// Wearable Data Layer. It shares the phone app's applicationId so the two pair up.
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "cc.randalls.gauntlet.wear"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "cc.randalls.gauntlet"
+        minSdkVersion 30
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // CI sets these from the git tag / run number (same as the phone app).
+        versionCode Integer.parseInt(System.getenv("GAUNTLET_VERSION_CODE") ?: "1")
+        versionName System.getenv("GAUNTLET_VERSION_NAME") ?: "0.1.0"
+    }
+    // Same signing approach as :app: from the environment, otherwise unsigned / debug key.
+    def keystorePath = System.getenv("GAUNTLET_KEYSTORE_PATH")
+    signingConfigs {
+        if (keystorePath) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv("GAUNTLET_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("GAUNTLET_KEY_ALIAS")
+                keyPassword System.getenv("GAUNTLET_KEY_PASSWORD")
+            }
+        }
+    }
+    lint {
+        checkReleaseBuilds = false
+    }
+    buildTypes {
+        release {
+            if (keystorePath) signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    implementation "androidx.wear.tiles:tiles:$wearTilesVersion"
+    implementation "androidx.wear.protolayout:protolayout:$wearProtoLayoutVersion"
+    implementation "com.google.android.gms:play-services-wearable:$playServicesWearableVersion"
+    // ListenableFuture helpers for the tile callbacks.
+    implementation "com.google.guava:guava:$guavaVersion"
+}

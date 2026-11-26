@@ -158,6 +158,20 @@ cd apps/web/android && ./gradlew assembleDebug
   weekday of the last 8 weeks). The app hands the wallpaper its latest numbers through Capacitor
   Preferences, so it shows what Gauntlet last synced. The shader in `apps/web/shaders/` is shared by
   the wallpaper and the in-app preview.
+- **Widget and Wear OS.** The app publishes a small snapshot of Today (steps, active calories and
+  minutes against your goals, plus the featured running challenge with your rank) every time Today
+  refreshes while the app is open.
+  - _Home-screen widget_ ("Gauntlet today"): long-press the home screen, Widgets, Gauntlet. 2x2 shows
+    the three rings and steps; stretch it to 4x2 for the numbers and your challenge (tap it to open
+    that challenge). It only changes when the app publishes, so after a few hours it greys out and
+    says "Open Gauntlet to refresh" instead of showing old numbers as current.
+  - _Wear OS tile_: a steps arc with your challenge rank, in `apps/web/android/wear` (same
+    `cc.randalls.gauntlet` id as the phone app, so the Wearable Data Layer pairs them; it needs Google
+    Play services on the phone and a paired watch). There is no Play Store listing, so each release
+    attaches `gauntlet-wear-<tag>.apk` (+ `.sha256`). Install it from a computer: on the watch enable
+    Developer options, ADB debugging and Debug over Wi-Fi, then
+    `adb connect <watch-ip>:5555` and `adb install gauntlet-wear-<tag>.apk`. Then add the "Gauntlet
+    today" tile from the watch's tile list. Open Gauntlet on the phone once so it sends the first numbers.
 - Icons and splash screens come from `apps/web/public/icons/*.svg`: `pnpm --filter @gauntlet/web icons`.
 
 ## Status

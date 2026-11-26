@@ -2,6 +2,7 @@ import { App as CapApp } from '@capacitor/app';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { WidgetBridge } from './components/WidgetBridge';
 import { AppBanner } from './components/AppBanner';
 import { PullToRefresh } from './components/PullToRefresh';
 import { AutoRefresh } from './lib/freshness';
@@ -79,11 +80,21 @@ function NativeBridge() {
         // An app's sign-in page sent the person back: finish connecting it.
         const o = /\/oauth\/(\w+)(\?[^#]*)?/.exec(url);
         if (o) navigate(`/oauth/${o[1]}${o[2] ?? ''}`);
+        // The home-screen widget's challenge line (gauntlet-widget://open/c/<id>).
+        const w = /^gauntlet-widget:\/\/open\/c\/([\w-]+)/.exec(url);
+        if (w) navigate(`/c/${w[1]}`);
       }),
       CapApp.addListener('backButton', ({ canGoBack }) =>
         canGoBack ? window.history.back() : CapApp.minimizeApp(),
       ),
     ];
+    // Tapped the widget's challenge while the app was closed: the link it launched with.
+    CapApp.getLaunchUrl()
+      .then((r) => {
+        const w = r?.url ? /^gauntlet-widget:\/\/open\/c\/([\w-]+)/.exec(r.url) : null;
+        if (w) navigate(`/c/${w[1]}`);
+      })
+      .catch(() => undefined);
     return () => subs.forEach((s) => s.then((h) => h.remove()));
   }, [navigate]);
   useEffect(() => {
@@ -114,6 +125,7 @@ export function App() {
       {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
+        <WidgetBridge />
         <AutoRefresh />
         {status === 'signedIn' && <PullToRefresh />}
         <AppBanner />
