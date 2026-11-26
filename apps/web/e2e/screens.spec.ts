@@ -654,3 +654,37 @@ test('Trends chart: tap or drag to see a day, arrows to step, Show total to go b
   await expect(page.locator('.big')).toContainText('vs last');
   await expect(days.locator('[aria-selected="true"]')).toHaveCount(0);
 });
+
+test('reacts to and comments on a feed item', async ({ page }) => {
+  await signIn(page);
+  const row = page.locator('.rx-row').first();
+  await expect(row).toBeVisible();
+  await row.getByRole('button', { name: 'Add a reaction' }).click();
+  await row.getByRole('button', { name: 'React 🔥' }).click();
+  await expect(row.getByRole('button', { name: /^🔥 \d+, you reacted$/ })).toBeVisible();
+  await snap(page, '50-feed-reaction');
+
+  // Open the item and leave a comment.
+  await row.getByRole('link', { name: /^Comment/ }).click();
+  await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^🔥 \d+, you reacted$/ })).toBeVisible();
+  await page.getByLabel('Add a comment').fill('Strong work!');
+  await page.getByRole('button', { name: 'Post' }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toBeVisible();
+  await snap(page, '51-feed-comments');
+
+  // The author can delete it again.
+  await page.getByRole('button', { name: /^Delete comment: Strong work/ }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toHaveCount(0);
+});
+
+test('nudges a friend from their profile', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/friends');
+  await page.getByText('Maya Rodriguez').first().click();
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await snap(page, '52-profile-nudge');
+  await page.getByRole('button', { name: 'Nudge Maya' }).click();
+  await expect(page.getByRole('button', { name: 'Nudged Maya' })).toBeDisabled();
+  await snap(page, '53-nudged');
+});

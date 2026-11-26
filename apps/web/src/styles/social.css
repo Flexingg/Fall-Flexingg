@@ -1,0 +1,113 @@
+/* Reactions, comments and nudges. */
+.rx-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.rx-chip,
+.rx-add,
+.rx-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.rx-chip.mine {
+  border-color: var(--volt);
+  color: var(--text);
+  background: color-mix(in srgb, var(--volt) 14%, var(--card));
+}
+.rx-chip:disabled,
+.rx-add:disabled {
+  opacity: 0.6;
+}
+.rx-count {
+  border-color: transparent;
+  background: none;
+  padding: 0 4px;
+  font-weight: 600;
+}
+.rx-picker {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.rx-picker button {
+  font-size: 20px;
+  width: 38px;
+  height: 34px;
+  border-radius: 99px;
+}
+.rx-picker button.mine {
+  background: color-mix(in srgb, var(--volt) 20%, transparent);
+}
+.item-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.comment {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  align-items: flex-start;
+}
+.comment .body {
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.comment small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.comment-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.comment-form textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 15px;
+  outline: none;
+}
+.comment-form textarea:focus {
+  border-color: var(--volt);
+}
+.comment-form .btn {
+  flex: none;
+}
+.nudge-btn {
+  flex: none;
+}
+.standing-row {
+  display: flex;
+  align-items: center;
+}
+.standing-row > a {
+  flex: 1;
+  min-width: 0;
+}
+.standing-row .nudge-btn {
+  margin-right: 12px;
+}

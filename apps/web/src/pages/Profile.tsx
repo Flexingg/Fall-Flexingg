@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
+import { NudgeButton } from '../components/NudgeButton';
 import { Avatar, Empty, ErrorBox, Header, Screen, Skeleton, toast, Toggle } from '../components/ui';
 import { ApiError, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -62,6 +63,9 @@ function Identity({ p }: { p: ProfileResponse }) {
         </small>
         <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           {u.friendship === 'friends' && <span className="pill">Friends</span>}
+          {u.friendship !== 'me' && (
+            <NudgeButton userId={u.id} name={u.displayName.split(' ')[0]} />
+          )}
           {u.friendship === 'me' && (
             <span className="pill plain">
               {u.visibility === 'public' ? 'Public profile' : 'Private profile'}

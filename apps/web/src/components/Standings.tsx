@@ -1,6 +1,8 @@
 import type { ChallengeDetail, StandingRow } from '@gauntlet/shared';
 import { Link } from 'react-router';
 import { fmt, shortName } from '../lib/format';
+import '../styles/social.css';
+import { NudgeButton } from './NudgeButton';
 import { Avatar } from './ui';
 
 export function Podium({ challenge }: { challenge: ChallengeDetail }) {
@@ -56,7 +58,7 @@ export function StandingsList({
           : top > 0
             ? Math.min((s.score ?? 0) / top, 1)
             : 0;
-        return (
+        const link = (
           <Link
             key={s.user.id}
             to={`/u/${s.user.id}`}
@@ -80,6 +82,17 @@ export function StandingsList({
               {s.reachedGoalOn && <small style={{ color: 'var(--volt)' }}>Finished</small>}
             </div>
           </Link>
+        );
+        if (s.isMe || challenge.status !== 'active' || challenge.solo) return link;
+        return (
+          <div key={s.user.id} className="standing-row">
+            {link}
+            <NudgeButton
+              userId={s.user.id}
+              challengeId={challenge.id}
+              name={shortName(s.user.displayName).split(' ')[0]}
+            />
+          </div>
         );
       })}
     </div>

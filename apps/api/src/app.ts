@@ -17,6 +17,7 @@ import { userRoutes } from './routes/users.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
 import { miscRoutes } from './routes/misc.js';
+import { socialRoutes } from './routes/social.js';
 import { SparkyError } from '@gauntlet/sparky';
 import { markKeyInvalid } from './services/users.js';
 
@@ -91,6 +92,7 @@ export async function buildApp(
   inviteRoutes(app, full);
   challengeRoutes(app, full);
   miscRoutes(app, full);
+  socialRoutes(app, full);
   garminRoutes(app, full);
   connectionRoutes(app, full);
   downloadRoutes(app, full.cfg);
