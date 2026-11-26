@@ -719,3 +719,67 @@ test('server admin page is for admins only, with backups', async ({ page }) => {
   await snap(page, '5b-admin-restore');
   await page.getByRole('button', { name: 'Cancel' }).click();
 });
+
+test('team challenge: set up two teams, pick and switch teams, shuffle before the start', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/c/new');
+  await page.getByLabel('Challenge name').fill('Team Sprint');
+  await page.getByRole('button', { name: 'Steps' }).click();
+  // Start tomorrow so teams can still be rearranged.
+  await page
+    .getByRole('group', { name: 'Duration' })
+    .getByRole('button', { name: 'Custom' })
+    .click();
+  const dayOut = (n: number) =>
+    page.evaluate((k) => new Date(Date.now() + k * 864e5).toLocaleDateString('en-CA'), n);
+  await page.getByLabel('End date').fill(await dayOut(4));
+  await page.getByLabel('Start date').fill(await dayOut(1));
+  await page.getByRole('button', { name: 'Invite Maya Rodriguez' }).click();
+  await page.getByRole('switch', { name: 'Play in teams' }).click();
+  await expect(page.getByText('Average of everyone on the team who scored.')).toBeVisible();
+  await page.getByRole('button', { name: 'I’m on this team' }).click();
+  await snap(page, '51-new-team-challenge');
+  await page.getByRole('button', { name: 'Start challenge' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Team Sprint' })).toBeVisible();
+  const board = page.getByLabel('Team leaderboard');
+  await expect(board.getByText('Red Rockets')).toBeVisible();
+  await expect(board.getByText('Blue Blazers')).toBeVisible();
+  // Alex starts on Blue; switch to Red until the challenge starts.
+  const mine = page.getByRole('group', { name: 'Pick a team' });
+  await expect(mine.getByRole('button', { name: /Blue Blazers/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await mine.getByRole('button', { name: /Red Rockets/ }).click();
+  await expect(mine.getByRole('button', { name: /Red Rockets/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Shuffle teams evenly' }).click();
+  await expect(page.getByText('Teams shuffled')).toBeVisible();
+  await snap(page, '52-team-challenge');
+});
+
+test('recurring challenge: repeat weekly, with the repeat label on the page and in the list', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/c/new');
+  await page.getByLabel('Challenge name').fill('Weekly Steps');
+  await page.getByRole('button', { name: 'Steps' }).click();
+  await page.getByRole('button', { name: '7 days' }).click();
+  await page.getByRole('switch', { name: 'Repeat this challenge' }).click();
+  await expect(page.getByText('Each round runs 7 days.')).toBeVisible();
+  await snap(page, '53-new-recurring');
+  await page.getByRole('button', { name: 'Start challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Weekly Steps' })).toBeVisible();
+  await expect(page.getByText(/Repeats weekly/).first()).toBeVisible();
+  await expect(page.getByLabel('Series').getByText('Round 1')).toBeVisible();
+  await snap(page, '54-recurring-challenge');
+  await page.goto('/challenges');
+  const row = page.locator('.item', { hasText: 'Weekly Steps' });
+  await expect(row.getByText('Weekly', { exact: true })).toBeVisible();
+});

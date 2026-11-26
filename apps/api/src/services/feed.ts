@@ -148,7 +148,10 @@ export async function feedFor(
         text = `${name} took the lead${challenge ? ` in ${challenge.name}` : ''}`;
         break;
       case 'challenge_won':
-        text = `${name} won ${challenge?.name ?? 'a challenge'}`;
+        text =
+          typeof p.teamName === 'string'
+            ? `${name}'s team ${p.teamName} won ${challenge?.name ?? 'a challenge'}`
+            : `${name} won ${challenge?.name ?? 'a challenge'}`;
         badge = '1st';
         break;
       case 'joined':

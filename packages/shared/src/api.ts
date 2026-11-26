@@ -8,7 +8,9 @@ import { isMetricKey, type MetricAggregate, type MetricGroup, type MetricKey } f
 import { isTrendMetric } from './derive.js';
 import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
-import type { Reaction } from './notify.js';
+import { recurrenceSchema, type Reaction, type Recurrence } from './notify.js';
+import { teamsInputSchema, type ChallengeTeam, type TeamScoring } from './teams.js';
+import type { SeriesInfo } from './recurring.js';
 
 const dateString = z.string().refine(isDateString, 'Expected a YYYY-MM-DD date');
 
@@ -198,7 +200,11 @@ export const weightGoalParamsSchema = z
 export const participantParamsSchema = z.object({ weightGoal: weightGoalParamsSchema.optional() });
 export type ParticipantParams = z.infer<typeof participantParamsSchema>;
 
-export const joinChallengeSchema = z.object({ params: participantParamsSchema.optional() });
+export const joinChallengeSchema = z.object({
+  params: participantParamsSchema.optional(),
+  /** Required to join a team challenge (switching is allowed until it starts). */
+  teamId: z.string().uuid().optional(),
+});
 
 export const createChallengeSchema = z
   .object({
@@ -227,6 +233,10 @@ export const createChallengeSchema = z
     showEvents: z.boolean().default(false),
     /** A challenge against yourself: the kind and its extras. Goal and dates work as usual. */
     solo: soloConfigSchema.optional(),
+    /** Split people into 2-6 teams. Not for solo challenges. */
+    teams: teamsInputSchema.optional(),
+    /** Start a new round when this one ends. Not for solo challenges. */
+    recurrence: recurrenceSchema.optional(),
   })
   .refine((v) => v.endDate >= v.startDate, {
     message: 'End date must be on or after start date',
@@ -268,6 +278,12 @@ export interface ChallengeSummary {
   showEvents: boolean;
   /** Set for a challenge against yourself: how you are doing against your own goal. */
   solo: SoloProgress | null;
+  /** Set when the challenge repeats (until the creator stops it). */
+  recurrence?: Recurrence | null;
+  /** Which round of a recurring series this is. */
+  seriesRound?: number | null;
+  /** Set for team challenges: how a team's score is worked out. */
+  teamScoring?: TeamScoring | null;
 }
 
 export interface StandingRow {
@@ -280,6 +296,8 @@ export interface StandingRow {
   state: ParticipantState;
   lastSyncedAt: string | null;
   isMe: boolean;
+  /** Team in a team challenge. */
+  teamId?: string | null;
 }
 
 export interface ChallengeDetail extends ChallengeSummary {
@@ -292,6 +310,12 @@ export interface ChallengeDetail extends ChallengeSummary {
   standings: StandingRow[];
   invited: PublicUser[];
   rematchOf: string | null;
+  /** Team leaderboard (best first); null when the challenge has no teams. */
+  teams?: ChallengeTeam[] | null;
+  /** The team the viewer is on, or was suggested if invited. */
+  myTeamId?: string | null;
+  /** Round number, earlier rounds and the season table, for a recurring series. */
+  series?: SeriesInfo | null;
 }
 
 export interface ChallengeResult {
@@ -316,6 +340,8 @@ export const updateChallengeSchema = z
     name: z.string().trim().min(1).max(60).optional(),
     visibility: z.enum(['private', 'public']).optional(),
     showEvents: z.boolean().optional(),
+    /** Null stops a recurring challenge from starting another round. */
+    recurrence: recurrenceSchema.nullable().optional(),
   })
   .strict();
 export type UpdateChallengeRequest = z.input<typeof updateChallengeSchema>;
@@ -371,6 +397,8 @@ export const eventsQuerySchema = z.object({
 export const respondChallengeSchema = z.object({
   accept: z.boolean(),
   params: participantParamsSchema.optional(),
+  /** Required when accepting a team challenge (unless a team was suggested). */
+  teamId: z.string().uuid().optional(),
 });
 
 export const featureChallengeSchema = z.object({ featured: z.boolean() });

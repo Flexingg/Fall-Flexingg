@@ -14,6 +14,7 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
   const [name, setName] = useState(c.name);
   const [isPublic, setPublic] = useState(c.visibility === 'public');
   const [showEvents, setShowEvents] = useState(c.showEvents);
+  const [repeats, setRepeats] = useState(!!c.recurrence);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const others = c.participantCount - 1;
@@ -24,6 +25,7 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
     if (name.trim() && name.trim() !== c.name) body.name = name.trim();
     if (isPublic !== (c.visibility === 'public')) body.visibility = isPublic ? 'public' : 'private';
     if (showEvents !== c.showEvents) body.showEvents = showEvents;
+    if (c.recurrence && !repeats) body.recurrence = null;
     if (!Object.keys(body).length) return onDone();
     if (
       body.visibility === 'private' &&
@@ -91,6 +93,19 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
         </div>
         <Toggle checked={showEvents} onChange={setShowEvents} label="Show events" />
       </div>
+      {c.recurrence && (
+        <div className="row">
+          <div className="grow">
+            <div style={{ fontWeight: 700 }}>Repeat</div>
+            <small className="muted">
+              {repeats
+                ? `Repeats ${c.recurrence.every === 'week' ? 'weekly' : 'monthly'}: a new round starts when this one ends.`
+                : 'This is the last round. No new round will start.'}
+            </small>
+          </div>
+          <Toggle checked={repeats} onChange={setRepeats} label="Repeat this challenge" />
+        </div>
+      )}
       <small className="muted" style={{ lineHeight: 1.45 }}>
         Dates ({dateRange(c.startDate, c.endDate)}) are fixed once a challenge is created. Use
         Rematch when it ends to run it again with new dates.

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { SoloCard, soloSentence } from '../components/SoloCard';
+import { TeamLeaderboard } from '../components/TeamsView';
 import { ErrorBox, Header, Screen, Skeleton } from '../components/ui';
 import { post } from '../lib/api';
 import { fmt, shortName } from '../lib/format';
@@ -43,16 +44,23 @@ export function ResultPage() {
   // "16,000 steps" rather than a bare "16,000" for unitless metrics.
   const amount = (v: number) =>
     c!.unit ? fmt(v, c!) : `${fmt(v, c!)} ${c!.metricLabel.toLowerCase()}`;
+  const myTeam = c?.teams?.find((t) =>
+    t.memberIds.includes(c.standings.find((s) => s.isMe)?.user.id ?? ''),
+  );
   const sub =
     !r?.me?.rank || !c
       ? ''
-      : r.me.rank === 1
-        ? c.standings[1]?.score != null && r.me.score != null
-          ? `You beat ${shortName(c.standings[1].user.displayName).split(' ')[0]} by ${amount(Math.abs(r.me.score - c.standings[1].score))}.`
-          : 'Nobody could keep up.'
-        : leader && leader.score != null && r.me.score != null
-          ? `You finished ${amount(Math.abs(leader.score - r.me.score))} behind ${leader.user.displayName.split(' ')[0]}.`
-          : '';
+      : myTeam
+        ? r.me.rank === 1
+          ? `${myTeam.name} won.`
+          : `${myTeam.name} finished ${ordinal(r.me.rank)} of ${c.teams!.length} teams.`
+        : r.me.rank === 1
+          ? c.standings[1]?.score != null && r.me.score != null
+            ? `You beat ${shortName(c.standings[1].user.displayName).split(' ')[0]} by ${amount(Math.abs(r.me.score - c.standings[1].score))}.`
+            : 'Nobody could keep up.'
+          : leader && leader.score != null && r.me.score != null
+            ? `You finished ${amount(Math.abs(leader.score - r.me.score))} behind ${leader.user.displayName.split(' ')[0]}.`
+            : '';
 
   return (
     <Screen>
@@ -108,11 +116,16 @@ export function ResultPage() {
             {r.me?.rank ? ordinal(r.me.rank) : '–'}
           </div>
           <div className="big" style={{ fontSize: 36 }}>
-            {headline(r.me?.rank ?? null, c.standings.length)}
+            {headline(r.me?.rank ?? null, c.teams?.length ?? c.standings.length)}
           </div>
           <p className="muted" style={{ fontSize: 15, margin: '8px 0 22px' }}>
             {sub}
           </p>
+          {c.teams && (
+            <div style={{ textAlign: 'left', marginBottom: 14 }}>
+              <TeamLeaderboard c={c} showScores />
+            </div>
+          )}
           <div className="list" style={{ textAlign: 'left' }}>
             {c.standings.slice(0, 5).map((s) => (
               <div

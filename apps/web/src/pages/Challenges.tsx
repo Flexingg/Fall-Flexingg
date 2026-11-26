@@ -129,8 +129,15 @@ function ChallengeList({ items }: { items: ChallengeSummary[] }) {
                 ? 'Solo'
                 : `${c.participantCount} ${c.participantCount === 1 ? 'person' : 'people'}`}{' '}
               · {daysLeftText(c)}
+              {c.teamScoring ? ' · Teams' : ''}
             </small>
           </div>
+          {c.recurrence && (
+            <span className="pill plain" title="Repeats" style={{ display: 'inline-flex', gap: 4 }}>
+              <Icon name="refresh" size={12} />{' '}
+              {c.recurrence.every === 'week' ? 'Weekly' : 'Monthly'}
+            </span>
+          )}
           {c.featured && <span className="pill">Featured</span>}
           {c.solo ? (
             <>

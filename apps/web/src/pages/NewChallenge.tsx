@@ -34,6 +34,13 @@ import { dateRange } from '../lib/format';
 import { timezone } from '../lib/platform';
 import { useCustomMetrics, useFriends, useLifts, useToday } from '../lib/queries';
 import { WeightGoalFields } from '../components/WeightGoal';
+import { teamsProblem, teamsRequest, TeamsSetup, type TeamsDraft } from '../components/TeamsSetup';
+import {
+  repeatProblem,
+  repeatRequest,
+  RepeatSetup,
+  type RepeatDraft,
+} from '../components/RepeatSetup';
 
 type Duration = '3' | 'weekend' | '7' | '30' | 'custom';
 const CUSTOM = 'custom' as const;
@@ -135,6 +142,8 @@ export function NewChallengePage() {
   const [customStart, setCustomStart] = useState(today);
   const [customEnd, setCustomEnd] = useState(addDays(today, 6));
   const [showEvents, setShowEvents] = useState(false);
+  const [teams, setTeams] = useState<TeamsDraft | null>(null);
+  const [repeat, setRepeat] = useState<RepeatDraft | null>(null);
   const { start, end } = window(duration, today, { start: customStart, end: customEnd });
   const datesProblem =
     duration !== 'custom'
@@ -209,6 +218,9 @@ export function NewChallengePage() {
         : !needsTarget && !(goalNum && goalNum > 0)
           ? 'Set the number to aim for.'
           : null;
+  const extraProblem = solo
+    ? null
+    : ((teams ? teamsProblem(teams) : null) ?? (repeat ? repeatProblem(repeat) : null));
   const scoringOptions = useMemo(
     () =>
       (def?.scoring ?? (Object.keys(SCORING_LABELS) as ScoringMode[])).filter(
@@ -272,6 +284,8 @@ export function NewChallengePage() {
         inviteUserIds: solo ? [] : [...invited],
         visibility: isPublic && !solo ? 'public' : 'private',
         showEvents,
+        teams: !solo && teams ? teamsRequest(teams) : undefined,
+        recurrence: !solo && repeat ? repeatRequest(repeat) : undefined,
         params: needsTarget && weightGoal ? { weightGoal } : undefined,
       };
       const created = await post<ChallengeDetail>('/api/challenges', body);
@@ -683,6 +697,17 @@ export function NewChallengePage() {
           </>
         )}
 
+        {!solo && (
+          <>
+            <TeamsSetup
+              value={teams}
+              onChange={setTeams}
+              lowerIsBetter={isCustom ? customLower : !!def?.lowerIsBetter}
+            />
+            <RepeatSetup value={repeat} onChange={setRepeat} days={daysBetween(start, end) + 1} />
+          </>
+        )}
+
         <div className="lbl">Show events</div>
         <div className="card stack" style={{ gap: 6 }}>
           <div className="row">
@@ -733,7 +758,13 @@ export function NewChallengePage() {
           <ErrorBox
             error={
               error ??
-              (ruleProblem ? new Error(ruleProblem) : soloProblem ? new Error(soloProblem) : null)
+              (ruleProblem
+                ? new Error(ruleProblem)
+                : soloProblem
+                  ? new Error(soloProblem)
+                  : extraProblem
+                    ? new Error(extraProblem)
+                    : null)
             }
           />
           <button
@@ -742,6 +773,7 @@ export function NewChallengePage() {
               busy ||
               !!ruleProblem ||
               !!soloProblem ||
+              !!extraProblem ||
               !!datesProblem ||
               !scoringOk ||
               (isCustom && !customChoice) ||

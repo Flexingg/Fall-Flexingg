@@ -1,4 +1,5 @@
 import type { ChallengeDetail, StandingRow } from '@gauntlet/shared';
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { fmt, shortName } from '../lib/format';
 import '../styles/social.css';
@@ -48,9 +49,11 @@ export function StandingsList({
     challenge.goal && challenge.scoring === 'race_to_goal'
       ? challenge.goal
       : Math.max(...scores, 0);
+  const teamOf = (id: string | null | undefined) => challenge.teams?.find((t) => t.id === id);
   return (
     <div className="list">
       {challenge.standings.map((s) => {
+        const team = teamOf(s.teamId);
         const pct = challenge.lowerIsBetter
           ? s.score
             ? Math.min(Math.min(...scores.filter((x) => x > 0)) / s.score, 1)
@@ -69,7 +72,24 @@ export function StandingsList({
               {s.score == null ? '–' : s.rank}
             </span>
             <div className="grow">
-              <div className="t ellipsis">{s.isMe ? 'You' : shortName(s.user.displayName)}</div>
+              <div className="t ellipsis">
+                {team && (
+                  <span
+                    className="member-dot"
+                    style={
+                      {
+                        '--tc': team.color,
+                        display: 'inline-block',
+                        marginRight: 6,
+                      } as CSSProperties
+                    }
+                    title={team.name}
+                    aria-label={`Team ${team.name}`}
+                  />
+                )}
+                {s.isMe ? 'You' : shortName(s.user.displayName)}
+                {team && <small style={{ display: 'inline', marginLeft: 6 }}>{team.name}</small>}
+              </div>
               <div className="track">
                 <i style={{ width: `${pct * 100}%` }} />
               </div>

@@ -1,4 +1,5 @@
 import { needsWeightGoal, scoringLabel, type WeightGoalParams } from '@gauntlet/shared';
+import { ArrangeTeams, SeriesCard, TeamLeaderboard, TeamPicker } from '../components/TeamsView';
 import { ChallengeEvents } from '../components/ChallengeEvents';
 import { SoloCard } from '../components/SoloCard';
 import { EditChallenge } from '../components/EditChallenge';
@@ -36,11 +37,17 @@ export function ChallengeDetailPage() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [weightGoal, setWeightGoal] = useState<WeightGoalParams | null>(null);
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const c = q.data;
   const solo = !!c?.soloConfig;
   const needsTarget = !!c && needsWeightGoal(c.metric) && !c.myParams?.weightGoal;
   const params = needsTarget && weightGoal ? { weightGoal } : undefined;
+  // Team challenges: you pick a team to join; an invite may already suggest one.
+  const teamChoice = pickedTeam ?? c?.myTeamId ?? null;
+  const teamBody = c?.teams ? { teamId: teamChoice ?? undefined } : {};
+  const needsTeam = !!c?.teams && !teamChoice;
+  const canSwitchTeam = c?.teams && c.myState === 'joined' && c.status === 'upcoming';
 
   async function act(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -91,6 +98,12 @@ export function ChallengeDetailPage() {
             {c.metricLabel} · {solo ? 'Solo' : scoringLabel(c.scoring, c.aggregate)}
             {c.goal ? ` · ${fmt(c.goal, c)}${c.scoring === 'streak' ? '/day' : ''}` : ''} ·{' '}
             {dateRange(c.startDate, c.endDate)} · {daysLeftText(c)}
+            {c.series ? ` · Round ${c.series.round}` : ''}
+            {c.recurrence
+              ? c.recurrence.every === 'week'
+                ? ' · Repeats weekly'
+                : ' · Repeats monthly'
+              : ''}
             {c.visibility === 'public' ? ' · Public' : ''}
             {c.featured ? ' · Featured' : ''}
           </p>
@@ -102,13 +115,16 @@ export function ChallengeDetailPage() {
                 <b>Open to everyone</b>
                 {c.showEvents && <ShowEventsNotice />}
                 {today.data && !today.data.hasSources && <NoSourcesNote />}
+                {c.teams && (
+                  <TeamPicker teams={c.teams} value={teamChoice} onChange={setPickedTeam} />
+                )}
                 {user?.visibility === 'public' ? (
                   <button
                     className="btn"
-                    disabled={busy}
-                    onClick={() => act(() => post(`/api/challenges/${id}/join`))}
+                    disabled={busy || needsTeam}
+                    onClick={() => act(() => post(`/api/challenges/${id}/join`, teamBody))}
                   >
-                    Join challenge
+                    {needsTeam ? 'Pick a team to join' : 'Join challenge'}
                   </button>
                 ) : (
                   <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
@@ -125,13 +141,18 @@ export function ChallengeDetailPage() {
             <div className="card stack" style={{ marginBottom: 14 }}>
               <b>You're invited</b>
               {c.showEvents && <ShowEventsNotice />}
+              {c.teams && (
+                <TeamPicker teams={c.teams} value={teamChoice} onChange={setPickedTeam} />
+              )}
               {needsTarget && <WeightGoalFields value={weightGoal} onChange={setWeightGoal} />}
               <div className="row">
                 <button
                   className="btn"
-                  disabled={busy || (needsTarget && !weightGoal)}
+                  disabled={busy || (needsTarget && !weightGoal) || needsTeam}
                   onClick={() =>
-                    act(() => post(`/api/challenges/${id}/respond`, { accept: true, params }))
+                    act(() =>
+                      post(`/api/challenges/${id}/respond`, { accept: true, params, ...teamBody }),
+                    )
                   }
                 >
                   Accept
@@ -174,7 +195,13 @@ export function ChallengeDetailPage() {
             <SoloCard c={c} />
           ) : (
             <>
-              <Podium challenge={c} />
+              <TeamLeaderboard c={c} showScores />
+              {!c.teams && <Podium challenge={c} />}
+              {c.teams && c.standings.length > 0 && (
+                <div className="lbl">
+                  <span>People</span>
+                </div>
+              )}
               {c.standings.length > 0 ? (
                 <StandingsList challenge={c} showToday={c.status === 'active'} />
               ) : (
@@ -194,6 +221,23 @@ export function ChallengeDetailPage() {
               </div>
             </>
           )}
+
+          {canSwitchTeam && c.teams && (
+            <div className="card stack" style={{ marginTop: 14, gap: 10 }}>
+              <b>Your team</b>
+              <TeamPicker
+                teams={c.teams}
+                value={c.myTeamId ?? null}
+                disabled={busy}
+                onChange={(teamId) =>
+                  act(() => post(`/api/challenges/${id}/respond`, { accept: true, teamId }))
+                }
+              />
+              <small className="muted">You can switch until the challenge starts.</small>
+            </div>
+          )}
+          {c.teams && c.createdBy === user?.id && c.status === 'upcoming' && <ArrangeTeams c={c} />}
+          <SeriesCard c={c} />
 
           {c.showEvents && c.myState === 'joined' && <ChallengeEvents c={c} />}
 

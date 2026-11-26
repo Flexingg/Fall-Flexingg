@@ -11,3 +11,5 @@ export * from './notify.js';
 export * from './social.js';
 export * from './widget.js';
 export * from './admin.js';
+export * from './teams.js';
+export * from './recurring.js';
