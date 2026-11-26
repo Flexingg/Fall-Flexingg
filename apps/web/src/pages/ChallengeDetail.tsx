@@ -24,6 +24,7 @@ import { dateRange, daysLeftText, fmt, fmtSolo } from '../lib/format';
 import { keys, useChallenge, useProgress, useToday } from '../lib/queries';
 import { ProgressChart } from '../components/ProgressChart';
 import { shareLink } from '../lib/share';
+import { deferAction } from '../lib/undo';
 import type { Invite } from '@gauntlet/shared';
 
 export function ChallengeDetailPage() {
@@ -271,14 +272,20 @@ export function ChallengeDetailPage() {
                 <button
                   className="btn ghost"
                   disabled={busy}
-                  onClick={() =>
-                    confirm('Leave this challenge?') &&
-                    act(async () => {
-                      await post(`/api/challenges/${id}/leave`);
-                      qc.removeQueries({ queryKey: keys.challenge(id) });
-                      navigate('/challenges');
-                    })
-                  }
+                  onClick={() => {
+                    // No "Are you sure?": leave now, send it in 5 s unless undone.
+                    deferAction({
+                      key: `leave:${id}`,
+                      message: `Left ${c.name}`,
+                      commit: () => post(`/api/challenges/${id}/leave`),
+                      settle: (err) => {
+                        if (err) toast(err instanceof Error ? err.message : 'Something went wrong');
+                        qc.removeQueries({ queryKey: keys.challenge(id) });
+                        void qc.invalidateQueries();
+                      },
+                    });
+                    navigate('/challenges');
+                  }}
                 >
                   Leave challenge
                 </button>

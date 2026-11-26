@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { impact } from '../lib/haptics';
 
 /**
  * The animated launch screen: a start line pinches into the logo tile, chevrons punch up and the
@@ -63,6 +64,13 @@ export function LaunchSplash({ ready, onDone }: { ready: boolean; onDone: () => 
   // so the sweep can wait there for the app.
   useEffect(() => {
     const t = setTimeout(() => setLanded(true), still ? REDUCED_MS : LANDED_MS);
+    return () => clearTimeout(t);
+  }, [still]);
+
+  // THROW IT DOWN lands: a heavy thump (the splash only plays once, and not in reduced motion).
+  useEffect(() => {
+    if (still) return;
+    const t = setTimeout(impact, LANDED_MS);
     return () => clearTimeout(t);
   }, [still]);
 

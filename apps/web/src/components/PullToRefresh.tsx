@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { tap } from '../lib/haptics';
 import { useSyncNow } from '../lib/freshness';
 import { Icon } from './Icon';
 
@@ -43,7 +44,10 @@ export function PullToRefresh() {
       setPull(dist.current);
     };
     const onEnd = () => {
-      if (start.current != null && dist.current >= TRIGGER) void sync();
+      if (start.current != null && dist.current >= TRIGGER) {
+        tap();
+        void sync();
+      }
       start.current = null;
       dist.current = 0;
       setPull(0);

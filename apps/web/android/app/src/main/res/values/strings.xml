@@ -13,4 +13,9 @@
     <string name="widget_label">Gauntlet today</string>
     <string name="widget_description">Today\'s steps, active calories and active minutes as three rings, plus your featured challenge.</string>
     <string name="widget_rings_description">Today\'s progress rings: steps, active calories and active minutes</string>
+    <!-- Launcher shortcuts (long-press the app icon). -->
+    <string name="shortcut_sync_short">Sync now</string>
+    <string name="shortcut_sync_long">Sync now</string>
+    <string name="shortcut_new_short">New challenge</string>
+    <string name="shortcut_new_long">New challenge</string>
 </resources>

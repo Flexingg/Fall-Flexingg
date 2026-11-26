@@ -264,10 +264,25 @@ test('goes public, joins a public challenge from Discover, and finds people by n
   await expect(page.locator('.item .t', { hasText: 'Riley P.' })).toBeVisible();
   await snap(page, '15-joined-public');
 
-  // Put things back so the test can run again.
-  page.once('dialog', (d) => d.accept());
+  // Leaving has no "Are you sure?": it happens at once, with an Undo for 5 seconds.
   await page.getByRole('button', { name: 'Leave challenge' }).click();
   await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+  await expect(page.getByRole('status').getByText(/^Left October Step Open/)).toBeVisible();
+  await snap(page, '81-leave-undo-toast');
+  // Undo brings it back (and nothing was sent to the server).
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByText('October Step Open', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('October Step Open', { exact: true })).toBeVisible();
+  // Put things back so the test can run again: leave for real and let the 5 seconds run out.
+  await page.getByText('October Step Open', { exact: true }).click();
+  await page.getByRole('button', { name: 'Leave challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+  await expect(page.getByText('October Step Open', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0, { timeout: 9000 });
+  await page.reload();
+  await page.getByRole('button', { name: 'Discover' }).click();
+  await expect(page.getByText('October Step Open', { exact: true })).toBeVisible();
   await page.goto('/friends');
   await page.getByRole('button', { name: /Requests/ }).click();
   await page.getByRole('button', { name: 'Cancel' }).click();
@@ -593,16 +608,67 @@ test('profiles: trophy board, your own stats, and unfriending', async ({ page })
   await expect(page.getByRole('switch', { name: 'Share stats and milestones' })).toBeVisible();
   await snap(page, '41-profile-me');
 
-  // Unfriend from the profile, after confirming.
+  // Unfriend from the profile: no confirm dialog, an Undo toast instead, and it really happens
+  // once the 5 seconds are up.
   await page.goto('/friends');
   await page.getByRole('link', { name: /Sam Kim/ }).click();
   await expect(page.getByRole('heading', { name: 'Sam Kim' })).toBeVisible();
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Unfriend' }).click();
+  await expect(page.getByRole('button', { name: 'Add friend' })).toBeVisible();
+  await expect(page.getByRole('status').getByText('Unfriended Sam Kim')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0, { timeout: 9000 });
+  await page.reload();
   await expect(page.getByRole('button', { name: 'Add friend' })).toBeVisible();
   await page.goto('/friends');
   await expect(page.getByText('Maya Rodriguez')).toBeVisible();
   await expect(page.getByText('Sam Kim')).toHaveCount(0);
+});
+
+test('undo: unfriending can be taken back, and the crew list follows', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Dre/ }).first().click();
+  await page.getByRole('button', { name: 'Unfriend' }).click();
+  await expect(page.getByRole('button', { name: 'Add friend' })).toBeVisible();
+  await snap(page, '80-unfriend-undo-toast');
+  // While the toast is up, the crew list already leaves them out.
+  await page.getByRole('button', { name: 'Back' }).click();
+  await expect(page.getByRole('link', { name: /Dre/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('link', { name: /Dre/ }).first()).toBeVisible();
+  // Nothing was sent: still friends after a reload.
+  await page.waitForTimeout(5500);
+  await page.reload();
+  await expect(page.getByRole('link', { name: /Dre/ }).first()).toBeVisible();
+});
+
+test('standings: rank animations leave the leaderboard intact (also with reduced motion)', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/challenges');
+  await page.locator('a[href^="/c/"]:not([href="/c/new"])').first().click();
+  const rows = page.locator('[data-flip]');
+  await expect(rows.first()).toBeVisible();
+  const before = await rows.locator('.v').allTextContents();
+  expect(before.length).toBeGreaterThan(1);
+  await expect(page.locator('.error')).toHaveCount(0);
+  // Fresh numbers arrive: nothing breaks, order and scores settle to what the server says.
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.reload();
+  await expect(rows.first()).toBeVisible();
+  expect(await rows.locator('.v').allTextContents()).toEqual(before);
+  // No leftover slide transforms once settled.
+  await page.waitForTimeout(800);
+  expect(
+    await rows.evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform)),
+  ).toEqual(before.map(() => ''));
+  await snap(page, '82-standings');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(rows.first()).toBeVisible();
+  await snap(page, '83-standings-reduced-motion');
 });
 
 test('fresh data: sync now, pull to refresh, and choosing which source counts', async ({
@@ -709,6 +775,13 @@ test('reacts to and comments on a feed item', async ({ page }) => {
 
   // The author can delete it again.
   await page.getByRole('button', { name: /^Delete comment: Strong work/ }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toHaveCount(0);
+  // Undo brings it back; deleting again and waiting makes it stick.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toBeVisible();
+  await page.getByRole('button', { name: /^Delete comment: Strong work/ }).click();
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0, { timeout: 9000 });
+  await page.reload();
   await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toHaveCount(0);
 });
 
