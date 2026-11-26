@@ -63,68 +63,79 @@ export function AppBanner() {
   );
 }
 
+/** A compact strip at the top of the page: it pushes content down rather than covering it. */
 function Shell({
   title,
   sub,
+  action,
+  note,
   onLater,
-  children,
 }: {
   title: string;
   sub: string;
+  action: React.ReactNode;
+  note?: string | null;
   onLater: () => void;
-  children: React.ReactNode;
 }) {
   return (
-    <div className="app-banner card" role="region" aria-label={title}>
-      <div className="row" style={{ gap: 12 }}>
-        <img src="/icons/favicon.svg" width={40} height={40} alt="" style={{ borderRadius: 10 }} />
-        <div className="grow">
-          <div style={{ fontWeight: 800 }}>{title}</div>
+    <div className="app-banner" role="region" aria-label={title}>
+      <div className="row" style={{ gap: 10 }}>
+        <img src="/icons/favicon.svg" width={32} height={32} alt="" style={{ borderRadius: 8 }} />
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>{title}</div>
           <small className="muted">{sub}</small>
         </div>
+        {action}
         <button type="button" className="app-banner-x" aria-label="Not now" onClick={onLater}>
-          <Icon name="close" size={18} />
+          <Icon name="close" size={16} />
         </button>
       </div>
-      {children}
+      {note && (
+        <small className="muted" role="status" style={{ lineHeight: 1.5 }}>
+          {note}
+        </small>
+      )}
     </div>
   );
 }
 
 const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
+const about = (r: AndroidRelease) => `${r.version}${r.sizeBytes ? ` · ${mb(r.sizeBytes)}` : ''}`;
 
 function GetAppCard({ release, onLater }: { release: AndroidRelease; onLater: () => void }) {
   return (
     <Shell
-      title="Get the Gauntlet app"
-      sub={`Android · ${release.version}${release.sizeBytes ? ` · ${mb(release.sizeBytes)}` : ''}`}
+      title="Get the app"
+      sub={`For Android · ${about(release)}`}
+      action={
+        <a className="btn sm" href={release.latestUrl} download>
+          Download app
+        </a>
+      }
       onLater={onLater}
-    >
-      <a className="btn" href={release.latestUrl} download>
-        Download app
-      </a>
-      <small className="muted" style={{ lineHeight: 1.5 }}>
-        Open the downloaded file and allow installs from your browser when asked. Health Connect
-        sync and the live wallpaper need the app.
-      </small>
-    </Shell>
+    />
   );
 }
 
 function UpdateCard({ release, onLater }: { release: AndroidRelease; onLater: () => void }) {
+  const u = useInstaller(release);
   return (
     <Shell
       title="Update available"
-      sub={`Gauntlet ${release.version}${release.sizeBytes ? ` · ${mb(release.sizeBytes)}` : ''}`}
+      sub={`Gauntlet ${about(release)}`}
+      action={
+        <button type="button" className="btn sm" disabled={u.busy} onClick={u.update}>
+          {u.busy ? u.progressLabel : 'Update'}
+        </button>
+      }
+      note={u.message}
       onLater={onLater}
-    >
-      <UpdateButton release={release} />
-    </Shell>
+    />
   );
 }
 
-/** Downloads the release and opens Android's installer, showing progress and what to do next. */
-function UpdateButton({ release }: { release: AndroidRelease }) {
+/** Downloads the release and opens Android's installer, tracking progress and what to do next. */
+function useInstaller(release: AndroidRelease) {
   const [progress, setProgress] = useState<number | null | undefined>(undefined);
   const [message, setMessage] = useState<string | null>(null);
   const busy = progress !== undefined;
@@ -147,19 +158,26 @@ function UpdateButton({ release }: { release: AndroidRelease }) {
       setProgress(undefined);
     }
   }
+  const pct = progress == null ? null : `${Math.round(progress * 100)}%`;
+  return {
+    busy,
+    message,
+    update,
+    progressLabel: pct ?? 'Downloading…',
+    fullLabel: pct ? `Downloading… ${pct}` : 'Downloading…',
+  };
+}
 
+function UpdateButton({ release }: { release: AndroidRelease }) {
+  const u = useInstaller(release);
   return (
     <>
-      <button type="button" className="btn" disabled={busy} onClick={update}>
-        {busy
-          ? progress == null
-            ? 'Downloading…'
-            : `Downloading… ${Math.round(progress * 100)}%`
-          : `Update to ${release.version}`}
+      <button type="button" className="btn" disabled={u.busy} onClick={u.update}>
+        {u.busy ? u.fullLabel : `Update to ${release.version}`}
       </button>
-      {message && (
+      {u.message && (
         <small className="muted" role="status" style={{ lineHeight: 1.5 }}>
-          {message}
+          {u.message}
         </small>
       )}
     </>
