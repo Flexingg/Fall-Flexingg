@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * The animated launch screen: a start line pinches into the logo tile, chevrons punch up, the
- * wordmark rolls in, then a loader ticks while the app signs in. It hands off to the app once the
- * animation has played and the app is ready (tap to skip once it is). Played once per app start.
+ * The animated launch screen: a start line pinches into the logo tile, chevrons punch up and the
+ * wordmark rolls in. Then, with everything else holding still, only the action word changes:
+ * "Step it up." → burn, lift, run, eat, drink, fast, sleep. The line fades and a giant
+ * "THROW IT DOWN" is hurled onto the screen like a gauntlet. It hands off to the app once that has
+ * played and the app is ready (tap to skip once it is). Played once per app start.
+ *
+ * The timeline lives in global.css (design seconds × --s); keep PLAY_MS in step with it.
  */
 
-/** Playback speed: 1 is the design's 3.9 s; 0.8 hands off at about 3.1 s. */
+/** The action words, in order. The first shows as the line appears. */
+export const SPLASH_WORDS = ['Step', 'Burn', 'Lift', 'Run', 'Eat', 'Drink', 'Fast', 'Sleep'];
+
+/** Playback speed: 1 is the design timeline (8.6 s); 0.8 hands off at about 6.9 s. */
 const SPEED = 0.8;
-const PLAY_MS = 3900 * SPEED;
+const PLAY_MS = 8600 * SPEED;
 const REDUCED_MS = 700;
 const FADE_MS = 280;
 
@@ -56,14 +63,14 @@ export function LaunchSplash({ ready, onDone }: { ready: boolean; onDone: () => 
 
   return (
     <div
-      className={`splash play${leaving ? ' leaving' : ''}`}
+      className={`splash play${leaving ? ' leaving' : ''}${elapsed && !ready ? ' waiting' : ''}`}
       style={{ ['--s' as string]: SPEED, ['--fade' as string]: `${FADE_MS}ms` }}
       onPointerDown={() => {
         // Tap to skip, once the logo has landed and the app is ready to show.
         if (ready && performance.now() - started.current > 1500) finish();
       }}
       role="img"
-      aria-label="Gauntlet. Throw it down. Step it up."
+      aria-label={`Gauntlet. Throw it down. ${SPLASH_WORDS.map((w) => `${w} it up.`).join(' ')}`}
     >
       <div className="splash-stage">
         <div className="splash-glow" />
@@ -99,19 +106,40 @@ export function LaunchSplash({ ready, onDone }: { ready: boolean; onDone: () => 
               </span>
             ))}
           </div>
-          <p className="splash-tagline">
-            Throw it down. <b>Step it up.</b>
+          {/* Only the word moves: it sits in a slot as wide as the widest word, right-aligned, so
+              " it up." never shifts. */}
+          <p className="splash-tagline" aria-hidden="true">
+            <span className="splash-words">
+              {SPLASH_WORDS.map((w, k) => (
+                <b
+                  key={w}
+                  className={k === 0 ? 'first' : k === SPLASH_WORDS.length - 1 ? 'last' : undefined}
+                  style={{ ['--k' as string]: k }}
+                >
+                  {w}
+                </b>
+              ))}
+            </span>{' '}
+            it up.
           </p>
         </div>
-        <div className="splash-loader" aria-hidden="true">
-          <div className="splash-track">
-            <div className="splash-bar" />
+        <div className="splash-throw" aria-hidden="true">
+          <div className="splash-impact" />
+          <div className="splash-dust">
+            {[-3, -2, -1, 1, 2, 3].map((d) => (
+              <i key={d} style={{ ['--d' as string]: d }} />
+            ))}
           </div>
-          <div className="splash-sync">
-            <i>Waking things up</i>
-            <i>Syncing your data</i>
-            <i>Loading your crew</i>
-          </div>
+          <b>
+            Throw it
+            <br />
+            down
+          </b>
+        </div>
+        <div className="splash-wait" aria-hidden="true">
+          Loading your crew<span>.</span>
+          <span>.</span>
+          <span>.</span>
         </div>
       </div>
     </div>
