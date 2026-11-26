@@ -31,11 +31,21 @@ export async function buildApp(
   });
   const full: AppContext = { ...ctx, log: app.log };
 
+  // Android's native HTTP (CapacitorHttp) gives requests without a body, such as DELETE, a form
+  // content type. Accept it (as fields, or no body) instead of answering 415; routes still validate
+  // whatever they need.
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_req, body, done) =>
+      done(null, body ? Object.fromEntries(new URLSearchParams(body as string)) : undefined),
+  );
+
   await app.register(cookie);
   await app.register(cors, {
     origin: (origin, cb) => cb(null, !origin || full.cfg.allowedOrigins.includes(origin)),
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Timezone', 'X-Gauntlet-Client'],
   });
   await app.register(rateLimit, {

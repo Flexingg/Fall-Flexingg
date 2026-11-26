@@ -5,7 +5,8 @@ import {
   type TrendDefInfo,
   type TrendOverviewItem,
 } from '@gauntlet/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { BarChart } from '../components/BarChart';
 import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
 import { useTrends, useTrendsOverview } from '../lib/queries';
 import { useAuth } from '../lib/auth';
@@ -18,7 +19,16 @@ export function TrendsPage() {
   const overview = useTrendsOverview(range);
   const t = q.data;
   const def: TrendDefInfo = t?.def ?? trendDef(metric) ?? trendDef('steps')!;
-  const max = Math.max(...(t?.bars.map((b) => b.value) ?? [0]), 1);
+  // The day picked on the chart, if any; switching stat or range lets go.
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => setPicked(null), [metric, range]);
+  const pickedBar = t?.bars.find((b) => b.date === picked) ?? null;
+  // Days after today in "this week/month" have no data yet; don't show them as a real zero.
+  const todayDate = t?.bars.find((b) => b.isToday)?.date ?? null;
+  const upcoming = (d: string) => todayDate != null && d > todayDate;
+  const num = (v: number) =>
+    def.decimals ? v.toFixed(def.decimals) : Math.round(v).toLocaleString('en-US');
+  const unit = def.unit ?? '';
   // Every stat a challenge can use, then whatever else the person has data for (each exercise,
   // custom measurements, weight).
   const options = new Map<string, { key: string; label: string; group: TrendDefInfo['group'] }>();
@@ -81,32 +91,39 @@ export function TrendsPage() {
                 })}
               </select>
             </label>
-            <div className="big num" style={{ marginTop: 6 }}>
-              {def.decimals
-                ? t.total.toFixed(def.decimals)
-                : Math.round(t.total).toLocaleString('en-US')}
-              <small>
-                {suffix(def)}
-                {t.changePct != null &&
-                  ` ${t.changePct >= 0 ? '+' : ''}${Math.round(t.changePct)}% vs last`}
-              </small>
-            </div>
-            <div
-              className={`bars${t.bars.length > 10 ? ' dense' : ''}`}
-              role="img"
-              aria-label={`${def.label} per day`}
-            >
-              {t.bars.map((b) => (
-                <div
-                  key={b.date}
-                  className={b.isToday ? 'today' : ''}
-                  title={`${b.date}: ${b.value}`}
-                >
-                  <i style={{ height: `${(b.value / max) * 100}%` }} />
-                  {t.bars.length <= 10 || Number(b.label) % 5 === 0 ? b.label : ''}
-                </div>
-              ))}
-            </div>
+            {pickedBar ? (
+              <div className="big num" style={{ marginTop: 6 }} aria-live="polite">
+                {upcoming(pickedBar.date) ? '–' : num(pickedBar.value)}
+                <small>
+                  {upcoming(pickedBar.date)
+                    ? `${longDay(pickedBar.date)} is still to come`
+                    : `${unit ? `${unit} ` : ''}on ${longDay(pickedBar.date)}`}
+                </small>
+                <button className="chart-clear" onClick={() => setPicked(null)}>
+                  Show total
+                </button>
+              </div>
+            ) : (
+              <div className="big num" style={{ marginTop: 6 }}>
+                {num(t.total)}
+                <small>
+                  {suffix(def)}
+                  {t.changePct != null &&
+                    ` ${t.changePct >= 0 ? '+' : ''}${Math.round(t.changePct)}% vs last`}
+                </small>
+              </div>
+            )}
+            <BarChart
+              label={`${def.label} per day`}
+              bars={t.bars}
+              selected={picked}
+              onSelect={setPicked}
+              describe={(b) =>
+                upcoming(b.date)
+                  ? `${longDay(b.date)}: still to come`
+                  : `${longDay(b.date)}: ${num(b.value)}${unit ? ` ${unit}` : ''}${b.isToday ? ', today' : ''}`
+              }
+            />
           </div>
         )
       )}
@@ -230,3 +247,11 @@ function RankLine({ points }: { points: { date: string; rank: number }[] }) {
     </svg>
   );
 }
+
+const longDay = (d: string) =>
+  new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
