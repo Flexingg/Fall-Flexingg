@@ -118,3 +118,33 @@
     align-items: center;
   }
 }
+
+/* Backup schedule form (components/BackupSchedule.tsx) */
+.adm-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.adm-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.adm-form label > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.adm-form select,
+.adm-form input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--card-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  color-scheme: dark;
+}

@@ -14,6 +14,7 @@ import {
 } from '../lib/admin';
 import { del, getApiBase, post } from '../lib/api';
 import '../styles/admin.css';
+import { BackupScheduleCard, describeSchedule } from '../components/BackupSchedule';
 
 const KIND_LABEL: Record<BackupInfo['kind'], string> = {
   auto: 'Automatic',
@@ -220,8 +221,12 @@ function BackupsSection() {
               {data.last ? `${formatBytes(data.last.sizeBytes)} · ` : ''}
               {data.nextAt
                 ? `next automatic backup ${when(data.nextAt)}`
-                : 'next backup time unknown'}
-              {data.keep ? ` · keeps the newest ${data.keep}` : ''}
+                : data.schedule.frequency === 'off'
+                  ? 'automatic backups are off'
+                  : 'next backup time unknown'}
+            </small>
+            <small className="muted" style={{ display: 'block' }}>
+              {describeSchedule(data.schedule)}
             </small>
           </div>
         </div>
@@ -266,6 +271,8 @@ function BackupsSection() {
           </div>
         )}
       </div>
+
+      <BackupScheduleCard schedule={data.schedule} />
 
       {data.backups.length === 0 ? (
         <small className="muted">Backups will be listed here.</small>

@@ -1,6 +1,8 @@
 #!/bin/sh
-# Gauntlet backup service. Runs forever (`backup.sh loop`): takes a backup every day at BACKUP_TIME,
-# and does the backups/restores the admin page (or `backup.sh restore FILE`) asks for.
+# Gauntlet backup service. Runs forever (`backup.sh loop`): takes automatic backups on a schedule
+# (off / hourly / daily / weekly / monthly, set on the admin page and saved in
+# $BACKUPS/.config/schedule.json; BACKUP_* env vars are the defaults), deletes old ones by count and
+# by age, and does the backups/restores the admin page (or `backup.sh restore FILE`) asks for.
 #
 # A backup is one tar in $BACKUPS: manifest.json, globals.sql, gauntlet.dump, sparkyfitness_db.dump
 # and sparky-uploads.tar.gz. Requests arrive as $BACKUPS/.requests/<id>.json, progress goes to
@@ -14,9 +16,15 @@ PGUSER=${PGUSER:-postgres}
 PGPASSWORD=${PGPASSWORD:-${POSTGRES_PASSWORD:-}}
 export PGHOST PGUSER PGPASSWORD
 DATABASES="gauntlet sparkyfitness_db"
+# Defaults until an admin saves a schedule.
+BACKUP_FREQUENCY=${BACKUP_FREQUENCY:-daily}
 BACKUP_TIME=${BACKUP_TIME:-03:30}
+BACKUP_WEEKDAY=${BACKUP_WEEKDAY:-0}
+BACKUP_DAY_OF_MONTH=${BACKUP_DAY_OF_MONTH:-1}
 BACKUP_KEEP=${BACKUP_KEEP:-14}
+BACKUP_KEEP_DAYS=${BACKUP_KEEP_DAYS:-0}
 MANUAL_KEEP=20
+CONFIG=$BACKUPS/.config/schedule.json
 POLL_SECONDS=${POLL_SECONDS:-5}
 REQ=$BACKUPS/.requests
 STATUS=$BACKUPS/.status
@@ -106,11 +114,24 @@ do_backup() {
   return 0
 }
 
-# Keep the newest BACKUP_KEEP automatic backups and MANUAL_KEEP manual ones. Pre-restore and
-# uploaded backups stay until someone deletes them.
+# Keep the newest KEEP_COUNT automatic backups (0 = no limit) and MANUAL_KEEP manual ones, then
+# apply the age limit. Uploaded backups stay until someone deletes them.
 prune() {
-  keep_newest "gauntlet-backup-????????-??????.tar" "$BACKUP_KEEP"
+  [ "$KEEP_COUNT" -gt 0 ] && keep_newest "gauntlet-backup-????????-??????.tar" "$KEEP_COUNT"
   keep_newest "gauntlet-backup-????????-??????-manual.tar" "$MANUAL_KEEP"
+  prune_by_age
+  return 0
+}
+# Delete automatic, manual and pre-restore backups older than KEEP_DAYS days, but never the newest
+# backup of all (so there is always one to restore). Uploaded backups are left to the admin.
+prune_by_age() {
+  [ "$KEEP_DAYS" -gt 0 ] || return 0
+  newest=$(ls -1 "$BACKUPS"/gauntlet-backup-*.tar 2>/dev/null | sort | tail -n 1)
+  find "$BACKUPS" -maxdepth 1 -name 'gauntlet-backup-*.tar' ! -name '*-uploaded.tar' \
+    -mmin +$((KEEP_DAYS * 1440)) 2>/dev/null | while read -r old; do
+    [ "$old" = "$newest" ] && continue
+    log "Removing $(basename "$old") (older than $KEEP_DAYS days)"; rm -f "$old"
+  done
 }
 keep_newest() { # glob, how many to keep
   ls -1 "$BACKUPS"/$1 2>/dev/null | sort -r | tail -n +"$(($2 + 1))" | while read -r old; do
@@ -226,25 +247,85 @@ handle_request() {
 }
 
 setup_dirs() {
-  mkdir -p "$REQ" "$STATUS"
+  mkdir -p "$REQ" "$STATUS" "$BACKUPS/.config"
   # The Gauntlet API runs as the image's `node` user (uid 1000) and needs to write requests and
   # delete backups. Give that user the folders rather than opening them to everyone.
-  chown "${API_UID:-1000}:${API_UID:-1000}" "$BACKUPS" "$REQ" "$STATUS" 2>/dev/null
-  chmod 770 "$BACKUPS" "$REQ" "$STATUS" 2>/dev/null
+  chown "${API_UID:-1000}:${API_UID:-1000}" "$BACKUPS" "$REQ" "$STATUS" "$BACKUPS/.config" 2>/dev/null
+  chmod 770 "$BACKUPS" "$REQ" "$STATUS" "$BACKUPS/.config" 2>/dev/null
   return 0
 }
 
-next_run() { # epoch of the next BACKUP_TIME in TZ
-  n=$(date +%s)
-  t=$(date -d "$(date +%Y-%m-%d) $BACKUP_TIME:00" +%s)
-  if [ "$t" -le "$n" ]; then
-    t=$(date -d "$(date -d "@$((n + 86400))" +%Y-%m-%d) $BACKUP_TIME:00" +%s)
+# Read the admin's schedule (or the env defaults) into FREQ TIME WEEKDAY DOM KEEP_COUNT KEEP_DAYS.
+# Anything invalid falls back to the default for that field.
+load_config() {
+  FREQ=$BACKUP_FREQUENCY; TIME=$BACKUP_TIME; WEEKDAY=$BACKUP_WEEKDAY; DOM=$BACKUP_DAY_OF_MONTH
+  KEEP_COUNT=$BACKUP_KEEP; KEEP_DAYS=$BACKUP_KEEP_DAYS; CONFIG_SOURCE=env
+  if [ -f "$CONFIG" ] && jq -e . "$CONFIG" > /dev/null 2>&1; then
+    CONFIG_SOURCE=admin
+    v=$(jq -r '.frequency // empty' "$CONFIG"); [ -n "$v" ] && FREQ=$v
+    v=$(jq -r '.time // empty' "$CONFIG"); [ -n "$v" ] && TIME=$v
+    v=$(jq -r '.weekday // empty' "$CONFIG"); [ -n "$v" ] && WEEKDAY=$v
+    v=$(jq -r '.dayOfMonth // empty' "$CONFIG"); [ -n "$v" ] && DOM=$v
+    v=$(jq -r '.keepCount // empty' "$CONFIG"); [ -n "$v" ] && KEEP_COUNT=$v
+    v=$(jq -r '.keepDays // empty' "$CONFIG"); [ -n "$v" ] && KEEP_DAYS=$v
   fi
-  echo "$t"
+  case $FREQ in off | hourly | daily | weekly | monthly) ;; *) FREQ=daily ;; esac
+  case $TIME in [0-2][0-9]:[0-5][0-9]) ;; *) TIME=03:30 ;; esac
+  case $WEEKDAY in [0-6]) ;; *) WEEKDAY=0 ;; esac
+  case $DOM in [1-9] | 1[0-9] | 2[0-8]) ;; *) DOM=1 ;; esac
+  case $KEEP_COUNT in '' | *[!0-9]*) KEEP_COUNT=14 ;; esac
+  case $KEEP_DAYS in '' | *[!0-9]*) KEEP_DAYS=0 ;; esac
+}
+config_signature() { echo "$FREQ $TIME $WEEKDAY $DOM $KEEP_COUNT $KEEP_DAYS"; }
+
+at_time_on() { date -d "$1 $TIME:00" +%s; } # YYYY-MM-DD -> epoch at TIME that day (in TZ)
+
+# Epoch of the next automatic backup, or 0 when they're off.
+next_run() {
+  n=$(date +%s)
+  case $FREQ in
+    off) echo 0; return ;;
+    hourly)
+      t=$(date -d "$(date +%Y-%m-%d) $(date +%H):${TIME#*:}:00" +%s)
+      [ "$t" -le "$n" ] && t=$((t + 3600))
+      echo "$t"; return ;;
+  esac
+  i=0
+  while [ "$i" -le 62 ]; do
+    d=$(date -d "@$((n + i * 86400))" +%Y-%m-%d)
+    t=$(at_time_on "$d")
+    if [ "$t" -gt "$n" ]; then
+      case $FREQ in
+        daily) echo "$t"; return ;;
+        weekly) [ "$(date -d "$d 12:00:00" +%w)" = "$WEEKDAY" ] && { echo "$t"; return; } ;;
+        monthly) [ "$(date -d "$d 12:00:00" +%d | sed 's/^0//')" = "$DOM" ] && { echo "$t"; return; } ;;
+      esac
+    fi
+    i=$((i + 1))
+  done
+  echo 0
 }
 write_schedule() {
-  write_json "$STATUS/schedule.json" --arg at "$(date -u -d "@$NEXT" +%Y-%m-%dT%H:%M:%SZ)" \
-    --argjson keep "$BACKUP_KEEP" --arg time "$BACKUP_TIME" '{nextAt:$at, keep:$keep, time:$time}'
+  if [ "$NEXT" -gt 0 ]; then at=$(date -u -d "@$NEXT" +%Y-%m-%dT%H:%M:%SZ); else at=""; fi
+  write_json "$STATUS/schedule.json" --arg at "$at" --arg frequency "$FREQ" --arg time "$TIME" \
+    --argjson weekday "$WEEKDAY" --argjson dayOfMonth "$DOM" --argjson keepCount "$KEEP_COUNT" \
+    --argjson keepDays "$KEEP_DAYS" --arg source "$CONFIG_SOURCE" \
+    '{nextAt:(if $at=="" then null else $at end), keep:$keepCount, frequency:$frequency, time:$time,
+      weekday:$weekday, dayOfMonth:$dayOfMonth, keepCount:$keepCount, keepDays:$keepDays, source:$source}'
+}
+# Re-read the schedule; when it changed, work out the next run again and tidy up under the new rules.
+refresh_config() {
+  load_config
+  sig=$(config_signature)
+  [ "$sig" = "${CONFIG_SIG:-}" ] && return 0
+  CONFIG_SIG=$sig
+  NEXT=$(next_run); write_schedule
+  if [ "$NEXT" -gt 0 ]; then
+    log "Schedule: $FREQ at $TIME, keeping $KEEP_COUNT (0 = all), max age $KEEP_DAYS days (0 = no limit). Next: $(date -d "@$NEXT")"
+  else
+    log "Automatic backups are off (keeping $KEEP_COUNT, max age $KEEP_DAYS days)"
+  fi
+  prune
 }
 
 # An automatic (scheduled or first-ever) backup.
@@ -261,20 +342,23 @@ auto_backup() {
 
 loop() {
   setup_dirs
-  case $BACKUP_TIME in [0-2][0-9]:[0-5][0-9]) ;; *) log "BACKUP_TIME must look like 03:30"; exit 1 ;; esac
   log "Waiting for the database"
   wait_for_db || { log "The database never became ready"; exit 1; }
-  NEXT=$(next_run); write_schedule
-  log "Ready. Daily backup at $BACKUP_TIME (keeping $BACKUP_KEEP). Next: $(date -d "@$NEXT")"
-  # A fresh install has no backup yet; take one now rather than waiting for the first night.
+  refresh_config
+  log "Ready."
+  # A fresh install has no backup yet; take one now rather than waiting for the first run.
   if ! ls "$BACKUPS"/gauntlet-backup-*.tar > /dev/null 2>&1; then auto_backup; fi
+  LAST_PRUNE=$(date +%s)
   while true; do
     write_json "$STATUS/heartbeat.json" --argjson at "$(date +%s)" '{at:$at}'
+    refresh_config
+    # Age limits apply even when nothing new is taken; check every 10 minutes.
+    if [ $(( $(date +%s) - LAST_PRUNE )) -ge 600 ]; then prune; LAST_PRUNE=$(date +%s); fi
     for rf in "$REQ"/*.json; do
       [ -e "$rf" ] || continue
       handle_request "$rf"
     done
-    if [ "$(date +%s)" -ge "$NEXT" ]; then
+    if [ "$NEXT" -gt 0 ] && [ "$(date +%s)" -ge "$NEXT" ]; then
       auto_backup
       NEXT=$(next_run); write_schedule
     fi
@@ -286,12 +370,19 @@ case ${1:-loop} in
   loop) loop ;;
   # One-off from the command line: backup.sh now | backup.sh restore FILE
   now)
-    setup_dirs; wait_for_db || exit 1
+    setup_dirs; load_config; wait_for_db || exit 1
     JOB_ID=cli; JOB_ACTION=backup; JOB_FILE=""; JOB_STARTED=$(now_iso)
     if do_backup -manual; then echo "Saved $BACKUPS/$BACKUP_FILE"; else echo "Failed: $ERR"; exit 1; fi ;;
   restore)
-    setup_dirs; wait_for_db || exit 1
+    setup_dirs; load_config; wait_for_db || exit 1
     JOB_ID=cli; JOB_ACTION=restore; JOB_FILE=$(basename "${2:?usage: backup.sh restore FILE}"); JOB_STARTED=$(now_iso)
     if do_restore "$JOB_FILE"; then echo "$RESULT_MSG"; else echo "Failed: $ERR"; exit 1; fi ;;
-  *) echo "usage: backup.sh [loop|now|restore FILE]"; exit 2 ;;
+  # Apply the keep-count and age limits now (they also run on their own every 10 minutes).
+  prune)
+    setup_dirs; load_config; prune ;;
+  # Print when the next automatic backup would run under the current schedule (for checking).
+  next)
+    load_config; NEXT=$(next_run)
+    if [ "$NEXT" -gt 0 ]; then date -d "@$NEXT" '+%a %Y-%m-%d %H:%M'; else echo off; fi ;;
+  *) echo "usage: backup.sh [loop|now|restore FILE|next|prune]"; exit 2 ;;
 esac

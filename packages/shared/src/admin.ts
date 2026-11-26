@@ -40,9 +40,11 @@ export interface BackupsResponse {
   backups: BackupInfo[];
   current: BackupJob | null;
   last: { file: string; sizeBytes: number; createdAt: string } | null;
-  /** From the backup service: when the next automatic backup runs. */
+  /** From the backup service: when the next automatic backup runs (null when they're off). */
   nextAt: string | null;
   keep: number | null;
+  /** The schedule and retention in effect. */
+  schedule: BackupSchedule;
   /** Whether the backup service has checked in recently. */
   serviceRunning: boolean;
   /** What to run after a restore. */
@@ -50,6 +52,38 @@ export interface BackupsResponse {
 }
 
 export const restoreBodySchema = z.object({ confirm: z.literal('RESTORE') });
+
+/**
+ * When automatic backups run and how long backups are kept. Set on the admin page (saved into the
+ * backups folder, where the backup service reads it); BACKUP_* env vars are the defaults.
+ */
+export const BACKUP_FREQUENCIES = ['off', 'hourly', 'daily', 'weekly', 'monthly'] as const;
+export const backupScheduleSchema = z.object({
+  frequency: z.enum(BACKUP_FREQUENCIES),
+  /** Local time "HH:MM" (hourly uses only the minutes). */
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a time like 03:30'),
+  /** Weekly: 0 = Sunday … 6 = Saturday. */
+  weekday: z.number().int().min(0).max(6),
+  /** Monthly: day 1–28 (every month has it). */
+  dayOfMonth: z.number().int().min(1).max(28),
+  /** How many automatic backups to keep (0 = no limit). */
+  keepCount: z.number().int().min(0).max(1000),
+  /**
+   * Delete automatic, manual and pre-restore backups older than this many days (0 = never).
+   * The newest backup is always kept, and uploaded backups are only deleted by hand.
+   */
+  keepDays: z.number().int().min(0).max(3650),
+});
+export type BackupSchedule = z.infer<typeof backupScheduleSchema>;
+
+export const DEFAULT_BACKUP_SCHEDULE: BackupSchedule = {
+  frequency: 'daily',
+  time: '03:30',
+  weekday: 0,
+  dayOfMonth: 1,
+  keepCount: 14,
+  keepDays: 0,
+};
 
 export interface DiskUsage {
   path: string;

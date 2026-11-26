@@ -11,7 +11,10 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import {
   BACKUP_NAME_RE,
+  backupScheduleSchema,
+  DEFAULT_BACKUP_SCHEDULE,
   restoreBodySchema,
+  type BackupSchedule,
   type AdminOverview,
   type BackupJob,
   type BackupsResponse,
@@ -38,6 +41,8 @@ import {
   serviceStatus,
   spendDownloadToken,
   sumFiles,
+  readSchedule,
+  saveSchedule,
 } from '../services/backups.js';
 import { lastSyncCycle } from '../services/syncStatus.js';
 import { getUser, isAdmin } from '../services/users.js';
@@ -199,6 +204,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         last: null,
         nextAt: null,
         keep: null,
+        schedule: DEFAULT_BACKUP_SCHEDULE,
         serviceRunning: false,
         restartCommand: RESTART_COMMAND,
       };
@@ -211,9 +217,19 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       last: st.last,
       nextAt: st.nextAt,
       keep: st.keep,
+      schedule: await readSchedule(dir),
       serviceRunning: st.serviceRunning,
       restartCommand: RESTART_COMMAND,
     };
+  });
+
+  /** How often automatic backups run and how long backups are kept. */
+  app.put('/api/admin/backups/schedule', auth, async (req): Promise<BackupSchedule> => {
+    const d = needDir();
+    const schedule = backupScheduleSchema.parse(req.body);
+    await saveSchedule(d, schedule);
+    audit(req, 'backup schedule changed', schedule);
+    return schedule;
   });
 
   app.post('/api/admin/backups', auth, async (req, reply): Promise<BackupJob> => {

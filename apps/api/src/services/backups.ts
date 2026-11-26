@@ -35,11 +35,34 @@ async function writeJsonAtomic(path: string, data: unknown) {
   await rename(tmp, path);
 }
 
+const CONFIG = '.config';
+
 export async function prepareBackupDir(dir: string, appVersion: string) {
   await mkdir(join(dir, REQUESTS), { recursive: true, mode: 0o770 });
   await mkdir(join(dir, STATUS), { recursive: true, mode: 0o770 });
+  await mkdir(join(dir, CONFIG), { recursive: true, mode: 0o770 });
   // Lets the backup service put the app version in each backup's manifest.
   await writeFile(join(dir, '.app-version'), appVersion).catch(() => undefined);
+}
+
+/**
+ * The schedule in effect: what the admin saved, else what the backup service reports it's using
+ * (its BACKUP_* env defaults), else the built-in defaults.
+ */
+export async function readSchedule(dir: string): Promise<BackupSchedule> {
+  for (const file of [join(dir, CONFIG, 'schedule.json'), join(dir, STATUS, 'schedule.json')]) {
+    const raw = await readJson<Partial<BackupSchedule>>(file);
+    if (!raw) continue;
+    const parsed = backupScheduleSchema.safeParse({ ...DEFAULT_BACKUP_SCHEDULE, ...raw });
+    if (parsed.success) return parsed.data;
+  }
+  return DEFAULT_BACKUP_SCHEDULE;
+}
+
+/** Save the admin's schedule; the backup service picks it up within a few seconds. */
+export async function saveSchedule(dir: string, schedule: BackupSchedule): Promise<void> {
+  await mkdir(join(dir, CONFIG), { recursive: true, mode: 0o770 });
+  await writeJsonAtomic(join(dir, CONFIG, 'schedule.json'), schedule);
 }
 
 export async function listBackups(dir: string): Promise<BackupInfo[]> {
