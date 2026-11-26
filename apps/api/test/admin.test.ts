@@ -97,7 +97,7 @@ afterAll(async () => {
 
 async function call<T = unknown>(
   w: Who,
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   url: string,
   payload?: object,
   expectStatus = 200,
@@ -393,6 +393,40 @@ describe('backups', () => {
     await call('admin', 'DELETE', `/api/admin/backups/${name}`);
     expect(existsSync(join(dir, name))).toBe(false);
     await call('admin', 'DELETE', `/api/admin/backups/${name}`, undefined, 404);
+  });
+});
+
+describe('backup schedule', () => {
+  const weekly = {
+    frequency: 'weekly',
+    time: '04:15',
+    weekday: 0,
+    dayOfMonth: 1,
+    keepCount: 8,
+    keepDays: 60,
+  };
+
+  it('defaults until an admin saves one, then the backup service gets it in the folder', async () => {
+    const before = await call<BackupsResponse>('admin', 'GET', '/api/admin/backups');
+    expect(before.schedule).toMatchObject({ frequency: 'daily', keepCount: 14, keepDays: 0 });
+    await call('admin', 'PUT', '/api/admin/backups/schedule', weekly);
+    expect(JSON.parse(readFileSync(join(dir, '.config', 'schedule.json'), 'utf8'))).toEqual(weekly);
+    const after = await call<BackupsResponse>('admin', 'GET', '/api/admin/backups');
+    expect(after.schedule).toEqual(weekly);
+  });
+
+  it('rejects bad schedules and non-admins', async () => {
+    await call('admin', 'PUT', '/api/admin/backups/schedule', { ...weekly, time: '25:00' }, 400);
+    await call(
+      'admin',
+      'PUT',
+      '/api/admin/backups/schedule',
+      { ...weekly, frequency: 'yearly' },
+      400,
+    );
+    await call('admin', 'PUT', '/api/admin/backups/schedule', { ...weekly, dayOfMonth: 31 }, 400);
+    await call('admin', 'PUT', '/api/admin/backups/schedule', { ...weekly, keepDays: -1 }, 400);
+    await call('ana', 'PUT', '/api/admin/backups/schedule', weekly, 403);
   });
 });
 
