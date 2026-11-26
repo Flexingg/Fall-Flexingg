@@ -1,11 +1,10 @@
 import {
-  formatMetricValue,
   metricDef,
   SOLO_STATUS_LABELS,
   type ChallengeDetail,
   type SoloStatus,
 } from '@gauntlet/shared';
-import { dateRange, fmt, fmtSolo } from '../lib/format';
+import { dateRange, fmt, fmtNum, fmtSolo } from '../lib/format';
 
 const TONE: Record<SoloStatus, string> = {
   upcoming: 'plain',
@@ -53,7 +52,7 @@ export function soloSentence(c: ChallengeDetail): string {
       return `No ${label} data from the days before it started, so there is nothing to compare with yet.`;
     return s.status === 'ahead'
       ? 'You are beating your past self right now. Keep it up.'
-      : `${Math.max(s.remaining ?? 0, 0).toFixed(1)} points of improvement to go.`;
+      : `${fmtNum(Math.max(s.remaining ?? 0, 0), 1)} points of improvement to go.`;
   }
   return '';
 }
@@ -129,7 +128,7 @@ export function SoloCard({ c }: { c: ChallengeDetail }) {
         <small className="muted" style={{ lineHeight: 1.45 }}>
           Compared with your {c.metricLabel.replace(/ vs before$/, '').toLowerCase()} over the{' '}
           {s.baseline.days} days before ({dateRange(s.baseline.from, s.baseline.to)}):{' '}
-          {formatMetricValue(s.baseline.value, metricDef(c.metric))} a day.
+          {fmt(s.baseline.value, metricDef(c.metric))} a day.
         </small>
       )}
       <p style={{ fontSize: 14, lineHeight: 1.45 }}>{soloSentence(c)}</p>

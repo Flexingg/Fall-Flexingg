@@ -2,11 +2,12 @@ import { Link } from 'react-router';
 import { ChallengeHero, FeedList } from '../components/Feed';
 import { Icon } from '../components/Icon';
 import { Rings } from '../components/Rings';
-import { Avatar, Empty, ErrorBox, Screen, Skeleton } from '../components/ui';
+import { Avatar, Empty, ErrorBox, Screen } from '../components/ui';
+import { SkeletonCard, SkeletonLine, SkeletonList } from '../components/Skeleton';
 import { useAuth } from '../lib/auth';
 import { useSyncNow } from '../lib/freshness';
 import { isNative } from '../lib/platform';
-import { fmtInt, timeAgo } from '../lib/format';
+import { fmtInt, fmtQty, timeAgo, unitLabel } from '../lib/format';
 import { useChallenges, useFeed, useToday } from '../lib/queries';
 import { useUnreadCount } from '../lib/notifyQueries';
 import { useReviewList } from '../lib/reviewQueries';
@@ -69,7 +70,16 @@ export function TodayPage() {
       <ErrorBox error={today.error} />
       {today.data && !today.data.hasSources && <ConnectSourceHero />}
       {today.isPending ? (
-        <Skeleton height={142} />
+        <SkeletonCard>
+          <div className="row" style={{ gap: 16 }}>
+            <SkeletonLine width={110} height={110} style={{ borderRadius: '50%' }} />
+            <div className="grow stack" style={{ gap: 14 }}>
+              <SkeletonLine />
+              <SkeletonLine />
+              <SkeletonLine />
+            </div>
+          </div>
+        </SkeletonCard>
       ) : (
         <div className="card row" style={{ gap: 16 }}>
           <Rings values={[ring('steps'), ring('active_calories'), ring('active_minutes')]} />
@@ -139,9 +149,9 @@ export function TodayPage() {
                 {x.value == null
                   ? '–'
                   : x.key === 'distance'
-                    ? x.value.toFixed(1)
+                    ? fmtQty(x.value, x.unit, 1, false)
                     : fmtInt(x.value)}
-                {x.unit && x.value != null ? ` ${x.unit}` : ''}
+                {x.unit && x.value != null ? ` ${unitLabel(x.unit)}` : ''}
               </span>
             </div>
           ))}
@@ -150,7 +160,7 @@ export function TodayPage() {
         <>
           <ErrorBox error={feed.error} />
           {feed.isPending ? (
-            <Skeleton height={180} />
+            <SkeletonList rows={3} />
           ) : feed.data?.length ? (
             <FeedList events={feed.data} />
           ) : (

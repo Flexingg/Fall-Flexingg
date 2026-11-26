@@ -7,6 +7,7 @@ import {
   bestStepDay,
   buildRecapTotals,
   formatCompact,
+  formatPercent,
   isoWeekStart,
   previousIsoWeek,
   todayIn,
@@ -22,7 +23,9 @@ import {
   users,
 } from '../db/schema.js';
 import { listForUser } from './challenges.js';
+import { displayFor } from './display.js';
 import { notify } from './notify.js';
+import { recordBadge } from './records.js';
 
 const RECAP_METRICS = ['steps', 'distance', 'active_minutes', 'workouts', 'lift_volume'];
 /** Recaps go out on Monday morning, local time, once this hour has come. */
@@ -47,6 +50,7 @@ export async function buildRecap(
       ),
     );
   const totals = buildRecapTotals(rows, start);
+  const prefs = await displayFor(ctx, userId);
 
   const weekStartInstant = new Date(`${start}T00:00:00Z`);
   const weekEndInstant = new Date(`${addDays(end, 1)}T00:00:00Z`);
@@ -63,8 +67,10 @@ export async function buildRecap(
         ),
       )
   ).map((r) => {
-    const p = r.payload as { label?: string; badge?: string };
-    return [p.label ? `New ${p.label}` : 'New personal record', p.badge].filter(Boolean).join(': ');
+    const p = r.payload as { label?: string };
+    return [p.label ? `New ${p.label}` : 'New personal record', recordBadge(r.payload, prefs)]
+      .filter(Boolean)
+      .join(': ');
   });
 
   // Challenges that ended that week, and where they stand in the ones still running.
@@ -157,13 +163,14 @@ export async function sendWeeklyRecaps(ctx: AppContext): Promise<number> {
       .returning({ id: users.id });
     if (!claimed) continue;
 
+    const prefs = await displayFor(ctx, u.id);
     const recap = await buildRecap(ctx, u.id, week);
     if (!recap.hasData) continue;
     const t = (k: string) => recap.totals.find((x) => x.key === k)!;
     const steps = t('steps');
     const parts = [
       steps.value > 0
-        ? `${formatCompact(steps.value)} steps${steps.changePct != null ? ` (${steps.changePct >= 0 ? '+' : ''}${steps.changePct}%)` : ''}`
+        ? `${formatCompact(steps.value, 1, prefs)} steps${steps.changePct != null ? ` (${formatPercent(steps.changePct, prefs, 0, true)})` : ''}`
         : null,
       t('workouts').value > 0
         ? `${t('workouts').value} workout${t('workouts').value === 1 ? '' : 's'}`

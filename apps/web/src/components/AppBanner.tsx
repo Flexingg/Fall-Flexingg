@@ -10,6 +10,7 @@ import {
   isAndroidBrowser,
 } from '../lib/appUpdate';
 import { storage } from '../lib/storage';
+import { fmtNum } from '../lib/format';
 import { Icon } from './Icon';
 
 const DISMISS_KEY = 'gauntlet.appBanner.dismissed';
@@ -99,7 +100,7 @@ function Shell({
   );
 }
 
-const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
+const mb = (bytes: number) => `${fmtNum(bytes / 1048576, 1)} MB`;
 const about = (r: AndroidRelease) => `${r.version}${r.sizeBytes ? ` · ${mb(r.sizeBytes)}` : ''}`;
 
 function GetAppCard({ release, onLater }: { release: AndroidRelease; onLater: () => void }) {

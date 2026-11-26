@@ -1,6 +1,7 @@
 import { buildWidgetSnapshot } from '@gauntlet/shared';
 import { useEffect } from 'react';
 import { useAuth } from '../lib/auth';
+import { useDisplay } from '../lib/display';
 import { isNative } from '../lib/platform';
 import { useToday } from '../lib/queries';
 import { publishWidget } from '../lib/widget';
@@ -14,9 +15,10 @@ export function WidgetBridge() {
   const enabled = isNative && status === 'signedIn';
   const today = useToday(enabled);
   const data = today.data;
+  const display = useDisplay();
   useEffect(() => {
     if (!enabled || !data) return;
-    publishWidget(buildWidgetSnapshot(data, new Date())).catch(() => undefined);
-  }, [enabled, data]);
+    publishWidget(buildWidgetSnapshot(data, new Date(), display)).catch(() => undefined);
+  }, [enabled, data, display]);
   return null;
 }

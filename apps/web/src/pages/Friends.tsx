@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Avatar, Empty, ErrorBox, Header, Screen, Seg, Skeleton, toast } from '../components/ui';
+import { SkeletonList } from '../components/Skeleton';
 import { ApiError, del, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { timeAgo } from '../lib/format';
@@ -189,7 +190,7 @@ export function FriendsPage() {
       />
       <div style={{ height: 14 }} />
       <ErrorBox error={q.error ?? error} />
-      {q.isPending && <Skeleton height={300} />}
+      {q.isPending && <SkeletonList rows={5} />}
 
       {q.data &&
         tab === 'crew' &&

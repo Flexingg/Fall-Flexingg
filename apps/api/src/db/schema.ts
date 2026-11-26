@@ -62,6 +62,10 @@ export const users = pgTable('users', {
   lastRecapWeek: text('last_recap_week'),
   /** The last month (YYYY-MM) a "month in review" notification was sent for. */
   lastReviewMonth: text('last_review_month'),
+  /** How numbers are written for this person; null = not chosen yet (the app saves its device default). */
+  displayUnits: text('display_units', { enum: ['metric', 'imperial'] }),
+  displayClock: text('display_clock', { enum: ['12h', '24h'] }),
+  displayLocale: text('display_locale'),
   createdAt: createdAt(),
 });
 

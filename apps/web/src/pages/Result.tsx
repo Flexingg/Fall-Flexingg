@@ -6,7 +6,7 @@ import { SoloCard, soloSentence } from '../components/SoloCard';
 import { TeamLeaderboard } from '../components/TeamsView';
 import { ErrorBox, Header, Screen, Skeleton } from '../components/ui';
 import { post } from '../lib/api';
-import { fmt, shortName } from '../lib/format';
+import { fmt, shortName, unitLabel } from '../lib/format';
 import { useResult } from '../lib/queries';
 import { SeriesRecord, StakeResult } from '../components/Stake';
 
@@ -150,7 +150,7 @@ export function ResultPage() {
             <div className="pb" style={{ marginTop: 14, textAlign: 'left' }}>
               <div>
                 <b className="num">{fmt(r.me.bestDay, c, false)}</b>
-                <span>Best day{c.unit ? ` (${c.unit})` : ''}</span>
+                <span>Best day{c.unit ? ` (${unitLabel(c.unit)})` : ''}</span>
               </div>
               <div>
                 <b className="num">{r.me.daysWithData}</b>

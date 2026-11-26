@@ -2,7 +2,8 @@ import type { AppNotification, NotificationKind } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { Icon, type IconName } from '../components/Icon';
-import { Empty, ErrorBox, Header, Screen, Skeleton } from '../components/ui';
+import { Empty, ErrorBox, Header, Screen } from '../components/ui';
+import { SkeletonList } from '../components/Skeleton';
 import { post } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { notifyKeys, useNotifications, useUnreadCount } from '../lib/notifyQueries';
@@ -63,7 +64,7 @@ export function NotificationsPage() {
         </div>
       )}
       {list.isPending ? (
-        <Skeleton height={180} />
+        <SkeletonList rows={5} avatar={36} />
       ) : items.length ? (
         <div className="list">
           {items.map((n) => (

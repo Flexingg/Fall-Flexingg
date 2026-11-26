@@ -4,6 +4,7 @@
  * the phone), so both always agree.
  */
 import { addDays, listDates, weekday } from './dates.js';
+import { DEFAULT_DISPLAY, formatDistanceKm, formatInt, type DisplayPrefs } from './format.js';
 import {
   isBuiltinMetric,
   isCustomMetric,
@@ -213,8 +214,9 @@ export function buildOverview(opts: {
  */
 export function personalBests(
   rows: MetricRow[],
-  opts: { today: string; challengesWon?: number | null },
+  opts: { today: string; challengesWon?: number | null; display?: DisplayPrefs },
 ): { label: string; value: string }[] {
+  const display = opts.display ?? DEFAULT_DISPLAY;
   const max = (metric: string) => {
     const vals = rows.filter((r) => r.metric === metric).map((r) => r.value);
     return vals.length ? Math.max(...vals) : null;
@@ -246,14 +248,14 @@ export function personalBests(
           const n = rows
             .filter((r) => r.metric === 'workouts' && r.date >= from && r.date <= opts.today)
             .reduce((a, r) => a + r.value, 0);
-          return { label: 'Workouts, 30 days', value: String(Math.round(n)) };
+          return { label: 'Workouts, 30 days', value: formatInt(n, display) };
         })();
 
   return [
-    { label: 'Best distance day', value: distance != null ? `${distance.toFixed(1)} km` : '–' },
+    { label: 'Best distance day', value: formatDistanceKm(distance, display) },
     {
       label: 'Best step day',
-      value: steps != null ? Math.round(steps).toLocaleString('en-US') : '–',
+      value: formatInt(steps, display),
     },
     { label: '10k-step streak', value: `${streak} ${streak === 1 ? 'day' : 'days'}` },
     last,

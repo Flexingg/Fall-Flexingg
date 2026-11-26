@@ -22,6 +22,8 @@ import {
   type CreateChallengeRequest,
   type MetricKey,
   type ScoringMode,
+  fromDisplayUnit,
+  toDisplayUnit,
 } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { StakeField } from '../components/Stake';
@@ -31,7 +33,8 @@ import { Icon } from '../components/Icon';
 import { Avatar, ErrorBox, Header, Screen, Seg, Toggle, NoSourcesNote } from '../components/ui';
 import { post } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { dateRange } from '../lib/format';
+import { useDisplay } from '../lib/display';
+import { dateRange, unitLabel } from '../lib/format';
 import { timezone } from '../lib/platform';
 import { useCustomMetrics, useFriends, useLifts, useToday } from '../lib/queries';
 import { WeightGoalFields } from '../components/WeightGoal';
@@ -203,7 +206,12 @@ export function NewChallengePage() {
       : effScoring === 'race_to_goal'
         ? DEFAULT_GOALS[metric as MetricKey]
         : undefined;
-  const goalNum = solo && needsTarget ? 100 : goal.trim() ? Number(goal) : (suggested ?? null);
+  // Goals are typed in the person's own units (miles, pounds) and stored in metric.
+  const { units } = useDisplay();
+  const typedGoal = (): number => Number(fromDisplayUnit(Number(goal), unit, units).toFixed(3));
+  const goalNum = solo && needsTarget ? 100 : goal.trim() ? typedGoal() : (suggested ?? null);
+  const suggestedShown =
+    suggested != null ? +toDisplayUnit(suggested, unit, 0, units).value.toFixed(1) : null;
   const ruleProblem = solo
     ? kind === 'improve'
       ? null
@@ -545,11 +553,11 @@ export function NewChallengePage() {
                     inputMode="decimal"
                     value={goal}
                     onChange={(e) => setGoal(e.target.value.replace(/[^\d.]/g, ''))}
-                    placeholder={suggested != null ? String(suggested) : ''}
+                    placeholder={suggestedShown != null ? String(suggestedShown) : ''}
                     aria-label="Goal"
                   />
                   <span>
-                    {unit}
+                    {unitLabel(unit)}
                     {kind === 'target'
                       ? ' in total'
                       : kind === 'average'
@@ -594,11 +602,11 @@ export function NewChallengePage() {
                 inputMode="decimal"
                 value={goal}
                 onChange={(e) => setGoal(e.target.value.replace(/[^\d.]/g, ''))}
-                placeholder={suggested != null ? String(suggested) : 'None'}
+                placeholder={suggestedShown != null ? String(suggestedShown) : 'None'}
                 aria-label="Goal"
               />
               <span>
-                {unit}
+                {unitLabel(unit)}
                 {scoring === 'race_to_goal'
                   ? ' · first to reach it wins'
                   : scoring === 'streak'

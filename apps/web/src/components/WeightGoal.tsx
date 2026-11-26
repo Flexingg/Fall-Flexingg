@@ -1,5 +1,6 @@
-import type { WeightGoalParams } from '@gauntlet/shared';
+import { fromDisplayUnit, toDisplayUnit, type WeightGoalParams } from '@gauntlet/shared';
 import { useState } from 'react';
+import { useDisplay } from '../lib/display';
 import { Seg } from './ui';
 
 /**
@@ -19,12 +20,24 @@ export function WeightGoalFields({
   const [targetType, setTargetType] = useState<WeightGoalParams['targetType']>(
     value?.targetType ?? 'percent',
   );
-  const [target, setTarget] = useState(value ? String(value.target) : '');
+  const { units } = useDisplay();
+  const kgLabel = toDisplayUnit(1, 'kg', 1, units).unit;
+  // Typed in the person's own unit (lb for imperial); the target is kept in kilograms.
+  const [target, setTarget] = useState(
+    value
+      ? String(
+          value.targetType === 'kg'
+            ? +toDisplayUnit(value.target, 'kg', 1, units).value.toFixed(1)
+            : value.target,
+        )
+      : '',
+  );
 
   function emit(next: Partial<{ direction: string; targetType: string; target: string }>) {
     const d = (next.direction ?? direction) as WeightGoalParams['direction'];
     const t = (next.targetType ?? targetType) as WeightGoalParams['targetType'];
-    const n = Number(next.target ?? target);
+    const typed = Number(next.target ?? target);
+    const n = t === 'kg' ? Number(fromDisplayUnit(typed, 'kg', units).toFixed(2)) : typed;
     onChange(n > 0 ? { direction: d, targetType: t, target: n } : null);
   }
 
@@ -52,10 +65,10 @@ export function WeightGoalFields({
               setTarget(v);
               emit({ target: v });
             }}
-            placeholder={targetType === 'percent' ? '5' : '4'}
+            placeholder={targetType === 'percent' ? '5' : units === 'imperial' ? '9' : '4'}
             aria-label="My target"
           />
-          <span>{targetType === 'percent' ? '% of my weight' : 'kg'}</span>
+          <span>{targetType === 'percent' ? '% of my weight' : kgLabel}</span>
         </label>
         <Seg
           label="Target unit"
@@ -66,7 +79,7 @@ export function WeightGoalFields({
           }}
           options={[
             { value: 'percent', label: '%' },
-            { value: 'kg', label: 'kg' },
+            { value: 'kg', label: kgLabel },
           ]}
         />
       </div>

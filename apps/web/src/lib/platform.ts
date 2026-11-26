@@ -14,3 +14,5 @@ export const DIRECT_AVAILABLE = isNative || import.meta.env.VITE_ALLOW_DIRECT_IN
 export const DEFAULT_SPARKY_URL = (import.meta.env.VITE_SPARKY_URL ?? '').replace(/\/+$/, '');
 /** The Gauntlet server the Android app uses unless someone picks another one. */
 export const DEFAULT_SERVER_URL = API_BASE;
+/** The device's own locale (for first guesses at units, clock and number format). */
+export const deviceLocale = (typeof navigator !== 'undefined' && navigator.language) || 'en-US';

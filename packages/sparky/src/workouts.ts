@@ -5,7 +5,11 @@
  * strength entries from one app on one day are one session, each entry an exercise in it.
  */
 import {
+  DEFAULT_DISPLAY,
   epley1rm,
+  formatFlexible,
+  formatQuantityFlexible,
+  type DisplayPrefs,
   type WorkoutDetail,
   type WorkoutExercise,
   type WorkoutSet,
@@ -28,8 +32,8 @@ const num = (v: unknown): number | null => {
 const day = (v: string | null | undefined) =>
   v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null;
 const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
-const nf = (n: number, digits = 0) =>
-  n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+/** The reader's units and number format; metric / en-US when not given. */
+export type Display = Pick<DisplayPrefs, 'units' | 'locale'>;
 const isWarmup = (s: ExerciseSetRow) => /warm/i.test(s.set_type ?? '');
 
 /** A workout with its detail, before the API says whose it is. */
@@ -77,9 +81,11 @@ function line(parts: (string | null)[]): string {
 /** Every workout in the entries, newest first, each with its detail. */
 export function buildWorkouts(
   entries: ExerciseEntryRow[],
-  opts: { start?: string; end?: string } = {},
+  opts: { start?: string; end?: string; display?: Display } = {},
 ): WorkoutFull[] {
   const keys = entryKeys(entries);
+  const d = opts.display ?? DEFAULT_DISPLAY;
+  const nf = (n: number, digits = 0) => formatFlexible(n, d, digits);
   const inWindow = (d: string) => (!opts.start || d >= opts.start) && (!opts.end || d <= opts.end);
   const out: WorkoutFull[] = [];
 
@@ -105,7 +111,7 @@ export function buildWorkouts(
         volumeKg: null,
         summary: line([
           `${nf(w.minutes)} min`,
-          km != null && km > 0 ? `${nf(km, 1)} km` : null,
+          km != null && km > 0 ? formatQuantityFlexible(km, 'km', 1, d) : null,
           w.kcal > 0 ? `${nf(w.kcal)} kcal` : null,
         ]),
         avgHeartRate: hr != null && hr > 0 ? Math.round(hr) : null,
@@ -154,7 +160,7 @@ export function buildWorkouts(
       volumeKg: volume > 0 ? volume : null,
       summary: line([
         `${working} ${working === 1 ? 'set' : 'sets'}`,
-        volume > 0 ? `${nf(volume)} kg volume` : null,
+        volume > 0 ? `${formatQuantityFlexible(volume, 'kg', 0, d)} volume` : null,
         minutes > 0 ? `${nf(minutes)} min` : null,
       ]),
       avgHeartRate: hr != null ? Math.round(hr) : null,

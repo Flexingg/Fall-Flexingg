@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -32,6 +33,7 @@ import {
   session,
   type Mode,
 } from './session';
+import { applyAccountSettings } from './display';
 import { storage } from './storage';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
@@ -73,6 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<Mode | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const qc = useQueryClient();
+
+  // Units, clock and number format follow the account as soon as it is known.
+  useLayoutEffect(() => applyAccountSettings(user?.settings), [user?.settings]);
 
   useEffect(() => {
     let cancelled = false;

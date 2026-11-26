@@ -31,6 +31,7 @@ import {
   users,
 } from '../db/schema.js';
 import { notify } from './notify.js';
+import { displayFor } from './display.js';
 import { describeRecord } from './records.js';
 import { localClock, RECAP_HOUR } from './recap.js';
 import { getUser, getUsers } from './users.js';
@@ -60,6 +61,7 @@ export async function buildReview(
     rows.filter((r) => r.date >= period.start && r.value > 0).map((r) => r.date),
   ).size;
 
+  const prefs = await displayFor(ctx, userId);
   const recordRows = await ctx.db
     .select()
     .from(personalRecords)
@@ -71,7 +73,7 @@ export async function buildReview(
     );
   const records = recordRows
     .flatMap((r) => {
-      const d = describeRecord(r.key, r.value);
+      const d = describeRecord(r.key, r.value, prefs);
       return d ? [{ ...d, date: r.date, order: r.key.startsWith('lift') ? 0 : 1 }] : [];
     })
     .sort((a, b) => a.order - b.order || a.date.localeCompare(b.date))

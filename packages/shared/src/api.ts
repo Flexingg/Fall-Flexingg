@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { isDateString } from './dates.js';
+import type { ClockFormat, UnitSystem } from './format.js';
 import { isMetricKey, type MetricAggregate, type MetricGroup, type MetricKey } from './metrics.js';
 import { isTrendMetric } from './derive.js';
 import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
@@ -99,6 +100,11 @@ export interface UserSettings {
   healthConnectSync: boolean;
   /** Show my trophies, milestones and all-time stats to people who can see my profile. */
   shareProfileStats: boolean;
+  /** How values are written: null until the person (or their device) picks; see format.ts. */
+  units: UnitSystem | null;
+  clock: ClockFormat | null;
+  /** Number format (digit grouping, decimal mark) as a locale tag such as "de-DE". */
+  locale: string | null;
 }
 
 export const updateMeSchema = z.object({
@@ -110,6 +116,9 @@ export const updateMeSchema = z.object({
       shareEvents: z.boolean().optional(),
       shareProfileStats: z.boolean().optional(),
       healthConnectSync: z.boolean().optional(),
+      units: z.enum(['metric', 'imperial']).optional(),
+      clock: z.enum(['12h', '24h']).optional(),
+      locale: z.string().min(2).max(35).optional(),
     })
     .optional(),
   visibility: z.enum(['private', 'public']).optional(),

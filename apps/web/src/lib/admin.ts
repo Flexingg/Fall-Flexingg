@@ -2,6 +2,7 @@
 import type { AdminOverview, BackupJob, BackupsResponse } from '@gauntlet/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, authHeader, get, getApiBase } from './api';
+import { fmtDateTime, fmtNum } from './format';
 
 export const adminKeys = {
   overview: ['admin', 'overview'] as const,
@@ -70,7 +71,7 @@ export function formatBytes(n: number | null | undefined): string {
     v /= 1024;
     i++;
   }
-  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+  return `${fmtNum(v, v < 10 ? 1 : 0)} ${units[i]}`;
 }
 
 export function formatUptime(seconds: number): string {
@@ -84,10 +85,5 @@ export function formatUptime(seconds: number): string {
 
 export function when(iso: string | null | undefined): string {
   if (!iso) return 'never';
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return fmtDateTime(iso);
 }

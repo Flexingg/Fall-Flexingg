@@ -4,6 +4,7 @@ import { Connections } from '../components/Connections';
 import { Icon } from '../components/Icon';
 import { ErrorBox, Header, Screen, Skeleton, toast, Toggle } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { fmtInt } from '../lib/format';
 import {
   healthAvailable,
   openHealthSettings,
@@ -97,7 +98,7 @@ export function SourcesPage() {
               </div>
               <div className="grow">
                 <div className="t">{p.label}</div>
-                <small>{p.records.toLocaleString('en-US')} records</small>
+                <small>{fmtInt(p.records)} records</small>
               </div>
               <i className="dot" aria-label="Connected" />
             </div>

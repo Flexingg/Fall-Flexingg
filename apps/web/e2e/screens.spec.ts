@@ -16,6 +16,19 @@ async function signIn(page: Page, email = 'you@example.com') {
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 }
 
+// People in a US locale get miles and pounds by default; these tests were written in metric, so each
+// browser starts with that choice (unless a test has already picked something else).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem('gauntlet.display'))
+        localStorage.setItem('gauntlet.display', JSON.stringify({ units: 'metric' }));
+    } catch {
+      /* storage blocked */
+    }
+  });
+});
+
 // When a test fails, keep a picture and the on-screen error text: CI only uploads the screenshots folder.
 test.afterEach(async ({ page }, info) => {
   if (info.status === info.expectedStatus) return;
@@ -1299,4 +1312,122 @@ test('the invite QR sheet shows a code and the link', async ({ page }) => {
   await expect(
     page.getByRole('dialog', { name: 'Invite QR code' }).locator('canvas'),
   ).toBeVisible();
+});
+
+test('units and clock: imperial and 24-hour show up on the screens, and survive a reload', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/me');
+  await page.getByRole('button', { name: 'Imperial (mi, lb)' }).click();
+  await page.getByRole('button', { name: '24-hour' }).click();
+  await expect(page.getByTestId('display-preview')).toContainText('mi');
+  await expect(page.getByTestId('display-preview')).toContainText('lb');
+  await expect(page.getByTestId('display-preview')).toContainText('19:05');
+  await snap(page, '85-settings-units');
+
+  // A distance challenge reads in miles now.
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  await expect(page.getByLabel('Top three')).toBeVisible();
+  await expect(
+    page
+      .locator('.v.num')
+      .filter({ hasText: /\bmi\b/ })
+      .first(),
+  ).toBeVisible();
+  await expect(page.locator('.v.num').filter({ hasText: /\bkm\b/ })).toHaveCount(0);
+  await snap(page, '86-challenge-miles');
+
+  // Weights in pounds and the start time on a 24-hour clock.
+  await page.goto('/trends');
+  await page.getByLabel('Metric').selectOption('lift_volume');
+  await page
+    .getByLabel('Recent workouts')
+    .getByRole('link', { name: /Strength workout · 2 exercises/ })
+    .first()
+    .click();
+  await expect(page.getByRole('region', { name: 'Squat' })).toBeVisible();
+  await expect(page.getByText(/\blb\b/).first()).toBeVisible();
+  await expect(page.getByText(/\bkg\b/)).toHaveCount(0);
+  await snap(page, '87-workout-pounds');
+
+  // A run's start time is on the 24-hour clock ("at 23:30"), distance in miles.
+  await page.goto('/trends');
+  await page.getByLabel('Metric').selectOption('workouts');
+  await page
+    .getByLabel('Recent workouts')
+    .getByRole('link', { name: /Running/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: 'Running' })).toBeVisible();
+  await expect(page.getByText(/ at \d{2}:\d{2}$/)).toBeVisible();
+  await expect(page.getByText('mi', { exact: true })).toBeVisible();
+
+  // The choice is saved on the account, not just in this tab.
+  await page.reload();
+  await page.goto('/me');
+  await expect(page.getByRole('button', { name: 'Imperial (mi, lb)' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: '24-hour' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  // Put it back, so the other tests that share this account still read in kilometres.
+  await page.getByRole('button', { name: 'Metric (km, kg)' }).click();
+  await page.getByRole('button', { name: '12-hour' }).click();
+  await expect(page.getByTestId('display-preview')).toContainText('km');
+});
+
+// The installed web app's service worker would answer these requests itself, past the delay below.
+test.describe('loading placeholders', () => {
+  test.use({ serviceWorkers: 'block' });
+
+  test('a skeleton shows while a slow request is pending, but not over cached data', async ({
+    page,
+  }) => {
+    await signIn(page);
+    let slow = true;
+    await page.route(/\/api\/friends(\?.*)?$/, async (route) => {
+      if (slow) await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await page.getByRole('link', { name: 'Friends' }).click();
+    const loading = page.getByRole('status', { name: 'Loading' });
+    await expect(loading.first()).toBeVisible();
+    await expect(loading.first()).toHaveAttribute('aria-busy', 'true');
+    // (a plain screenshot, not snap(): snap waits for the network to go quiet, which ends the skeleton)
+    if (shots) await page.screenshot({ path: `${shots}/88-skeleton-friends.png` });
+    await expect(page.getByText('Maya Rodriguez')).toBeVisible();
+    await expect(loading).toHaveCount(0);
+
+    // Back again with the data cached: a refresh happens quietly, with no skeleton.
+    await page.getByRole('link', { name: 'Today' }).click();
+    await page.getByRole('link', { name: 'Friends' }).click();
+    await expect(page.getByText('Maya Rodriguez')).toBeVisible();
+    await expect(loading).toHaveCount(0);
+
+    // Reduced motion: the same placeholder, held still.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    slow = true;
+    await page.route(/\/api\/notifications(\?.*)?$/, async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    // Open it from inside the app: after a full reload the service worker, not this route, answers.
+    await page.evaluate(() => {
+      history.pushState({}, '', '/notifications');
+      dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await expect(loading.first()).toBeVisible();
+    const anim = await page.evaluate(() => {
+      const el = document.querySelector('.sk-bar, .sk-circle');
+      return el ? getComputedStyle(el).animationName : 'missing';
+    });
+    expect(anim).toBe('none');
+    if (shots) await page.screenshot({ path: `${shots}/89-skeleton-reduced-motion.png` });
+  });
 });
