@@ -1,4 +1,5 @@
 import type { ChallengeDetail, StandingRow } from '@gauntlet/shared';
+import { Link } from 'react-router';
 import { fmt, shortName } from '../lib/format';
 import { Avatar } from './ui';
 
@@ -56,7 +57,12 @@ export function StandingsList({
             ? Math.min((s.score ?? 0) / top, 1)
             : 0;
         return (
-          <div key={s.user.id} className={`item${s.isMe ? ' me' : ''}`}>
+          <Link
+            key={s.user.id}
+            to={`/u/${s.user.id}`}
+            className={`item${s.isMe ? ' me' : ''}`}
+            aria-label={`${s.isMe ? 'You' : s.user.displayName}, profile`}
+          >
             <span className="num" style={{ width: 18, color: 'var(--dim)', fontWeight: 800 }}>
               {s.score == null ? '–' : s.rank}
             </span>
@@ -73,7 +79,7 @@ export function StandingsList({
               )}
               {s.reachedGoalOn && <small style={{ color: 'var(--volt)' }}>Finished</small>}
             </div>
-          </div>
+          </Link>
         );
       })}
     </div>

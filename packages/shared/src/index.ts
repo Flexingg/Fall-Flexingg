@@ -6,3 +6,4 @@ export * from './derive.js';
 export * from './names.js';
 export * from './solo.js';
 export * from './wallpaper.js';
+export * from './profile.js';

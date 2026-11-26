@@ -93,6 +93,8 @@ export interface UserSettings {
   /** Show my workouts to the other people in challenges that have Show Events on. */
   shareEvents: boolean;
   healthConnectSync: boolean;
+  /** Show my trophies, milestones and all-time stats to people who can see my profile. */
+  shareProfileStats: boolean;
 }
 
 export const updateMeSchema = z.object({
@@ -102,6 +104,7 @@ export const updateMeSchema = z.object({
     .object({
       shareWorkoutDetails: z.boolean().optional(),
       shareEvents: z.boolean().optional(),
+      shareProfileStats: z.boolean().optional(),
       healthConnectSync: z.boolean().optional(),
     })
     .optional(),

@@ -1,4 +1,5 @@
 import type {
+  ProfileResponse,
   AndroidRelease,
   ChallengeDetail,
   ChallengeEventsResponse,
@@ -41,6 +42,8 @@ export const keys = {
   lifts: ['lifts'] as const,
   fast: ['fast'] as const,
   androidRelease: ['android-release'] as const,
+  profiles: ['profile'] as const,
+  profile: (id: string) => ['profile', id] as const,
   wallpaper: ['wallpaper'] as const,
 };
 
@@ -197,4 +200,13 @@ export const useFast = (enabled: boolean) =>
     queryFn: () => get<FastStatus>('/api/me/fast'),
     enabled: enabled && !session.direct,
     refetchInterval: 60_000,
+  });
+
+/** Someone's profile, or your own (needs a Gauntlet server). */
+export const useProfile = (id: string) =>
+  useQuery({
+    queryKey: keys.profile(id),
+    enabled: !!id,
+    retry: (count, err) => !(err instanceof ApiError && err.status === 404) && count < 2,
+    queryFn: () => get<ProfileResponse>(`/api/users/${encodeURIComponent(id)}/profile`),
   });

@@ -177,7 +177,13 @@ export class DirectBackend {
   async settings(): Promise<UserSettings> {
     const raw = await this.o.kv.get(SETTINGS_KEY);
     const saved = raw ? (JSON.parse(raw) as Partial<UserSettings>) : {};
-    return { shareWorkoutDetails: true, shareEvents: true, healthConnectSync: false, ...saved };
+    return {
+      shareWorkoutDetails: true,
+      shareEvents: true,
+      healthConnectSync: false,
+      shareProfileStats: false,
+      ...saved,
+    };
   }
 
   async updateSettings(patch: Partial<UserSettings>): Promise<MeUser> {

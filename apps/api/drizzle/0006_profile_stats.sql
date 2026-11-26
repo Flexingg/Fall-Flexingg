@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "share_profile_stats" boolean DEFAULT false NOT NULL;

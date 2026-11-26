@@ -1,6 +1,7 @@
 import { ordinal, type Invite } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Avatar, Empty, ErrorBox, Header, Screen, Seg, Skeleton, toast } from '../components/ui';
 import { ApiError, del, post } from '../lib/api';
@@ -130,16 +131,18 @@ export function FriendsPage() {
               )}
               {search.data?.map((p) => (
                 <div key={p.id} className="item">
-                  <Avatar user={p} size={42} />
-                  <div className="grow">
-                    <div className="t">{p.displayName}</div>
-                    <small className="ellipsis">
-                      {p.handle ? `@${p.handle} · ` : ''}
-                      {p.challenges.played
-                        ? `${p.challenges.won} won of ${p.challenges.played}`
-                        : 'No finished challenges yet'}
-                    </small>
-                  </div>
+                  <Link to={`/u/${p.id}`} className="row grow" style={{ gap: 12, minWidth: 0 }}>
+                    <Avatar user={p} size={42} />
+                    <div className="grow">
+                      <div className="t">{p.displayName}</div>
+                      <small className="ellipsis">
+                        {p.handle ? `@${p.handle} · ` : ''}
+                        {p.challenges.played
+                          ? `${p.challenges.won} won of ${p.challenges.played}`
+                          : 'No finished challenges yet'}
+                      </small>
+                    </div>
+                  </Link>
                   {p.friendship === 'none' || p.friendship === 'incoming' ? (
                     <button
                       type="button"
@@ -182,7 +185,7 @@ export function FriendsPage() {
         (q.data.friends.length ? (
           <div className="list">
             {q.data.friends.map((f) => (
-              <div key={f.id} className="item">
+              <Link key={f.id} to={`/u/${f.id}`} className="item">
                 <Avatar user={f} size={42} />
                 <div className="grow">
                   <div className="t">{f.displayName}</div>
@@ -195,7 +198,8 @@ export function FriendsPage() {
                   className={`dot${f.online ? '' : ' off'}`}
                   aria-label={f.online ? 'Recently active' : 'Inactive'}
                 />
-              </div>
+                <Icon name="chevron" size={16} />
+              </Link>
             ))}
           </div>
         ) : (
@@ -211,11 +215,13 @@ export function FriendsPage() {
           {incoming.length === 0 && outgoing.length === 0 && <Empty title="No requests" />}
           {incoming.map((r) => (
             <div key={r.id} className="item">
-              <Avatar user={r.user} size={42} />
-              <div className="grow">
-                <div className="t">{r.user.displayName}</div>
-                <small>Wants to be friends</small>
-              </div>
+              <Link to={`/u/${r.user.id}`} className="row grow" style={{ gap: 12, minWidth: 0 }}>
+                <Avatar user={r.user} size={42} />
+                <div className="grow">
+                  <div className="t">{r.user.displayName}</div>
+                  <small>Wants to be friends</small>
+                </div>
+              </Link>
               <button className="btn sm" onClick={() => respond(r.user.id, true)}>
                 Accept
               </button>
@@ -230,11 +236,13 @@ export function FriendsPage() {
           ))}
           {outgoing.map((r) => (
             <div key={r.id} className="item">
-              <Avatar user={r.user} size={42} />
-              <div className="grow">
-                <div className="t">{r.user.displayName}</div>
-                <small>Request sent</small>
-              </div>
+              <Link to={`/u/${r.user.id}`} className="row grow" style={{ gap: 12, minWidth: 0 }}>
+                <Avatar user={r.user} size={42} />
+                <div className="grow">
+                  <div className="t">{r.user.displayName}</div>
+                  <small>Request sent</small>
+                </div>
+              </Link>
               <button className="btn sm secondary" onClick={() => respond(r.user.id, false)}>
                 Cancel
               </button>

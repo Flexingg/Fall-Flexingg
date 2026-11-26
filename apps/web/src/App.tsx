@@ -18,6 +18,7 @@ import { JoinPage } from './pages/Join';
 import { LoginPage } from './pages/Login';
 import { MePage } from './pages/Me';
 import { OAuthReturnPage } from './pages/OAuthReturn';
+import { ProfilePage } from './pages/Profile';
 import { NewChallengePage } from './pages/NewChallenge';
 import { ResultPage } from './pages/Result';
 import { SignupPage } from './pages/Signup';
@@ -211,6 +212,16 @@ export function App() {
               <Private>
                 <NeedsServer what="Friends">
                   <FriendsPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/u/:id"
+            element={
+              <Private>
+                <NeedsServer what="Profiles">
+                  <ProfilePage />
                 </NeedsServer>
               </Private>
             }

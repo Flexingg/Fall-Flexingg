@@ -1147,3 +1147,109 @@ svg {
   padding: 6px;
   margin-right: -6px;
 }
+
+/* ---------- Profile (pages/Profile.tsx) ---------- */
+.profile-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.profile-name {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.profile-head .btn.sm {
+  flex: none;
+  white-space: nowrap;
+}
+.pb.pb3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.medals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.medal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  border-radius: var(--radius);
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  color: var(--medal);
+}
+.medal b {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--text);
+}
+.medal span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.gold {
+  --medal: #f5c542;
+}
+.silver {
+  --medal: #c4c8d0;
+}
+.bronze {
+  --medal: #d08a4f;
+}
+.medal-dot {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 14px;
+  background: var(--medal);
+  color: #111;
+}
+.milestones {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.milestone {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px dashed var(--line-2);
+  color: var(--muted);
+}
+.milestone b {
+  font-size: 14px;
+  font-weight: 800;
+}
+.milestone.done {
+  border: 1px solid var(--volt);
+  background: var(--volt-wash);
+  color: var(--volt);
+}
+.milestone.done b {
+  color: var(--text);
+}
+.milestone-bar {
+  height: 4px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+.milestone-bar i {
+  display: block;
+  height: 100%;
+  background: var(--volt);
+}
