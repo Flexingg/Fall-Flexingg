@@ -10,7 +10,11 @@ const apkV2 = Buffer.from('PK\x03\x04 version two, a bit longer');
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
 /** A stand-in for api.github.com serving one release; records what was asked for. */
-function fakeGithub(tag: string, apk: Buffer, opts: { sum?: string; status?: number } = {}) {
+function fakeGithub(
+  tag: string,
+  apk: Buffer,
+  opts: { sum?: string; status?: number; wearFirst?: boolean } = {},
+) {
   const calls: { url: string; headers: Record<string, string> }[] = [];
   const fetchFn = (async (url: string, init?: RequestInit) => {
     calls.push({ url, headers: (init?.headers ?? {}) as Record<string, string> });
@@ -22,6 +26,22 @@ function fakeGithub(tag: string, apk: Buffer, opts: { sum?: string; status?: num
         draft: false,
         prerelease: false,
         assets: [
+          ...(opts.wearFirst
+            ? [
+                {
+                  id: 8,
+                  name: `gauntlet-wear-${tag}.apk`,
+                  size: 5,
+                  url: 'https://gh.test/assets/8',
+                },
+                {
+                  id: 9,
+                  name: `gauntlet-wear-${tag}.apk.sha256`,
+                  size: 80,
+                  url: 'https://gh.test/assets/9',
+                },
+              ]
+            : []),
           { id: 1, name: `gauntlet-${tag}.aab`, size: 9, url: 'https://gh.test/assets/1' },
           { id: 2, name: `gauntlet-${tag}.apk`, size: apk.length, url: 'https://gh.test/assets/2' },
           { id: 3, name: `gauntlet-${tag}.apk.sha256`, size: 80, url: 'https://gh.test/assets/3' },
@@ -37,6 +57,15 @@ function fakeGithub(tag: string, apk: Buffer, opts: { sum?: string; status?: num
 }
 
 describe('GitHub release mirror', () => {
+  it('ignores the Wear OS APK even when it is listed first', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gauntlet-gh-'));
+    const gh = fakeGithub('v1.0.0', apkV1, { wearFirst: true });
+    const res = await mirrorLatestRelease({ repo: 'me/app', dir, fetch: gh.fetchFn });
+    expect(res.status).toBe('updated');
+    expect(readFileSync(join(dir, 'gauntlet-latest.apk')).equals(apkV1)).toBe(true);
+    expect(gh.calls.some((c) => c.url.endsWith('/assets/8'))).toBe(false);
+  });
+
   it('downloads the APK, checks its checksum and writes latest.json', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gauntlet-gh-'));
     const gh = fakeGithub('v1.0.0', apkV1);

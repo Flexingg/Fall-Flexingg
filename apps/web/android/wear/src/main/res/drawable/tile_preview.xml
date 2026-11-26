@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown in the watch's tile picker. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#0c0c0d"
+        android:pathData="M50,50m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M50,50m-38,0a38,38 0,1 1,76 0a38,38 0,1 1,-76 0"
+        android:strokeColor="#26262a"
+        android:strokeWidth="8" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M50,12A38,38 0,1 1,12,50"
+        android:strokeColor="#c6ff00"
+        android:strokeLineCap="round"
+        android:strokeWidth="8" />
+</vector>

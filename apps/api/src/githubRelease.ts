@@ -66,7 +66,11 @@ export async function mirrorLatestRelease(opts: GithubReleaseOptions): Promise<M
   const rel = (await res.json()) as GhRelease;
   const tag = rel.tag_name;
   if (!TAG_RE.test(tag)) throw new Error(`Release tag "${tag}" can't be used as a file name`);
-  const apk = rel.assets.find((a) => a.name.endsWith('.apk'));
+  // The phone APK: gauntlet-<tag>.apk if present, else any .apk that isn't the Wear OS one.
+  const phoneApks = rel.assets.filter(
+    (a) => a.name.endsWith('.apk') && !a.name.startsWith('gauntlet-wear-'),
+  );
+  const apk = phoneApks.find((a) => a.name === `gauntlet-${tag}.apk`) ?? phoneApks[0];
   if (!apk) return { status: 'no_apk' };
 
   const file = `gauntlet-${tag}.apk`;

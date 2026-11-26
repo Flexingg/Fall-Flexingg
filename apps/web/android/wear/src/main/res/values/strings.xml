@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gauntlet</string>
+    <string name="tile_label">Gauntlet today</string>
+    <string name="open_on_phone">Open Gauntlet on your phone</string>
+</resources>
