@@ -31,11 +31,13 @@ import {
 } from '@gauntlet/shared';
 import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import type { AppContext } from '../context.js';
 import { badRequest, forbidden, notFound } from '../context.js';
 import { challengeParticipants, challenges, feedEvents } from '../db/schema.js';
+import { chooseTeam, cloneTeams, getTeams, insertTeams } from '../services/teams.js';
 import {
   assertCanView,
   challengeStatus,
@@ -142,6 +144,8 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       // Weight challenges against yourself aim at 100% of your own target.
       if (metricDef(metric).transform === 'weight_goal') goal = 100;
     }
+    if (body.solo && (body.teams || body.recurrence))
+      throw badRequest('A solo challenge is just for you: no teams, and it does not repeat.');
     const problem = validateRules({ scoring, aggregate, goal });
     if (problem) throw badRequest(problem);
     const params = checkParams(metric, body.params);
@@ -158,10 +162,17 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     if (notFriends.length)
       throw badRequest('You can only invite friends. Share the challenge link with anyone else.');
 
+    // A recurring challenge is the first round of its own series.
+    const newId = randomUUID();
     const id = await ctx.db.transaction(async (tx) => {
+      const txCtx: AppContext = { ...ctx, db: tx as unknown as AppContext['db'] };
       const [ch] = await tx
         .insert(challenges)
         .values({
+          id: newId,
+          teamScoring: body.teams?.scoring ?? null,
+          recurrence: body.recurrence ?? null,
+          ...(body.recurrence ? { seriesId: newId, seriesRound: 1 } : {}),
           name: body.name,
           metric,
           customLabel: custom?.label ?? null,
@@ -179,8 +190,16 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           showEvents: body.showEvents,
         })
         .returning({ id: challenges.id });
+      const teamRows = body.teams ? await insertTeams(txCtx, ch!.id, body.teams.teams) : [];
+      const myTeamId = teamRows[body.teams?.myTeam ?? 0]?.id ?? null;
       await tx.insert(challengeParticipants).values([
-        { challengeId: ch!.id, userId: req.userId, state: 'joined' as const, params },
+        {
+          challengeId: ch!.id,
+          userId: req.userId,
+          state: 'joined' as const,
+          params,
+          teamId: myTeamId,
+        },
         ...invitees.map((userId) => ({
           challengeId: ch!.id,
           userId,
@@ -235,7 +254,16 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     const mine = parts.find((p) => p.userId === req.userId);
     if (ch.visibility !== 'public' && !mine) throw notFound('Challenge not found');
     if (challengeStatus(ctx, ch) === 'completed') throw badRequest('That challenge is over');
-    if (mine?.state === 'joined' && !body.params) return loadDetail(ctx, ch.id, req.userId);
+    if (mine?.state === 'joined' && !body.params && !body.teamId)
+      return loadDetail(ctx, ch.id, req.userId);
+    const teamId = ch.teamScoring
+      ? chooseTeam({
+          teams: await getTeams(ctx, ch.id),
+          started: challengeStatus(ctx, ch) !== 'upcoming',
+          mine,
+          wanted: body.teamId,
+        })
+      : null;
     const params = checkParams(ch.metric, body.params ?? (mine ? paramsOf(mine) : undefined));
     if (!mine) {
       const me = await getUser(ctx, req.userId);
@@ -249,10 +277,10 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     await ctx.db
       .insert(challengeParticipants)
-      .values({ challengeId: ch.id, userId: req.userId, state: 'joined', params })
+      .values({ challengeId: ch.id, userId: req.userId, state: 'joined', params, teamId })
       .onConflictDoUpdate({
         target: [challengeParticipants.challengeId, challengeParticipants.userId],
-        set: { state: 'joined', params },
+        set: { state: 'joined', params, teamId },
       });
     if (mine?.state !== 'joined')
       await ctx.db
@@ -274,6 +302,10 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     const ch = await getChallenge(ctx, uuid(req.params.id));
     if (ch.createdBy !== req.userId) throw forbidden('Only the creator can change a challenge');
     if (ch.finalizedAt) throw badRequest('That challenge is over');
+    if (ch.solo && (body.visibility === 'public' || body.recurrence))
+      throw badRequest(
+        'A solo challenge is just for you, so it stays private and does not repeat.',
+      );
     if (ch.solo && body.visibility === 'public')
       throw badRequest('A solo challenge is just for you, so it stays private.');
     if (body.visibility === 'public' && ch.visibility !== 'public') {
@@ -290,6 +322,9 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         // A challenge that leaves Discover can't stay pinned there.
         ...(visibility === 'private' ? { featured: false } : {}),
         ...(body.showEvents != null ? { showEvents: body.showEvents } : {}),
+        // null stops repeating; a challenge that starts repeating becomes round 1 of a series.
+        ...(body.recurrence !== undefined ? { recurrence: body.recurrence } : {}),
+        ...(body.recurrence && !ch.seriesId ? { seriesId: ch.id, seriesRound: 1 } : {}),
       })
       .where(eq(challenges.id, ch.id));
     return loadDetail(ctx, ch.id, req.userId);
@@ -411,16 +446,25 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
   );
 
   app.post<{ Params: { id: string } }>('/api/challenges/:id/respond', auth, async (req) => {
-    const { accept, params: given } = respondChallengeSchema.parse(req.body);
+    const { accept, params: given, teamId: wantedTeam } = respondChallengeSchema.parse(req.body);
     const ch = await getChallenge(ctx, uuid(req.params.id));
     const parts = await assertCanView(ctx, ch, req.userId);
     const mine = parts.find((p) => p.userId === req.userId)!;
     if (challengeStatus(ctx, ch) === 'completed') throw badRequest('That challenge is over');
     const params = accept ? checkParams(ch.metric, given ?? paramsOf(mine)) : mine.params;
-    if (mine.state !== 'joined' || !accept || given) {
+    const teamId =
+      accept && ch.teamScoring
+        ? chooseTeam({
+            teams: await getTeams(ctx, ch.id),
+            started: challengeStatus(ctx, ch) !== 'upcoming',
+            mine,
+            wanted: wantedTeam,
+          })
+        : mine.teamId;
+    if (mine.state !== 'joined' || !accept || given || teamId !== mine.teamId) {
       await ctx.db
         .update(challengeParticipants)
-        .set({ state: accept ? 'joined' : 'declined', params })
+        .set({ state: accept ? 'joined' : 'declined', params, teamId })
         .where(
           and(
             eq(challengeParticipants.challengeId, ch.id),
@@ -523,8 +567,15 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           visibility: ch.visibility,
           showEvents: ch.showEvents,
           solo: ch.solo,
+          teamScoring: ch.teamScoring,
         })
         .returning({ id: challenges.id });
+      // Same teams, nobody on them yet; people are suggested the team they were on.
+      const teamMap = ch.teamScoring
+        ? await cloneTeams({ ...ctx, db: tx as unknown as AppContext['db'] }, ch.id, copy!.id)
+        : new Map<string, string>();
+      const mapTeam = (id: string | null | undefined) => (id ? (teamMap.get(id) ?? null) : null);
+      const firstTeam = [...teamMap.values()][0] ?? null;
       await tx.insert(challengeParticipants).values([
         {
           challengeId: copy!.id,
@@ -532,12 +583,16 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
           state: 'joined' as const,
           // Same target as last time; others pick theirs when they accept.
           params: parts.find((p) => p.userId === req.userId)?.params ?? null,
+          teamId: ch.teamScoring
+            ? (mapTeam(parts.find((p) => p.userId === req.userId)?.teamId) ?? firstTeam)
+            : null,
         },
         ...others.map((userId) => ({
           challengeId: copy!.id,
           userId,
           state: 'invited' as const,
           invitedBy: req.userId,
+          teamId: mapTeam(parts.find((p) => p.userId === userId)?.teamId),
         })),
       ]);
       if (!ch.solo)
@@ -562,6 +617,8 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       const parts = await getParticipants(ctx, ch.id);
       const { bestDays, standings } = await computeChallengeStandings(ctx, ch, parts);
       const mine = detail.standings.find((s) => s.isMe);
+      // In a team challenge your place is your team's.
+      const myTeam = detail.teams?.find((t) => t.memberIds.includes(req.userId));
       const winnerRow = detail.standings.find((s) => s.rank === 1 && s.score != null);
       const usersById = await getUsers(ctx, winnerRow ? [winnerRow.user.id] : []);
       const winner = winnerRow ? usersById.get(winnerRow.user.id) : undefined;
@@ -569,7 +626,7 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
         challenge: detail,
         me: mine
           ? {
-              rank: mine.rank,
+              rank: myTeam?.rank ?? mine.rank,
               score: mine.score,
               bestDay: bestDays.get(req.userId) ?? null,
               daysWithData: standings.find((s) => s.userId === req.userId)?.daysWithData ?? 0,

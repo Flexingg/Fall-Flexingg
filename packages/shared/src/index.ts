@@ -8,3 +8,5 @@ export * from './solo.js';
 export * from './wallpaper.js';
 export * from './profile.js';
 export * from './notify.js';
+export * from './teams.js';
+export * from './recurring.js';
