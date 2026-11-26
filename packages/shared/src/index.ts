@@ -13,3 +13,4 @@ export * from './widget.js';
 export * from './admin.js';
 export * from './teams.js';
 export * from './recurring.js';
+export * from './stats.js';

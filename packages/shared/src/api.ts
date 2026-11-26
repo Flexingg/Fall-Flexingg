@@ -372,6 +372,8 @@ export interface ChallengeEvent {
   /** "40 min · 450 kcal". */
   detail: string;
   source: string | null;
+  /** Workouts and lift sessions: the id that opens `/workouts/:id` (see WorkoutSummary). */
+  workoutId?: string | null;
 }
 
 export interface EventGroup {
@@ -509,6 +511,8 @@ export interface TrendsResponse {
   previousTotal: number;
   changePct: number | null;
   bars: { date: string; label: string; value: number; isToday: boolean }[];
+  /** The period before, one entry per bar in the same order (same day of the period), for Compare. */
+  previousBars?: { date: string; value: number }[];
   rankHistory: {
     challengeId: string;
     name: string;

@@ -8,6 +8,7 @@ import { Avatar, Empty, ErrorBox, Header, Screen, Skeleton, toast, Toggle } from
 import { ApiError, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { keys, useProfile } from '../lib/queries';
+import { HeadToHead } from '../components/HeadToHead';
 
 /** Someone's profile (or your own): record, trophy board, milestones and all-time stats. */
 export function ProfilePage() {
@@ -33,6 +34,7 @@ export function ProfilePage() {
           <Identity p={p} />
           <Record p={p} />
           <TrophyBoard p={p} />
+          {p.user.friendship !== 'me' && <HeadToHead userId={p.user.id} />}
           <Stats p={p} />
         </div>
       )}
