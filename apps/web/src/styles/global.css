@@ -765,6 +765,13 @@ svg {
 }
 
 /* ---------- Launch splash (from the Gauntlet Splash design) ---------- */
+/* How far down the screen the wipe has got: the splash is cleared above it and THROW IT DOWN
+   rides its edge. One animated value, so the text and the wipe can never drift apart. */
+@property --wipe {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: -15%;
+}
 .splash {
   --lime: #c6ff00;
   --olive: #8aab00;
@@ -774,15 +781,47 @@ svg {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: #0a0a09;
-  display: flex;
-  justify-content: center;
   overflow: hidden;
   transition: opacity var(--fade, 280ms) ease-out;
   font-family: 'Archivo Variable', 'Arial Black', system-ui, sans-serif;
 }
 .splash.leaving {
   opacity: 0;
+  pointer-events: none;
+}
+/* Layers: the veil dims the app where it has been wiped; the splash itself (bg) is cut away above
+   the wipe; the edge line and THROW IT DOWN (fg) sit on top. */
+.splash-veil,
+.splash-bg {
+  position: absolute;
+  inset: 0;
+  background: #0a0a09;
+}
+.splash-bg {
+  display: flex;
+  justify-content: center;
+  clip-path: inset(max(0%, var(--wipe)) 0 0 0);
+}
+.splash-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--wipe);
+  height: 3px;
+  margin-top: -1.5px;
+  background: var(--lime);
+  box-shadow:
+    0 0 12px 2px rgba(198, 255, 0, 0.55),
+    0 -18px 40px rgba(198, 255, 0, 0.18);
+  opacity: 0;
+}
+.splash-fg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - min(100vw, 480px) / 2);
+  width: min(100vw, 480px);
+  container-type: size;
   pointer-events: none;
 }
 /* A phone-sized column, so it also looks right in a wide browser window. */
@@ -923,14 +962,16 @@ svg {
   transform: none;
   opacity: 1;
 }
-/* THROW IT DOWN: hurled from above at the end. */
+/* THROW IT DOWN: hurled from above at the end; its middle sits on the wipe's edge. */
 .splash-throw {
   position: absolute;
   left: 0;
   right: 0;
-  top: 56%;
+  top: calc(var(--wipe) + 0.86em);
   height: 0;
-  pointer-events: none;
+  font-size: min(13cqw, 66px);
+  font-stretch: 125%;
+  font-weight: 900;
 }
 .splash-throw b {
   position: absolute;
@@ -950,7 +991,7 @@ svg {
     0 0.06em 0 var(--olive),
     0 0.14em 0.4em rgba(0, 0, 0, 0.6);
   transform-origin: 50% 100%;
-  transform: translate(-50%, -170cqh) rotate(-38deg) scale(2.2);
+  transform: translate(-50%, 0) rotate(-38deg) scale(2.2);
 }
 .splash-impact {
   position: absolute;
@@ -1045,38 +1086,57 @@ svg {
 .play .splash-tagline {
   animation:
     sp-fadeup calc(0.5s * var(--s)) ease-out calc(2s * var(--s)) both,
-    sp-out calc(0.22s * var(--s)) ease-in calc(7.12s * var(--s)) forwards;
+    sp-out 0.1s ease-in calc(var(--t) + 0.3s) forwards;
 }
-/* The intro has settled by 3.3; from 3.4 only the word changes, every 0.52. */
+/* The intro has settled by 3.3; "Step it up." holds for --hold, then only the word changes,
+   every 0.52. */
 .play .splash-words b.first {
-  animation: sp-word-out calc(0.07s * var(--s)) ease-in calc(3.33s * var(--s)) forwards;
+  animation: sp-word-out calc(0.07s * var(--s)) ease-in calc(3.33s * var(--s) + var(--hold))
+    forwards;
 }
 .play .splash-words b {
   animation: sp-word calc(0.52s * var(--s)) cubic-bezier(0.3, 0.7, 0.3, 1)
-    calc((3.4s + (var(--k) - 1) * 0.52s) * var(--s)) both;
+    calc((3.4s + (var(--k) - 1) * 0.52s) * var(--s) + var(--hold)) both;
 }
 .play .splash-words b.last {
   animation: sp-word-in calc(0.07s * var(--s)) cubic-bezier(0.3, 0.7, 0.3, 1)
-    calc((3.4s + (var(--k) - 1) * 0.52s) * var(--s)) both;
+    calc((3.4s + (var(--k) - 1) * 0.52s) * var(--s) + var(--hold)) both;
 }
-/* Then the throw: the logo steps back, the words fade, THROW IT DOWN lands at 7.56 and holds. */
+/* Then the throw, in real seconds from --t (1.27 s in all): THROW IT DOWN falls from above the
+   screen and lands mid-screen at +0.42 (impact, dust, shake), sits until +0.67, then drives down
+   off the bottom, wiping the splash away as the app brightens behind it. The logo steps back and
+   the line fades as it comes down. */
 .play .splash-center {
-  animation: sp-dim calc(0.35s * var(--s)) ease-out calc(7.12s * var(--s)) forwards;
+  animation: sp-dim 0.25s ease-out calc(var(--t) + 0.2s) forwards;
+}
+.play {
+  animation: sp-wipe 1.27s linear var(--t) both;
 }
 .play .splash-throw b {
-  animation: sp-throw calc(1s * var(--s)) cubic-bezier(0.55, 0, 0.75, 0.4) calc(6.86s * var(--s))
-    both;
+  animation: sp-throw 1.27s linear var(--t) both;
+}
+.play .splash-veil {
+  animation: sp-veil 1.27s linear var(--t) both;
+}
+.play .splash-edge {
+  animation: sp-edge 1.27s linear var(--t) both;
 }
 .play .splash-impact {
-  animation: sp-impact calc(1.1s * var(--s)) cubic-bezier(0.1, 0.6, 0.3, 1) calc(7.56s * var(--s))
-    forwards;
+  animation: sp-impact 0.3s cubic-bezier(0.1, 0.6, 0.3, 1) calc(var(--t) + 0.42s) forwards;
 }
 .play .splash-dust i {
-  animation: sp-dust calc(1s * var(--s)) cubic-bezier(0.1, 0.6, 0.3, 1) calc(7.56s * var(--s))
-    forwards;
+  animation: sp-dust 0.3s cubic-bezier(0.1, 0.6, 0.3, 1) calc(var(--t) + 0.42s) forwards;
 }
-.play .splash-stage {
-  animation: sp-shake calc(0.7s * var(--s)) linear calc(7.56s * var(--s)) both;
+.play .splash-stage,
+.play .splash-fg {
+  animation: sp-shake 0.22s linear calc(var(--t) + 0.42s) both;
+}
+/* App not ready yet: wait, landed, until it is. */
+.splash.waiting,
+.splash.waiting .splash-throw b,
+.splash.waiting .splash-veil,
+.splash.waiting .splash-edge {
+  animation-play-state: paused;
 }
 @keyframes sp-word {
   0% {
@@ -1125,18 +1185,60 @@ svg {
     transform: scale(0.94);
   }
 }
-@keyframes sp-throw {
+/* Keyframes share one 1.27 s clock: 33% = landed (+0.42), 53% = sweep starts (+0.67). */
+@keyframes sp-wipe {
   0% {
-    transform: translate(-50%, -170cqh) rotate(-38deg) scale(2.2);
+    --wipe: -15%;
+    animation-timing-function: cubic-bezier(0.55, 0, 0.75, 0.4);
   }
-  70% {
-    transform: translate(-50%, 0) rotate(-3deg) scale(1.12, 0.82);
+  33% {
+    --wipe: 50%;
   }
-  84% {
-    transform: translate(-50%, -4%) rotate(-7deg) scale(0.96, 1.05);
+  53% {
+    --wipe: 50%;
+    animation-timing-function: cubic-bezier(0.5, 0, 0.7, 1);
   }
   100% {
+    --wipe: 115%;
+  }
+}
+@keyframes sp-throw {
+  0% {
+    transform: translate(-50%, 0) rotate(-38deg) scale(2.2);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.75, 0.4);
+  }
+  33% {
+    transform: translate(-50%, 0) rotate(-3deg) scale(1.12, 0.82);
+  }
+  40% {
+    transform: translate(-50%, -6%) rotate(-7deg) scale(0.96, 1.05);
+  }
+  47%,
+  53% {
     transform: translate(-50%, 0) rotate(-6deg) scale(1);
+  }
+  100% {
+    transform: translate(-50%, 0) rotate(0deg) scale(1);
+  }
+}
+@keyframes sp-veil {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  95%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes sp-edge {
+  0%,
+  33% {
+    opacity: 0;
+  }
+  36%,
+  100% {
+    opacity: 1;
   }
 }
 @keyframes sp-impact {
@@ -1290,6 +1392,7 @@ svg {
 }
 /* Reduced motion: the final frame, no movement. */
 @media (prefers-reduced-motion: reduce) {
+  .splash,
   .splash *,
   .splash *::before {
     animation: none !important;
@@ -1305,6 +1408,16 @@ svg {
   }
   .splash-center {
     opacity: 0.22;
+  }
+  .splash-veil,
+  .splash-edge {
+    display: none;
+  }
+  .splash-bg {
+    clip-path: none;
+  }
+  .splash-throw {
+    top: 56%;
   }
   .splash-throw b {
     transform: translate(-50%, 0) rotate(-6deg);
