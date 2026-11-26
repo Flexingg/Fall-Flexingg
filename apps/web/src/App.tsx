@@ -25,6 +25,7 @@ import { MePage } from './pages/Me';
 import { NotificationSettingsPage } from './pages/NotificationSettings';
 import { NotificationsPage } from './pages/Notifications';
 import { RecapPage } from './pages/Recap';
+import { ReviewPage } from './pages/Review';
 import { OAuthReturnPage } from './pages/OAuthReturn';
 import { ProfilePage } from './pages/Profile';
 import { NewChallengePage } from './pages/NewChallenge';
@@ -81,7 +82,7 @@ function Splash() {
 
 /** Where a tapped notification may take the app (the Android job opens https://<server>/<path>). */
 const NOTIFICATION_PATH =
-  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|u\/[\w-]+|trends|challenges)$/;
+  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|review\/[\d-]+|u\/[\w-]+|trends|challenges)$/;
 
 /** Android: open invite links in-app, and push Health Connect data when the app comes to the front. */
 function NativeBridge() {
@@ -352,6 +353,16 @@ export function App() {
               <Private>
                 <NeedsServer what="Weekly recap">
                   <RecapPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/review/:period"
+            element={
+              <Private>
+                <NeedsServer what="Year in review">
+                  <ReviewPage />
                 </NeedsServer>
               </Private>
             }

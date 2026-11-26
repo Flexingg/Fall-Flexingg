@@ -9,6 +9,8 @@ import { isNative } from '../lib/platform';
 import { fmtInt, timeAgo } from '../lib/format';
 import { useChallenges, useFeed, useToday } from '../lib/queries';
 import { useUnreadCount } from '../lib/notifyQueries';
+import { useReviewList } from '../lib/reviewQueries';
+import { monthName, reviewsToOffer, todayIn } from '@gauntlet/shared';
 import '../styles/notify.css';
 import { FastCard } from '../components/FastCard';
 
@@ -111,6 +113,8 @@ export function TodayPage() {
         ) : null}
       </div>
 
+      {!direct && <ReviewCards />}
+
       {inFastingChallenge && <FastCard />}
 
       <div className="lbl">
@@ -168,6 +172,47 @@ export function TodayPage() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** "Your October in review" in a month's first week, "Your 2026 in review" from 1 Dec to 7 Jan. */
+function ReviewCards() {
+  const { user } = useAuth();
+  const list = useReviewList(!!user);
+  if (!user || !list.data) return null;
+  const offer = reviewsToOffer(todayIn(user.timezone));
+  const cards = [
+    offer.month && list.data.months.includes(offer.month)
+      ? {
+          to: offer.month,
+          kicker: 'Month in review',
+          title: `Your ${monthName(Number(offer.month.slice(5)))} in review`,
+        }
+      : null,
+    offer.year && list.data.years.includes(offer.year)
+      ? { to: offer.year, kicker: 'Year in review', title: `Your ${offer.year} in review` }
+      : null,
+  ].filter((c): c is { to: string; kicker: string; title: string } => c !== null);
+  return (
+    <>
+      {cards.map((c) => (
+        <Link
+          key={c.to}
+          to={`/review/${c.to}`}
+          className="hero review-card"
+          style={{ marginTop: 12 }}
+        >
+          <div className="badge">
+            <Icon name="trends" />
+          </div>
+          <div className="grow">
+            <small>{c.kicker}</small>
+            <b>{c.title}</b>
+          </div>
+          <Icon name="chevron" size={18} />
+        </Link>
+      ))}
+    </>
   );
 }
 

@@ -10,6 +10,8 @@ import { LegalLinks } from '../components/LegalLinks';
 import { useAndroidRelease } from '../lib/queries';
 import { AppUpdatesSection } from '../components/AppBanner';
 import { canSelfUpdate } from '../lib/appUpdate';
+import { useReviewList } from '../lib/reviewQueries';
+import { monthName } from '@gauntlet/shared';
 
 export function MePage() {
   const { user, setUser, logout, mode, disconnectServer } = useAuth();
@@ -189,6 +191,8 @@ export function MePage() {
         </div>
       </div>
 
+      {!direct && <PastReviews />}
+
       {android.data && !isNative && (
         <>
           <div className="lbl">Android app</div>
@@ -284,5 +288,36 @@ export function MePage() {
         Gauntlet · powered by SparkyFitness
       </p>
     </Screen>
+  );
+}
+
+/** Every month and year with something to look back on (the last year of months, then all years). */
+function PastReviews() {
+  const list = useReviewList();
+  const [all, setAll] = useState(false);
+  if (!list.data || (!list.data.months.length && !list.data.years.length)) return null;
+  const months = all ? list.data.months : list.data.months.slice(0, 12);
+  const row = (id: string, title: string) => (
+    <Link key={id} to={`/review/${id}`} className="item">
+      <Icon name="trends" size={20} />
+      <div className="grow t">{title}</div>
+      <Icon name="chevron" size={18} />
+    </Link>
+  );
+  return (
+    <>
+      <div className="lbl">Looking back</div>
+      <div className="list">
+        {list.data.years.map((y) => row(y, `${y} in review`))}
+        {months.map((m) => row(m, `${monthName(Number(m.slice(5)))} ${m.slice(0, 4)}`))}
+        {list.data.months.length > 12 && (
+          <button className="item" onClick={() => setAll((a) => !a)}>
+            <div className="grow t muted">
+              {all ? 'Show fewer' : `Show all ${list.data.months.length} months`}
+            </div>
+          </button>
+        )}
+      </div>
+    </>
   );
 }

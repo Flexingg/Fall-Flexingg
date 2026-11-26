@@ -1023,3 +1023,132 @@ test('the demo account can open its weekly recap', async ({ page }) => {
   await page.getByRole('link', { name: 'Last week' }).click();
   await expect(page).toHaveURL(/\/recap\/\d{4}-W\d{2}$/);
 });
+
+// ---------- Month / year in review, calendar heatmap ----------
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+async function demoSignIn(page: Page) {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Try the demo' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+}
+
+test('month in review: open from Me, step through the cards with taps and keys, close', async ({
+  page,
+}) => {
+  await demoSignIn(page);
+  const now = new Date();
+  const month = now.toISOString().slice(0, 7);
+  const label = `${MONTH_NAMES[now.getUTCMonth()]} ${now.getUTCFullYear()}`;
+
+  // Past reviews are listed on Me.
+  await page.goto('/me');
+  await page.getByRole('link', { name: label }).click();
+  await expect(page).toHaveURL(new RegExp(`/review/${month}$`));
+  const story = page.getByRole('dialog', { name: `${label} in review` });
+  await expect(story).toBeVisible();
+  await expect(story.getByTestId('story-card')).toContainText('in review');
+  await snap(page, '95-review-intro');
+
+  // Tap right: the headline numbers.
+  await page.getByRole('button', { name: 'Next card' }).click();
+  await expect(story.getByTestId('story-card')).toContainText('You took');
+  await expect(story.getByTestId('story-card')).toContainText('steps');
+  await snap(page, '96-review-steps');
+  // Tap left goes back; the arrow keys do the same.
+  await page.getByRole('button', { name: 'Previous card' }).click();
+  await expect(story.getByTestId('story-card')).toContainText('Tap to begin');
+  await page.keyboard.press('ArrowRight');
+  await expect(story.getByTestId('story-card')).toContainText('You took');
+  await page.keyboard.press('ArrowLeft');
+  await expect(story.getByTestId('story-card')).toContainText('Tap to begin');
+
+  // Step through to the closing card, which has Share.
+  const share = story.getByRole('button', { name: 'Share' });
+  for (let i = 0; i < 15 && !(await share.isVisible()); i++)
+    await page.keyboard.press('ArrowRight');
+  await expect(share).toBeVisible();
+  await expect(story.getByTestId('story-card')).toContainText('That was');
+  await snap(page, '97-review-end');
+  await expect(page.locator('.error')).toHaveCount(0);
+
+  // Close goes back to where we came from.
+  await story.getByRole('button', { name: 'Close' }).first().click();
+  await expect(page).toHaveURL(/\/me$/);
+});
+
+test('year in review opens and tells the year, and a bad period goes home', async ({ page }) => {
+  await demoSignIn(page);
+  const year = String(new Date().getUTCFullYear());
+  await page.goto(`/review/${year}`);
+  const story = page.getByRole('dialog', { name: `${year} in review` });
+  await expect(story).toBeVisible();
+  await expect(story.getByTestId('story-card')).toContainText(`Your ${year}`);
+  await page.getByRole('button', { name: 'Next card' }).click();
+  await expect(story.getByTestId('story-card')).toContainText('You took');
+  const share = story.getByRole('button', { name: 'Share' });
+  for (let i = 0; i < 15 && !(await share.isVisible()); i++)
+    await page.keyboard.press('ArrowRight');
+  await expect(share).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+
+  await page.goto('/review/not-a-month');
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+});
+
+test("Today offers last month's review during the first week of a month", async ({ page }) => {
+  await demoSignIn(page);
+  // Pretend it is the 3rd of next month: the demo's data month is "last month".
+  const now = new Date();
+  const fake = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 3, 12));
+  await page.clock.setFixedTime(fake);
+  await page.goto('/');
+  await expect(
+    page.getByRole('link', {
+      name: new RegExp(`Your ${MONTH_NAMES[now.getUTCMonth()]} in review`),
+    }),
+  ).toBeVisible();
+  await snap(page, '98-review-today-card');
+});
+
+test('profile calendar heatmap: renders your year and a tapped day shows its value', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Your profile, trophies/ }).click();
+  const heat = page.getByRole('group', { name: /Steps by day/ });
+  await expect(heat).toBeVisible();
+  await expect(page.locator('.hm-cell[data-l="4"]').first()).toBeVisible();
+  // One tab stop for the whole grid, not 365.
+  await expect(page.locator('.hm-grid [tabindex="0"]')).toHaveCount(1);
+  await snap(page, '99-profile-heatmap');
+
+  // Tap a day with steps: the readout shows its date and number.
+  const day = page.getByRole('button', { name: /: 9,412 steps$/ });
+  await day.click();
+  await expect(page.getByTestId('heatmap-readout')).toContainText('9,412 steps');
+  // The arrow keys move between days (up = the day before).
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('heatmap-readout')).toContainText('12,100 steps');
+
+  // Another stat from the picker.
+  await page.getByLabel('Show on the calendar').selectOption('distance');
+  await expect(page.getByRole('group', { name: /Distance by day/ })).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+});

@@ -9,6 +9,7 @@ import { ApiError, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { keys, useProfile } from '../lib/queries';
 import { HeadToHead } from '../components/HeadToHead';
+import { CalendarHeatmap } from '../components/CalendarHeatmap';
 
 /** Someone's profile (or your own): record, trophy board, milestones and all-time stats. */
 export function ProfilePage() {
@@ -35,6 +36,13 @@ export function ProfilePage() {
           <Record p={p} />
           <TrophyBoard p={p} />
           {p.user.friendship !== 'me' && <HeadToHead userId={p.user.id} />}
+          {/* Same rule as the all-time stats: yours always, others only if they share. */}
+          {p.stats && (
+            <CalendarHeatmap
+              userId={p.user.id}
+              name={p.user.friendship === 'me' ? undefined : p.user.displayName.split(' ')[0]}
+            />
+          )}
           <Stats p={p} />
         </div>
       )}

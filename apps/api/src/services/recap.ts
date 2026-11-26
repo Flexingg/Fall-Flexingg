@@ -118,7 +118,7 @@ export async function buildRecap(
 }
 
 /** Local weekday (Monday = 1) and hour for an instant in a time zone. */
-function localClock(instant: Date, timeZone: string): { isMonday: boolean; hour: number } {
+export function localClock(instant: Date, timeZone: string): { isMonday: boolean; hour: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     weekday: 'short',

@@ -91,6 +91,15 @@ interface Alert {
   key: string;
 }
 
+/** How a stored record reads in lists ("Best step day", "20,000"); null for keys we don't word. */
+export function describeRecord(
+  key: string,
+  value: number,
+): { label: string; badge: string } | null {
+  const a = describe({ key, value, date: '' }, 0);
+  return a ? { label: a.label.charAt(0).toUpperCase() + a.label.slice(1), badge: a.badge } : null;
+}
+
 function describe(c: Candidate, previous: number): Alert | null {
   const day = DAY_RECORDS.find((d) => d.key === c.key);
   if (day) {
