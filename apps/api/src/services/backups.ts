@@ -8,6 +8,9 @@ import { constants } from 'node:fs';
 import { mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  backupScheduleSchema,
+  DEFAULT_BACKUP_SCHEDULE,
+  type BackupSchedule,
   BACKUP_JOB_ID_RE,
   BACKUP_NAME_RE,
   backupKind,
