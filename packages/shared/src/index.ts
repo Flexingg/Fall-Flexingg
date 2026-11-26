@@ -7,3 +7,4 @@ export * from './names.js';
 export * from './solo.js';
 export * from './wallpaper.js';
 export * from './profile.js';
+export * from './notify.js';
