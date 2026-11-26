@@ -1,5 +1,6 @@
 import {
   formatCompact,
+  formatQuantity,
   metricDef,
   REACTIONS,
   type FeedEvent,
@@ -14,7 +15,9 @@ import {
   feedEvents,
   feedReactions,
 } from '../db/schema.js';
+import { displayFor } from './display.js';
 import { friendIds } from './friends.js';
+import { recordBadge } from './records.js';
 import { getUsers, shortName, toPublicUser } from './users.js';
 
 /**
@@ -82,6 +85,7 @@ export async function feedFor(
     .orderBy(desc(feedEvents.createdAt))
     .limit(Math.min(Math.max(limit, 1), 100));
 
+  const prefs = await displayFor(ctx, userId);
   const usersById = await getUsers(
     ctx,
     rows.map((r) => r.e.actorId),
@@ -126,22 +130,20 @@ export async function feedFor(
           lowerIsBetter: false,
         });
         const delta = Number(p.delta ?? 0);
-        const amount = def.decimals
-          ? delta.toFixed(def.decimals)
-          : Math.round(delta).toLocaleString('en-US');
-        badge = `+${metric === 'steps' ? formatCompact(delta) : amount}`;
+        const amount = formatQuantity(delta, def.unit, def.decimals, prefs, false);
+        badge = `+${metric === 'steps' ? formatCompact(delta, 1, prefs) : amount}`;
         text =
           metric === 'distance'
-            ? `${name} covered ${amount} km`
+            ? `${name} covered ${formatQuantity(delta, 'km', def.decimals, prefs)}`
             : metric === 'steps'
-              ? `${name} hit ${formatCompact(delta)} steps`
+              ? `${name} hit ${formatCompact(delta, 1, prefs)} steps`
               : metric === 'workouts'
                 ? `${name} logged ${delta === 1 ? 'a workout' : `${amount} workouts`}`
                 : metric === 'active_minutes'
                   ? `${name} logged ${amount} active min`
                   : metric === 'active_calories'
                     ? `${name} burned ${amount} kcal`
-                    : `${name} logged ${amount}${def.unit ? ` ${def.unit}` : ''} ${def.label.toLowerCase()}`;
+                    : `${name} logged ${formatQuantity(delta, def.unit, def.decimals, prefs)} ${def.label.toLowerCase()}`;
         break;
       }
       case 'took_lead':
@@ -162,7 +164,7 @@ export async function feedFor(
         break;
       case 'personal_record':
         text = `${name} set a new ${typeof p.label === 'string' ? p.label : 'personal record'}`;
-        badge = typeof p.badge === 'string' ? p.badge : null;
+        badge = recordBadge(p, prefs);
         break;
       default:
         text = `${name} was active`;

@@ -1,11 +1,13 @@
 import type { MeUser } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { DisplaySettings } from '../components/DisplaySettings';
 import { Icon } from '../components/Icon';
 import { Avatar, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isNative } from '../lib/platform';
+import { fmtDate, fmtNum } from '../lib/format';
 import { LegalLinks } from '../components/LegalLinks';
 import { useAndroidRelease } from '../lib/queries';
 import { AppUpdatesSection } from '../components/AppBanner';
@@ -189,6 +191,8 @@ export function MePage() {
         </div>
       </div>
 
+      <DisplaySettings />
+
       {android.data && !isNative && (
         <>
           <div className="lbl">Android app</div>
@@ -206,10 +210,8 @@ export function MePage() {
                   Gauntlet for Android
                 </div>
                 <small className="muted">
-                  {android.data.version} · {(android.data.sizeBytes / 1048576).toFixed(1)} MB
-                  {android.data.builtAt
-                    ? ` · ${new Date(android.data.builtAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                    : ''}
+                  {android.data.version} · {fmtNum(android.data.sizeBytes / 1048576, 1)} MB
+                  {android.data.builtAt ? ` · ${fmtDate(android.data.builtAt)}` : ''}
                 </small>
               </div>
             </div>

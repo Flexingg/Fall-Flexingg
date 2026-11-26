@@ -6,6 +6,7 @@
 import {
   eventKindsFor,
   formatMetricValue,
+  type DisplayPrefs,
   liftExercise,
   type ChallengeEvent,
   type EventGroup,
@@ -14,6 +15,7 @@ import { fetchEvents } from '@gauntlet/sparky';
 import { and, eq } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics } from '../db/schema.js';
+import { displayFor } from './display.js';
 import { challengeMetricDef, type ChallengeRow } from './challenges.js';
 import { sparkyToken, toPublicUser, type UserRow } from './users.js';
 
@@ -31,14 +33,17 @@ async function fromSparky(
   user: UserRow,
   date: string,
   kinds: ('workout' | 'lift' | 'fast')[],
+  display: DisplayPrefs,
 ) {
-  const key = `${user.id}|${date}|${kinds.join(',')}`;
+  // The wording depends on the reader's units, so the cache is per units and number format.
+  const key = `${user.id}|${date}|${kinds.join(',')}|${display.units}|${display.locale}`;
   const hit = cache.get(key);
   const now = Date.now();
   if (hit && now - hit.at < CACHE_MS) return hit.events;
   const events = await fetchEvents(ctx.sparky, sparkyToken(ctx, user), date, date, {
     kinds,
     timezone: user.timezone,
+    display,
   });
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
   cache.set(key, { at: now, events });
@@ -53,6 +58,7 @@ export async function eventGroupFor(
   viewerId: string,
 ): Promise<EventGroup> {
   const isMe = user.id === viewerId;
+  const display = await displayFor(ctx, viewerId);
   const base = { user: toPublicUser(user), isMe };
   // People can keep their workouts private; their totals still count.
   if (user.isDemo || (!isMe && !user.shareEvents)) return { ...base, status: 'hidden', events: [] };
@@ -67,7 +73,7 @@ export async function eventGroupFor(
       return { ...base, status: 'unavailable', events: [] };
     try {
       const lift = liftExercise(ch.metric);
-      for (const { event } of await fromSparky(ctx, user, date, live)) {
+      for (const { event } of await fromSparky(ctx, user, date, live, display)) {
         // Per-exercise challenges only list that exercise.
         if (lift && event.kind === 'lift' && event.title.toLowerCase() !== lift.exercise) continue;
         events.push(event);
@@ -95,7 +101,7 @@ export async function eventGroupFor(
         id: `day:${date}`,
         kind: 'day',
         title: events.length ? 'Day total' : def.label,
-        detail: formatMetricValue(row.value, def),
+        detail: formatMetricValue(row.value, def, true, display),
         // Source names follow the same "show my data sources" choice as the feed.
         source: isMe || user.shareWorkoutDetails ? row.source : null,
       });

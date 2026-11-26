@@ -1,6 +1,6 @@
 import type { ChallengeProgress } from '@gauntlet/shared';
 import { useMemo, useRef, useState } from 'react';
-import { shortName } from '../lib/format';
+import { fmtCompact, fmtDate, shortName } from '../lib/format';
 
 /**
  * Seven hues validated together against the app's dark card (CVD and normal-vision separation,
@@ -28,22 +28,17 @@ const lastIndex = (values: (number | null)[]): number => {
   return -1;
 };
 
-const compact = (v: number) =>
-  Math.abs(v) >= 1000 ? `${+(v / 1000).toFixed(1)}k` : `${+v.toFixed(1)}`;
-
-const day = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+const day = (iso: string) => fmtDate(iso);
 
 /** Everyone's score at the end of each day. Up always means ahead. */
 export function ProgressChart({
   data,
   format,
+  scale = 1,
 }: {
   data: ChallengeProgress;
+  /** Axis labels show value × scale (for example km shown as miles). */
+  scale?: number;
   /** Formats a value the way the leaderboard does (decimals, unit). */
   format: (v: number) => string;
 }) {
@@ -155,7 +150,7 @@ export function ProgressChart({
                 strokeWidth={1}
               />
               <text x={M.l - 6} y={y(t) + 4} textAnchor="end" fontSize="10" fill="var(--muted)">
-                {compact(t)}
+                {fmtCompact(t * scale)}
               </text>
             </g>
           ))}

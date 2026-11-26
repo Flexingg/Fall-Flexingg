@@ -113,6 +113,7 @@ for (const [id, p] of Object.entries(profile)) {
         exercise_source: p.source,
         distance: km,
         avg_heart_rate: 138 + (i % 5) * 4,
+        start_time: `${date}T07:30:00Z`,
       });
     }
     u.sleep.push({

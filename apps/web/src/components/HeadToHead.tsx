@@ -1,13 +1,13 @@
 import type { CompareMetric } from '@gauntlet/shared';
 import { useState } from 'react';
+import { fmtInt, fmtQty, unitLabel } from '../lib/format';
 import { useCompare } from '../lib/statsQueries';
 import '../styles/stats.css';
-import { ErrorBox, Seg, Skeleton } from './ui';
+import { SkeletonCard } from './Skeleton';
+import { ErrorBox, Seg } from './ui';
 
-const fmt = (v: number, key: string) =>
-  key === 'distance'
-    ? v.toLocaleString('en-US', { maximumFractionDigits: 1 })
-    : Math.round(v).toLocaleString('en-US');
+const fmt = (v: number, key: string, unit: string) =>
+  key === 'distance' ? fmtQty(v, unit, 1, false) : fmtInt(v);
 
 /**
  * "Head to head" on someone else's profile: you and them over a range, a two-sided bar for each
@@ -24,7 +24,7 @@ export function HeadToHead({ userId }: { userId: string }) {
     <section aria-label="Head to head">
       <div className="lbl">Head to head</div>
       <ErrorBox error={q.error} />
-      {q.isPending && <Skeleton height={160} />}
+      {q.isPending && <SkeletonCard lines={4} />}
       {c && (
         <div className="stack" style={{ gap: 10, opacity: q.isFetching ? 0.6 : 1 }}>
           {c.record.shared > 0 ? (
@@ -81,23 +81,23 @@ function Row({ m, first }: { m: CompareMetric; first: string }) {
   const them = m.them ?? 0;
   const top = Math.max(m.me, them) || 1;
   const lead = m.me === them ? null : m.me > them ? 'me' : 'them';
-  const unit = m.unit ? ` ${m.unit}` : '';
+  const unit = m.unit ? ` ${unitLabel(m.unit)}` : '';
   return (
     <div
       className="h2h-row"
       role="group"
-      aria-label={`${m.label}: you ${fmt(m.me, m.key)}${unit}, ${first} ${fmt(them, m.key)}${unit}. ${
+      aria-label={`${m.label}: you ${fmt(m.me, m.key, m.unit)}${unit}, ${first} ${fmt(them, m.key, m.unit)}${unit}. ${
         lead === 'me' ? 'You are ahead.' : lead === 'them' ? `${first} is ahead.` : 'Level.'
       }`}
     >
       <div className="h2h-vals" aria-hidden="true">
         <span className={`num${lead === 'me' ? ' lead' : ''}`}>
-          {fmt(m.me, m.key)}
+          {fmt(m.me, m.key, m.unit)}
           {unit && <small className="muted">{unit}</small>}
         </span>
         <span className="mid">{m.label}</span>
         <span className={`num${lead === 'them' ? ' lead' : ''}`}>
-          {fmt(them, m.key)}
+          {fmt(them, m.key, m.unit)}
           {unit && <small className="muted">{unit}</small>}
         </span>
       </div>

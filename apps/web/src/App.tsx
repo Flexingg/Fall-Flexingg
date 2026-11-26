@@ -4,12 +4,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { WidgetBridge } from './components/WidgetBridge';
 import { AppBanner } from './components/AppBanner';
+import { DisplaySync } from './components/DisplaySync';
 import { PullToRefresh } from './components/PullToRefresh';
 import { AutoRefresh } from './lib/freshness';
 import { ConnectServer } from './components/ConnectServer';
 import { LaunchSplash, shouldShowSplash } from './components/LaunchSplash';
 import { ToastHost } from './components/ui';
 import { useAuth } from './lib/auth';
+import { useDisplay } from './lib/display';
 import { syncHealthConnect } from './lib/health';
 import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
@@ -149,12 +151,14 @@ function NativeBridge() {
 
 export function App() {
   const { status } = useAuth();
+  useDisplay(); // a change of units or clock re-renders every screen
   const [splash, setSplash] = useState(shouldShowSplash);
   return (
     <BrowserRouter>
       {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
+        <DisplaySync />
         <WidgetBridge />
         <AutoRefresh />
         {status === 'signedIn' && <PullToRefresh />}

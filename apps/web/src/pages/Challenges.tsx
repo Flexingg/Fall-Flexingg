@@ -3,7 +3,8 @@ import { ordinal, SOLO_STATUS_LABELS } from '@gauntlet/shared';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Icon } from '../components/Icon';
-import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
+import { Empty, ErrorBox, Header, Screen, Seg } from '../components/ui';
+import { SkeletonList } from '../components/Skeleton';
 import { daysLeftText, fmt, fmtSolo } from '../lib/format';
 import { useChallenges, useDiscover } from '../lib/queries';
 
@@ -48,7 +49,7 @@ export function ChallengesPage() {
       ) : (
         <>
           <ErrorBox error={q.error} />
-          {q.isPending && <Skeleton height={200} />}
+          {q.isPending && <SkeletonList rows={3} avatar={44} />}
           {invites.length > 0 && (
             <>
               <div className="lbl" style={{ marginTop: 0 }}>
@@ -89,7 +90,7 @@ function Discover({ q }: { q: ReturnType<typeof useDiscover> }) {
   return (
     <>
       <ErrorBox error={q.error} />
-      {q.isPending && <Skeleton height={200} />}
+      {q.isPending && <SkeletonList rows={3} avatar={44} />}
       {q.data && !q.data.canJoin && (
         <div className="notice" style={{ marginBottom: 12 }}>
           Your profile is private. <Link to="/me">Go public</Link> to join these challenges.

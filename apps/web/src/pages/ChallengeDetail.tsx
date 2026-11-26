@@ -1,4 +1,9 @@
-import { needsWeightGoal, scoringLabel, type WeightGoalParams } from '@gauntlet/shared';
+import {
+  needsWeightGoal,
+  scoringLabel,
+  toDisplayUnit,
+  type WeightGoalParams,
+} from '@gauntlet/shared';
 import { ArrangeTeams, SeriesCard, TeamLeaderboard, TeamPicker } from '../components/TeamsView';
 import { ChallengeEvents } from '../components/ChallengeEvents';
 import { SoloCard } from '../components/SoloCard';
@@ -9,18 +14,12 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
 import { Podium, StandingsList } from '../components/Standings';
-import {
-  ErrorBox,
-  Header,
-  NoSourcesNote,
-  Screen,
-  ShowEventsNotice,
-  Skeleton,
-  toast,
-} from '../components/ui';
+import { ErrorBox, Header, NoSourcesNote, Screen, ShowEventsNotice, toast } from '../components/ui';
+import { SkeletonCard, SkeletonChart, SkeletonGroup, SkeletonList } from '../components/Skeleton';
 import { del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { dateRange, daysLeftText, fmt, fmtSolo } from '../lib/format';
+import { getDisplay } from '../lib/display';
+import { dateRange, daysLeftText, fmt, fmtFlex, fmtQtyFlex, fmtSolo } from '../lib/format';
 import { keys, useChallenge, useProgress, useToday } from '../lib/queries';
 import { ProgressChart } from '../components/ProgressChart';
 import { shareLink } from '../lib/share';
@@ -91,7 +90,13 @@ export function ChallengeDetailPage() {
         }
       />
       <ErrorBox error={q.error ?? error} />
-      {q.isPending && <Skeleton height={320} />}
+      {q.isPending && (
+        <SkeletonGroup>
+          <SkeletonCard lines={2} />
+          <SkeletonChart height={150} bars={10} />
+          <SkeletonList rows={4} />
+        </SkeletonGroup>
+      )}
       {c && (
         <>
           <p className="muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 14 }}>
@@ -187,8 +192,11 @@ export function ChallengeDetailPage() {
 
           {c.myParams?.weightGoal && (
             <p className="muted" style={{ fontSize: 13, marginTop: -6, marginBottom: 12 }}>
-              Your target: {c.myParams.weightGoal.direction} {c.myParams.weightGoal.target}
-              {c.myParams.weightGoal.targetType === 'percent' ? '%' : ' kg'}. Only your % is shown.
+              Your target: {c.myParams.weightGoal.direction}{' '}
+              {c.myParams.weightGoal.targetType === 'percent'
+                ? `${fmtFlex(c.myParams.weightGoal.target, 1)}%`
+                : fmtQtyFlex(c.myParams.weightGoal.target, 'kg', 1)}
+              . Only your % is shown.
             </p>
           )}
           {solo ? (
@@ -217,6 +225,11 @@ export function ChallengeDetailPage() {
                 <ProgressChart
                   data={progress.data}
                   format={(v) => fmtSolo(v, progress.data!.valueKind, c)}
+                  scale={
+                    progress.data.valueKind === 'metric'
+                      ? toDisplayUnit(1, c.unit, 0, getDisplay().units).value
+                      : 1
+                  }
                 />
               </div>
             </>

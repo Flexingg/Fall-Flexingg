@@ -184,7 +184,12 @@ export async function fetchEvents(
   token: string,
   start: string,
   end: string,
-  opts: { kinds: ('workout' | 'lift' | 'fast')[]; timezone?: string },
+  opts: {
+    kinds: ('workout' | 'lift' | 'fast')[];
+    timezone?: string;
+    /** The reader's units and number format, for the wording of each event. */
+    display?: { units: 'metric' | 'imperial'; locale: string };
+  },
 ): Promise<{ date: string; event: ChallengeEvent }[]> {
   const needsReport = opts.kinds.includes('workout') || opts.kinds.includes('lift');
   const [report, fasts] = await Promise.all([
@@ -197,5 +202,6 @@ export async function fetchEvents(
     exerciseEntries: report.exerciseEntries,
     fasts,
     timezone: opts.timezone,
+    display: opts.display,
   }).filter((e) => opts.kinds.includes(e.event.kind as 'workout' | 'lift' | 'fast'));
 }

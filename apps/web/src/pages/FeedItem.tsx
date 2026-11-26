@@ -3,7 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 import { ReactionRow } from '../components/Reactions';
-import { Avatar, Empty, ErrorBox, Header, Screen, Skeleton, toast } from '../components/ui';
+import { Avatar, Empty, ErrorBox, Header, Screen, toast } from '../components/ui';
+import { SkeletonCard, SkeletonLine, SkeletonList } from '../components/Skeleton';
 import { ApiError, del, post } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { keys } from '../lib/queries';
@@ -29,7 +30,17 @@ export function FeedItemPage() {
       ) : (
         <ErrorBox error={item.error} />
       )}
-      {item.isPending && <Skeleton height={120} />}
+      {item.isPending && (
+        <SkeletonCard>
+          <div className="row" style={{ gap: 12 }}>
+            <SkeletonLine width={40} height={40} style={{ borderRadius: '50%' }} />
+            <div className="grow stack" style={{ gap: 8 }}>
+              <SkeletonLine width="60%" height={14} />
+              <SkeletonLine width="35%" />
+            </div>
+          </div>
+        </SkeletonCard>
+      )}
       {e && (
         <div className="stack" style={{ gap: 14 }}>
           <div className="card">
@@ -97,7 +108,7 @@ function Comments({ eventId }: { eventId: string }) {
       <div className="lbl">Comments</div>
       <ErrorBox error={q.error} />
       {q.isPending ? (
-        <Skeleton height={60} />
+        <SkeletonList rows={2} avatar={32} />
       ) : q.data?.length ? (
         <div className="list" style={{ marginBottom: 12 }}>
           {q.data.map((c) => (

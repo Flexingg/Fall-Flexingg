@@ -4,6 +4,7 @@
  * available. Keeping the builder here makes the wording testable without a phone.
  */
 import type { ChallengeSummary, TodayResponse } from './api.js';
+import { DEFAULT_DISPLAY, type DisplayPrefs } from './format.js';
 import { formatMetricValue } from './metrics.js';
 import { ordinal } from './scoring.js';
 import { SOLO_STATUS_LABELS } from './solo.js';
@@ -37,6 +38,8 @@ export interface WidgetSnapshot {
   challenge: WidgetChallenge | null;
 }
 
+type Display = Pick<DisplayPrefs, 'units' | 'locale'>;
+
 function channel(today: TodayResponse, key: string): WidgetChannel {
   const m = today.metrics.find((x) => x.key === key);
   return { value: m?.value ?? null, goal: m?.goal != null && m.goal > 0 ? m.goal : null };
@@ -47,11 +50,11 @@ export function widgetRankText(rank: number | null, of: number): string {
   return rank == null ? 'No score yet' : `${ordinal(rank)} of ${of}`;
 }
 
-function challengeLine(c: ChallengeSummary): string {
+function challengeLine(c: ChallengeSummary, prefs: Display): string {
   const amount = (v: number) =>
     c.unit
-      ? formatMetricValue(v, c)
-      : `${formatMetricValue(v, c, false)} ${c.metricLabel.toLowerCase()}`;
+      ? formatMetricValue(v, c, true, prefs)
+      : `${formatMetricValue(v, c, false, prefs)} ${c.metricLabel.toLowerCase()}`;
   if (c.solo) {
     return c.solo.status === 'upcoming'
       ? 'Starts soon'
@@ -66,7 +69,7 @@ function challengeLine(c: ChallengeSummary): string {
 }
 
 /** Only a challenge that is running now is worth a widget line. */
-function widgetChallenge(c: ChallengeSummary | null): WidgetChallenge | null {
+function widgetChallenge(c: ChallengeSummary | null, prefs: Display): WidgetChallenge | null {
   if (!c || c.status !== 'active') return null;
   return {
     id: c.id,
@@ -74,17 +77,21 @@ function widgetChallenge(c: ChallengeSummary | null): WidgetChallenge | null {
     rank: c.myRank,
     of: c.participantCount,
     rankText: c.solo ? 'Solo' : widgetRankText(c.myRank, c.participantCount),
-    line: challengeLine(c),
+    line: challengeLine(c, prefs),
   };
 }
 
-export function buildWidgetSnapshot(today: TodayResponse, now: Date = new Date()): WidgetSnapshot {
+export function buildWidgetSnapshot(
+  today: TodayResponse,
+  now: Date = new Date(),
+  prefs: Display = DEFAULT_DISPLAY,
+): WidgetSnapshot {
   return {
     updatedAt: now.toISOString(),
     date: today.date,
     steps: channel(today, 'steps'),
     activeCalories: channel(today, 'active_calories'),
     activeMinutes: channel(today, 'active_minutes'),
-    challenge: widgetChallenge(today.featured),
+    challenge: widgetChallenge(today.featured, prefs),
   };
 }

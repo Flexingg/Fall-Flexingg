@@ -6,6 +6,7 @@
 import {
   nextRoundDates,
   recurrenceSchema,
+  formatDate,
   todayIn,
   type SeasonRow,
   type SeriesInfo,
@@ -13,6 +14,7 @@ import {
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { challengeParticipants, challenges, challengeTeams, feedEvents } from '../db/schema.js';
+import { displayFor } from './display.js';
 import { notify } from './notify.js';
 import { getUsers, toPublicUser } from './users.js';
 
@@ -153,15 +155,11 @@ export async function notifyNewRound(
   next: NextRound,
 ): Promise<void> {
   const today = todayIn(ch.timezone, ctx.now());
-  const when =
-    next.startDate <= today
-      ? 'starts today'
-      : `starts ${new Date(`${next.startDate}T00:00:00Z`).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          timeZone: 'UTC',
-        })}`;
   for (const userId of next.invitees) {
+    const when =
+      next.startDate <= today
+        ? 'starts today'
+        : `starts ${formatDate(next.startDate, await displayFor(ctx, userId))}`;
     await notify(ctx, userId, {
       kind: 'new_round',
       title: `Round ${next.round} of ${ch.name}`,

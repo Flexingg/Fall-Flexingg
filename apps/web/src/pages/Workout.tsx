@@ -1,12 +1,13 @@
 import type { WorkoutDetail, WorkoutExercise } from '@gauntlet/shared';
 import { useParams, useSearchParams } from 'react-router';
-import { Empty, ErrorBox, Header, Screen, Skeleton } from '../components/ui';
+import { Empty, ErrorBox, Header, Screen } from '../components/ui';
+import { SkeletonCard, SkeletonGroup, SkeletonList } from '../components/Skeleton';
 import { ApiError } from '../lib/api';
+import { fmtDate, fmtFlex, fmtQty, fmtTime, fmtWallTime, unitLabel } from '../lib/format';
 import { useWorkout } from '../lib/statsQueries';
 import '../styles/stats.css';
 
-const n = (v: number, digits = 0) =>
-  v.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+const n = (v: number, digits = 0) => fmtFlex(v, digits);
 
 /** One workout: the numbers, and for strength every exercise with its sets. Read live, never stored. */
 export function WorkoutPage() {
@@ -27,7 +28,12 @@ export function WorkoutPage() {
       ) : (
         <ErrorBox error={q.error} />
       )}
-      {q.isPending && <Skeleton height={260} />}
+      {q.isPending && (
+        <SkeletonGroup>
+          <SkeletonCard lines={2} />
+          <SkeletonList rows={4} avatar={null} />
+        </SkeletonGroup>
+      )}
       {w && <Body w={w} />}
     </Screen>
   );
@@ -37,10 +43,11 @@ function Body({ w }: { w: WorkoutDetail }) {
   const when = whenText(w);
   const stats: [string, string][] = [];
   if (w.minutes != null) stats.push([n(w.minutes), 'minutes']);
-  if (w.distanceKm != null) stats.push([n(w.distanceKm, 1), 'km']);
+  if (w.distanceKm != null) stats.push([fmtQty(w.distanceKm, 'km', 1, false), unitLabel('km')]);
   if (w.kcal != null) stats.push([n(w.kcal), 'kcal']);
   if (w.avgHeartRate != null) stats.push([n(w.avgHeartRate), 'avg heart rate (bpm)']);
-  if (w.volumeKg != null) stats.push([n(w.volumeKg), 'kg total volume']);
+  if (w.volumeKg != null)
+    stats.push([fmtQty(w.volumeKg, 'kg', 0, false), `${unitLabel('kg')} total volume`]);
 
   return (
     <div className="stack" style={{ gap: 14 }}>
@@ -94,20 +101,20 @@ function Exercise({ e }: { e: WorkoutExercise }) {
               <tr key={i} className={s.warmup ? 'warm' : ''}>
                 <td>{label[i]}</td>
                 <td className="num">
-                  {s.reps} × {s.kg > 0 ? `${n(s.kg, 1)} kg` : 'bodyweight'}
+                  {s.reps} × {s.kg > 0 ? fmtQty(s.kg, 'kg', 1) : 'bodyweight'}
                 </td>
-                <td className="num">{s.e1rm != null ? `${n(s.e1rm, 1)} kg` : '–'}</td>
+                <td className="num">{s.e1rm != null ? fmtQty(s.e1rm, 'kg', 1) : '–'}</td>
               </tr>
             ))}
           </tbody>
         </table>
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 10 }}>
           <small className="muted">
-            Volume <b className="num">{n(e.volumeKg)} kg</b>
+            Volume <b className="num">{fmtQty(e.volumeKg, 'kg', 0)}</b>
           </small>
           {e.bestE1rm != null && (
             <small className="muted">
-              Best est. 1RM <b className="num">{n(e.bestE1rm, 1)} kg</b>
+              Best est. 1RM <b className="num">{fmtQty(e.bestE1rm, 'kg', 1)}</b>
             </small>
           )}
         </div>
@@ -117,22 +124,15 @@ function Exercise({ e }: { e: WorkoutExercise }) {
 }
 
 function whenText(w: WorkoutDetail): string {
-  const day = new Date(`${w.date}T12:00:00Z`).toLocaleDateString('en-US', {
+  const day = fmtDate(w.date, {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-    timeZone: 'UTC',
   });
   if (!w.startedAt) {
     // Only a local wall-clock time ("07:37") is known: show it as written, no time-zone maths.
-    if (!w.startTime) return day;
-    const [h, m] = w.startTime.split(':').map(Number) as [number, number];
-    return `${day} at ${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+    return w.startTime ? `${day} at ${fmtWallTime(w.startTime)}` : day;
   }
-  const time = new Date(w.startedAt).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  return `${day} at ${time}`;
+  return `${day} at ${fmtTime(w.startedAt)}`;
 }

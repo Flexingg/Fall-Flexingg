@@ -1,16 +1,87 @@
-import { formatMetricValue, type ChallengeSummary } from '@gauntlet/shared';
+import {
+  displayUnitLabel,
+  formatCompact,
+  formatDate,
+  formatDateRange,
+  formatDateTime,
+  formatDistanceKm,
+  formatFlexible,
+  formatInt,
+  formatLiftTotalKg,
+  formatMetricValue,
+  formatNumber,
+  formatPercent,
+  formatQuantity,
+  formatQuantityFlexible,
+  formatTime,
+  formatWallTime,
+  formatWeightKg,
+  type ChallengeSummary,
+} from '@gauntlet/shared';
+import { getDisplay } from './display';
 
 export function fmt(
   value: number | null | undefined,
   c: Pick<ChallengeSummary, 'decimals' | 'unit'>,
   withUnit = true,
 ) {
-  return formatMetricValue(value, c, withUnit);
+  return formatMetricValue(value, c, withUnit, getDisplay());
 }
 
 export function fmtInt(value: number | null | undefined) {
-  return value == null ? '–' : Math.round(value).toLocaleString('en-US');
+  return formatInt(value, getDisplay());
 }
+
+/** A number with the person's digit grouping and a fixed number of decimals. */
+export const fmtNum = (value: number | null | undefined, decimals = 0) =>
+  formatNumber(value, getDisplay(), decimals);
+
+/** Like fmtNum but whole values drop the decimals ("12", "12.5"). */
+export const fmtFlex = (value: number | null | undefined, maxDecimals = 1) =>
+  formatFlexible(value, getDisplay(), maxDecimals);
+
+/** A stored (metric) value with its unit, in the person's units: km -> mi, kg -> lb, L -> fl oz. */
+export const fmtQty = (
+  value: number | null | undefined,
+  unit: string,
+  decimals = 1,
+  withUnit = true,
+) => formatQuantity(value, unit, decimals, getDisplay(), withUnit);
+
+/** Like fmtQty, but whole values drop their decimals: "3 kg", "3.5 kg". */
+export const fmtQtyFlex = (value: number | null | undefined, unit: string, maxDecimals = 1) =>
+  formatQuantityFlexible(value, unit, maxDecimals, getDisplay());
+
+export const fmtDistanceKm = (km: number | null | undefined, decimals = 1) =>
+  formatDistanceKm(km, getDisplay(), decimals);
+export const fmtWeightKg = (kg: number | null | undefined, decimals = 1) =>
+  formatWeightKg(kg, getDisplay(), decimals);
+export const fmtLiftTotalKg = (kg: number | null | undefined) =>
+  formatLiftTotalKg(kg, getDisplay());
+
+/** The unit label to show for a stored unit ("km" -> "mi" for imperial). */
+export const unitLabel = (unit: string) => displayUnitLabel(unit, getDisplay().units);
+
+export const fmtCompact = (value: number, decimals = 1) =>
+  formatCompact(value, decimals, getDisplay());
+
+/** Time of day in the person's clock ("7:05 PM" / "19:05"). */
+export const fmtTime = (value: string | number | Date | null | undefined, timeZone?: string) =>
+  formatTime(value, getDisplay(), timeZone);
+
+/** A wall-clock "07:37" as written, in the person's clock. */
+export const fmtWallTime = (hhmm: string | null | undefined) => formatWallTime(hhmm, getDisplay());
+
+/** A calendar day (YYYY-MM-DD) or instant, e.g. "Nov 10"; pass Intl options for other shapes. */
+export const fmtDate = (
+  value: string | number | Date | null | undefined,
+  options?: Intl.DateTimeFormatOptions,
+  timeZone?: string,
+) => formatDate(value, getDisplay(), options, timeZone);
+
+/** "Nov 10, 7:05 PM". */
+export const fmtDateTime = (value: string | number | Date | null | undefined) =>
+  formatDateTime(value, getDisplay());
 
 export function timeAgo(iso: string | null | undefined, now = Date.now()): string {
   if (!iso) return 'never';
@@ -32,10 +103,7 @@ export function firstName(name: string): string {
 }
 
 export function dateRange(start: string, end: string): string {
-  const o: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', timeZone: 'UTC' };
-  const a = new Date(`${start}T00:00:00Z`).toLocaleDateString('en-US', o);
-  const b = new Date(`${end}T00:00:00Z`).toLocaleDateString('en-US', o);
-  return start === end ? a : `${a} – ${b}`;
+  return formatDateRange(start, end, getDisplay());
 }
 
 export function daysLeftText(
@@ -54,8 +122,8 @@ export function fmtSolo(
   withUnit = true,
 ): string {
   if (value == null || !Number.isFinite(value)) return '–';
-  if (valueKind === 'pct') return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+  if (valueKind === 'pct') return formatPercent(value, getDisplay(), 1, true);
   if (valueKind === 'days')
-    return `${Math.round(value)}${withUnit ? (Math.round(value) === 1 ? ' day' : ' days') : ''}`;
+    return `${fmtInt(value)}${withUnit ? (Math.round(value) === 1 ? ' day' : ' days') : ''}`;
   return fmt(value, c, withUnit);
 }

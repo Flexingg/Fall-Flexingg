@@ -4,10 +4,19 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
 import { NudgeButton } from '../components/NudgeButton';
-import { Avatar, Empty, ErrorBox, Header, Screen, Skeleton, toast, Toggle } from '../components/ui';
+import { Avatar, Empty, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
+import { SkeletonCard, SkeletonGroup, SkeletonLine, SkeletonList } from '../components/Skeleton';
 import { ApiError, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { keys, useProfile } from '../lib/queries';
+import {
+  fmtDate,
+  fmtDistanceKm,
+  fmtFlex,
+  fmtInt,
+  fmtLiftTotalKg,
+  fmtWeightKg,
+} from '../lib/format';
 import { HeadToHead } from '../components/HeadToHead';
 
 /** Someone's profile (or your own): record, trophy board, milestones and all-time stats. */
@@ -28,7 +37,21 @@ export function ProfilePage() {
       ) : (
         <ErrorBox error={q.error} />
       )}
-      {q.isPending && <Skeleton height={420} />}
+      {q.isPending && (
+        <SkeletonGroup>
+          <SkeletonCard>
+            <div className="row" style={{ gap: 14 }}>
+              <SkeletonLine width={64} height={64} style={{ borderRadius: '50%' }} />
+              <div className="grow stack" style={{ gap: 10 }}>
+                <SkeletonLine width="50%" height={16} />
+                <SkeletonLine width="70%" />
+              </div>
+            </div>
+          </SkeletonCard>
+          <SkeletonCard lines={3} />
+          <SkeletonList rows={3} />
+        </SkeletonGroup>
+      )}
       {p && (
         <div className="stack" style={{ gap: 14 }}>
           <Identity p={p} />
@@ -42,16 +65,10 @@ export function ProfilePage() {
   );
 }
 
-const monthYear = (d: string) =>
-  new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-const shortDate = (d: string) =>
-  new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-const n = (v: number) => Math.round(v).toLocaleString('en-US');
-const one = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 1 });
+const monthYear = (d: string) => fmtDate(d, { month: 'short', year: 'numeric' });
+const shortDate = (d: string) => fmtDate(d, { month: 'short', day: 'numeric', year: 'numeric' });
+const n = (v: number) => fmtInt(v);
+const one = (v: number) => fmtFlex(v, 1);
 
 function Identity({ p }: { p: ProfileResponse }) {
   const u = p.user;
@@ -321,23 +338,23 @@ function AllTime({ s }: { s: AllTimeStats }) {
   const b = s.bests;
   const tiles = [
     { label: 'Steps', value: t.steps, fmt: n },
-    { label: 'Distance', value: t.distanceKm, fmt: (v: number) => `${one(v)} km` },
+    { label: 'Distance', value: t.distanceKm, fmt: (v: number) => fmtDistanceKm(v) },
     { label: 'Workouts', value: t.workouts, fmt: n },
     { label: 'Active minutes', value: t.activeMinutes, fmt: n },
     { label: 'Active kcal', value: t.activeCalories, fmt: n },
     {
       label: 'Volume lifted',
       value: t.liftVolumeKg,
-      fmt: (v: number) => (v >= 10_000 ? `${one(v / 1000)} t` : `${n(v)} kg`),
+      fmt: fmtLiftTotalKg,
     },
     { label: 'Sets logged', value: t.liftSets, fmt: n },
     { label: 'Hours fasted', value: t.fastHours, fmt: (v: number) => `${one(v)} h` },
   ].filter((x) => x.value > 0);
   const bests = [
     { label: 'Best step day', value: b.steps, fmt: n },
-    { label: 'Best distance day', value: b.distanceKm, fmt: (v: number) => `${one(v)} km` },
+    { label: 'Best distance day', value: b.distanceKm, fmt: (v: number) => fmtDistanceKm(v) },
     { label: 'Longest 10k streak', value: b.stepStreakDays || null, fmt: (v: number) => `${v} d` },
-    { label: 'Biggest lift day', value: b.liftVolumeKg, fmt: (v: number) => `${n(v)} kg` },
+    { label: 'Biggest lift day', value: b.liftVolumeKg, fmt: (v: number) => fmtWeightKg(v, 0) },
     { label: 'Longest fast', value: b.longestFastHours, fmt: (v: number) => `${one(v)} h` },
   ].filter(
     (x): x is { label: string; value: number; fmt: (v: number) => string } => x.value != null,

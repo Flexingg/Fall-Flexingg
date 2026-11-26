@@ -40,6 +40,8 @@ found by name or @handle and to join **public challenges** from Discover; server
 
 **Demo account:** the sign-in screen has a "Try the demo" button. It signs into a built-in account with five made-up friends, 70 days of sample stats and a few challenges (including solo ones), all rebuilt every day. It has no SparkyFitness behind it, so linking apps, fasting and Health Connect are switched off, and it can't add real friends, go public or be deleted. Switch it off with `DEMO_ACCOUNT=false`.
 
+**Units and formats:** Me → Units & formats switches between metric (km, kg) and imperial (mi, lb), a 12 or 24-hour clock and the number format. The first guess comes from the device's locale; the choice is saved on the account so notifications, the feed and the weekly recap are worded the same way as the screens (the display settings are kept in `users.notification_prefs` under `display`, so no migration). Shared rules live in `packages/shared/src/format.ts`. Screens show shaped placeholders while data loads (`components/Skeleton.tsx`).
+
 - **PWA** (installable web app) and **Android app** from one React codebase (Capacitor).
 - **SparkyFitness holds all raw health data.** Gauntlet stores only users, friends, challenges and a
   per-day scoring cache that can be rebuilt at any time.
