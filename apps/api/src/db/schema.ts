@@ -1,5 +1,6 @@
 import type { SoloConfig } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
+import type { NotificationPrefs, Recurrence } from '@gauntlet/shared';
 import {
   boolean,
   date,
@@ -9,6 +10,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  uniqueIndex,
   text,
   timestamp,
   uuid,
@@ -51,6 +53,13 @@ export const users = pgTable('users', {
   /** The built-in demo account and its made-up friends: sample data, no SparkyFitness behind it. */
   isDemo: boolean('is_demo').notNull().default(false),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  /** The last sync's failure, for the admin page; cleared by the next good sync. */
+  lastSyncError: text('last_sync_error'),
+  lastSyncErrorAt: timestamp('last_sync_error_at', { withTimezone: true }),
+  /** Which notifications this person wants, per kind (missing = the kind's default). */
+  notificationPrefs: jsonb('notification_prefs').$type<NotificationPrefs>().notNull().default({}),
+  /** ISO week (e.g. 2026-W48) of the last weekly recap sent, so each goes out once. */
+  lastRecapWeek: text('last_recap_week'),
   createdAt: createdAt(),
 });
 
@@ -139,6 +148,14 @@ export const challenges = pgTable(
     solo: jsonb('solo').$type<SoloConfig>(),
     leaderId: uuid('leader_id'),
     finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+    /** Team challenge: how a team's score combines its members' scores. Null = everyone for themselves. */
+    teamScoring: text('team_scoring', { enum: ['sum', 'avg'] }),
+    /** Recurring challenge: starts the next round when this one ends. */
+    recurrence: jsonb('recurrence').$type<Recurrence>(),
+    /** The first challenge of a recurring series (its own id for the first round). */
+    seriesId: uuid('series_id'),
+    /** 1 for the first round of a series. */
+    seriesRound: integer('series_round'),
     createdAt: createdAt(),
   },
   (t) => [index('challenges_visibility_idx').on(t.visibility, t.endDate)],
@@ -159,6 +176,8 @@ export const challengeParticipants = pgTable(
     finalScore: doublePrecision('final_score'),
     /** Per-person settings, e.g. a weight challenge's direction and target. */
     params: jsonb('params').$type<Record<string, unknown>>(),
+    /** Team in a team challenge. */
+    teamId: uuid('team_id'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -231,4 +250,136 @@ export const feedEvents = pgTable(
     index('feed_actor_idx').on(t.actorId, t.createdAt),
     index('feed_challenge_idx').on(t.challengeId, t.createdAt),
   ],
+);
+
+// ---------- Team challenges ----------
+
+export const challengeTeams = pgTable(
+  'challenge_teams',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    challengeId: uuid('challenge_id')
+      .notNull()
+      .references(() => challenges.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** Display colour, e.g. "#c6ff00". */
+    color: text('color').notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index('teams_challenge_idx').on(t.challengeId)],
+);
+
+// ---------- Feed reactions, comments and nudges ----------
+
+export const feedReactions = pgTable(
+  'feed_reactions',
+  {
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => feedEvents.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** One of a small fixed set (see REACTIONS in @gauntlet/shared). */
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.eventId, t.userId, t.emoji] })],
+);
+
+export const feedComments = pgTable(
+  'feed_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => feedEvents.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('comments_event_idx').on(t.eventId, t.createdAt)],
+);
+
+export const nudges = pgTable(
+  'nudges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fromUserId: uuid('from_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    toUserId: uuid('to_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    challengeId: uuid('challenge_id').references(() => challenges.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('nudges_pair_idx').on(t.fromUserId, t.toUserId, t.createdAt)],
+);
+
+// ---------- Notifications and push ----------
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** A NotificationKind from @gauntlet/shared. */
+    kind: text('kind').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    /** In-app path to open, e.g. "/c/<id>". */
+    url: text('url'),
+    payload: jsonb('payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: createdAt(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    /** When delivery (web push / device poll) handed it on; null = not yet. */
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  },
+  (t) => [index('notifications_user_idx').on(t.userId, t.createdAt)],
+);
+
+export const pushTargets = pgTable(
+  'push_targets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** webpush: a browser's Push API subscription. device: the Android app polling with a token. */
+    kind: text('kind', { enum: ['webpush', 'device'] }).notNull(),
+    /** webpush: the subscription endpoint. device: SHA-256 of the device token. */
+    endpoint: text('endpoint').notNull(),
+    /** webpush: { p256dh, auth }. */
+    keys: jsonb('keys').$type<Record<string, string>>(),
+    label: text('label'),
+    createdAt: createdAt(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('push_endpoint_idx').on(t.endpoint)],
+);
+
+// ---------- Personal records ----------
+
+export const personalRecords = pgTable(
+  'personal_records',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** e.g. "steps_day", "distance_day", "lift_e1rm:squat", "step_streak". */
+    key: text('key').notNull(),
+    value: doublePrecision('value').notNull(),
+    date: date('date', { mode: 'string' }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
 );

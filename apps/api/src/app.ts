@@ -8,15 +8,22 @@ import { ZodError } from 'zod';
 import type { AppContext } from './context.js';
 import { HttpError } from './context.js';
 import { downloadRoutes } from './downloads.js';
+import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { challengeRoutes } from './routes/challenges.js';
+import { teamRoutes } from './routes/teams.js';
 import { connectionRoutes } from './routes/connections.js';
 import { garminRoutes } from './routes/garmin.js';
 import { friendRoutes } from './routes/friends.js';
 import { userRoutes } from './routes/users.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
+import { statsRoutes } from './routes/stats.js';
 import { miscRoutes } from './routes/misc.js';
+import { socialRoutes } from './routes/social.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { pushRoutes } from './routes/push.js';
+import { registerPushDelivery } from './services/push.js';
 import { SparkyError } from '@gauntlet/sparky';
 import { markKeyInvalid } from './services/users.js';
 
@@ -85,14 +92,21 @@ export async function buildApp(
   });
 
   authRoutes(app, full);
+  adminRoutes(app, full);
   meRoutes(app, full);
+  statsRoutes(app, full);
   friendRoutes(app, full);
   userRoutes(app, full);
   inviteRoutes(app, full);
   challengeRoutes(app, full);
+  teamRoutes(app, full);
   miscRoutes(app, full);
+  socialRoutes(app, full);
   garminRoutes(app, full);
   connectionRoutes(app, full);
+  notificationRoutes(app, full);
+  pushRoutes(app, full);
+  registerPushDelivery();
   downloadRoutes(app, full.cfg);
   legalRoutes(app, full);
 

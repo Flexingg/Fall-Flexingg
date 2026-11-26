@@ -6,13 +6,19 @@ import {
   type TrendOverviewItem,
 } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { BarChart } from '../components/BarChart';
+import { Icon } from '../components/Icon';
 import { Empty, ErrorBox, Header, Screen, Seg, Skeleton } from '../components/ui';
 import { useTrends, useTrendsOverview } from '../lib/queries';
 import { useAuth } from '../lib/auth';
+import { useWorkouts, workoutPath } from '../lib/statsQueries';
+import '../styles/stats.css';
+import { previousIsoWeek, todayIn } from '@gauntlet/shared';
+import { timezone } from '../lib/platform';
 
 export function TrendsPage() {
-  const { mode } = useAuth();
+  const { mode, user } = useAuth();
   const [range, setRange] = useState<'day' | 'week' | 'month'>('week');
   const [metric, setMetric] = useState<string>('steps');
   const q = useTrends(range, metric);
@@ -21,6 +27,10 @@ export function TrendsPage() {
   const def: TrendDefInfo = t?.def ?? trendDef(metric) ?? trendDef('steps')!;
   // The day picked on the chart, if any; switching stat or range lets go.
   const [picked, setPicked] = useState<string | null>(null);
+  // Compare lays the period before over each bar; remembered between visits.
+  const [compare, setCompare] = useState(readCompare);
+  const ghost = compare && t?.previousBars ? t.previousBars.map((b) => b.value) : undefined;
+  const pickedIdx = t ? t.bars.findIndex((b) => b.date === picked) : -1;
   useEffect(() => setPicked(null), [metric, range]);
   const pickedBar = t?.bars.find((b) => b.date === picked) ?? null;
   // Days after today in "this week/month" have no data yet; don't show them as a real zero.
@@ -39,12 +49,34 @@ export function TrendsPage() {
   for (const a of overview.data?.available ?? []) options.set(a.key, a);
   if (!options.has(metric))
     options.set(metric, { key: metric, label: def.label, group: def.group });
+  const prevName =
+    range === 'week' ? 'last week' : range === 'month' ? 'the 30 days before' : 'the week before';
+  const legend =
+    range === 'week'
+      ? ['This week', 'Last week']
+      : range === 'month'
+        ? ['Last 30 days', 'The 30 days before']
+        : ['Last 7 days', 'The week before'];
+  const showWorkouts = (metric === 'workouts' || metric === 'lift_volume') && mode !== 'direct';
+  const workouts = useWorkouts(showWorkouts);
   const rangeName =
     range === 'week' ? 'this week' : range === 'month' ? 'last 30 days' : 'last 7 days';
 
   return (
     <Screen>
-      <Header title="Trends" />
+      <Header
+        title="Trends"
+        action={
+          mode !== 'direct' && (
+            <Link
+              to={`/recap/${previousIsoWeek(todayIn(user?.timezone ?? timezone))}`}
+              className="btn secondary sm"
+            >
+              Last week
+            </Link>
+          )
+        }
+      />
       <Seg
         label="Range"
         value={range}
@@ -98,6 +130,9 @@ export function TrendsPage() {
                   {upcoming(pickedBar.date)
                     ? `${longDay(pickedBar.date)} is still to come`
                     : `${unit ? `${unit} ` : ''}on ${longDay(pickedBar.date)}`}
+                  {ghost && !upcoming(pickedBar.date) && pickedIdx >= 0
+                    ? ` · ${num(ghost[pickedIdx]!)} ${prevName}${vsPct(pickedBar.value, ghost[pickedIdx]!)}`
+                    : ''}
                 </small>
                 <button className="chart-clear" onClick={() => setPicked(null)}>
                   Show total
@@ -113,16 +148,43 @@ export function TrendsPage() {
                 </small>
               </div>
             )}
+            {t.previousBars && (
+              <div className="chart-tools">
+                <button
+                  type="button"
+                  className={`pill${compare ? '' : ' plain'}`}
+                  aria-pressed={compare}
+                  onClick={() => {
+                    setCompare(!compare);
+                    saveCompare(!compare);
+                  }}
+                  style={{ cursor: 'pointer', minHeight: 32, padding: '0 14px', fontSize: 13 }}
+                >
+                  Compare
+                </button>
+                {compare && (
+                  <div className="chart-legend" aria-hidden="true">
+                    <span>
+                      <i /> {legend[0]}
+                    </span>
+                    <span>
+                      <i className="ghost" /> {legend[1]}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             <BarChart
               label={`${def.label} per day`}
               bars={t.bars}
               selected={picked}
               onSelect={setPicked}
-              describe={(b) =>
-                upcoming(b.date)
-                  ? `${longDay(b.date)}: still to come`
-                  : `${longDay(b.date)}: ${num(b.value)}${unit ? ` ${unit}` : ''}${b.isToday ? ', today' : ''}`
-              }
+              ghost={ghost}
+              describe={(b) => {
+                if (upcoming(b.date)) return `${longDay(b.date)}: still to come`;
+                const prev = ghost?.[t.bars.indexOf(b)];
+                return `${longDay(b.date)}: ${num(b.value)}${unit ? ` ${unit}` : ''}${b.isToday ? ', today' : ''}${prev != null ? `. ${prevName}: ${num(prev)}${unit ? ` ${unit}` : ''}` : ''}`;
+              }}
             />
           </div>
         )
@@ -170,6 +232,26 @@ export function TrendsPage() {
         </>
       )}
 
+      {showWorkouts && workouts.data && workouts.data.workouts.length > 0 && (
+        <>
+          <div className="lbl">Recent workouts</div>
+          <div className="list" aria-label="Recent workouts">
+            {workouts.data.workouts.map((w) => (
+              <Link key={w.id} to={workoutPath(w.id)} className="item">
+                <div className="grow" style={{ textAlign: 'left', minWidth: 0 }}>
+                  <div className="t ellipsis">{w.name}</div>
+                  <small className="ellipsis">
+                    {longDay(w.date)}
+                    {w.source ? ` · ${w.source}` : ''} · {w.summary}
+                  </small>
+                </div>
+                <Icon name="chevron" size={16} />
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="lbl">Personal bests</div>
       {mode === 'direct' && (
         <p className="muted" style={{ fontSize: 12, margin: '-4px 0 8px' }}>
@@ -195,6 +277,29 @@ export function TrendsPage() {
       )}
     </Screen>
   );
+}
+
+const COMPARE_KEY = 'gauntlet.trends.compare';
+function readCompare(): boolean {
+  try {
+    return localStorage.getItem(COMPARE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function saveCompare(on: boolean) {
+  try {
+    localStorage.setItem(COMPARE_KEY, on ? '1' : '0');
+  } catch {
+    // Storage can be blocked; the toggle still works for this visit.
+  }
+}
+
+/** " (+29%)" against the previous value, or nothing when there is nothing to compare with. */
+function vsPct(now: number, before: number): string {
+  if (!(before > 0)) return '';
+  const pct = Math.round(((now - before) / before) * 100);
+  return ` (${pct >= 0 ? '+' : ''}${pct}%)`;
 }
 
 const GROUP_LABEL = new Map(METRIC_GROUPS.map((g) => [g.key, g.label]));

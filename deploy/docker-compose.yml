@@ -84,6 +84,25 @@ services:
     ports:
       - '${SPARKY_PORT:-3004}:80'
 
+  # Daily backups of both databases and the SparkyFitness uploads into the `backups` volume, plus
+  # the backups and restores asked for on the admin page. See "Backups" in the README.
+  backup:
+    build: ./backup
+    image: gauntlet-backup:18
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PGHOST: db
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_TIME: ${BACKUP_TIME:-03:30}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - backups:/backups
+      - sparky-uploads:/uploads
+
   gauntlet:
     build:
       context: ..
@@ -92,6 +111,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # Makes the shared backups folder writable for Gauntlet before it starts using it.
+      backup:
+        condition: service_started
     environment:
       DATABASE_URL: postgres://gauntlet:${GAUNTLET_DB_PASSWORD}@db:5432/gauntlet
       # Server-to-server over the internal network; links shown to people use the public URL.
@@ -109,8 +131,15 @@ services:
       # A private repository also needs GITHUB_TOKEN (read-only access to its contents).
       GITHUB_RELEASES_REPO: ${GITHUB_RELEASES_REPO:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Shared with the backup service, for the admin page's Backups section.
+      BACKUP_DIR: /backups
+      # Browser and installed-app notifications (Web Push). Generate once: npx web-push generate-vapid-keys
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     volumes:
       - gauntlet-downloads:/app/downloads
+      - backups:/backups
     ports:
       - '${GAUNTLET_PORT:-8080}:8080'
 
@@ -119,3 +148,4 @@ volumes:
   gauntlet-downloads:
   sparky-uploads:
   sparky-backup:
+  backups:

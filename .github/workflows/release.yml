@@ -153,7 +153,7 @@ jobs:
           GAUNTLET_VERSION_CODE: ${{ github.run_number }}
         run: |
           export GAUNTLET_VERSION_NAME="${TAG#v}"
-          ./gradlew assembleRelease bundleRelease --no-daemon
+          ./gradlew :app:assembleRelease :app:bundleRelease :wear:assembleRelease --no-daemon
 
       - name: Verify signature and version
         id: name
@@ -169,6 +169,12 @@ jobs:
           [ -f "$AAB" ] || { echo "::error::No app bundle was built"; exit 1; }
           cp "$AAB" "dist/gauntlet-${TAG}.aab"
           (cd dist && sha256sum "$FILE" > "$FILE.sha256")
+          # The Wear OS companion (installed on a watch by hand; see the README).
+          WEAR=apps/web/android/wear/build/outputs/apk/release/wear-release.apk
+          [ -f "$WEAR" ] || { echo "::error::No Wear OS APK was built"; exit 1; }
+          "$BT/apksigner" verify "$WEAR"
+          cp "$WEAR" "dist/gauntlet-wear-${TAG}.apk"
+          (cd dist && sha256sum "gauntlet-wear-${TAG}.apk" > "gauntlet-wear-${TAG}.apk.sha256")
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
           # Signing-certificate fingerprint for Android App Links (AB:CD:... form).
           FP="$("$BT/apksigner" verify --print-certs "$SRC" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1 \
@@ -192,7 +198,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" "dist/${{ steps.name.outputs.file }}" "dist/${{ steps.name.outputs.file }}.sha256" "dist/gauntlet-${TAG}.aab" --clobber
+        run: gh release upload "$TAG" "dist/${{ steps.name.outputs.file }}" "dist/${{ steps.name.outputs.file }}.sha256" "dist/gauntlet-${TAG}.aab" "dist/gauntlet-wear-${TAG}.apk" "dist/gauntlet-wear-${TAG}.apk.sha256" --clobber
 
       - name: Warn when the GitHub release could not be written
         if: steps.create.outcome == 'failure' || steps.attach.outcome == 'failure'

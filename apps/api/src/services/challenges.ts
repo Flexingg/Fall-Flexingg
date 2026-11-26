@@ -20,8 +20,11 @@ import {
   type MetricDef,
   type MetricKey,
   type ParticipantState,
+  type SeriesInfo,
   type Standing,
   type StandingRow,
+  ordinal,
+  recurrenceSchema,
 } from '@gauntlet/shared';
 import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
@@ -33,6 +36,10 @@ import {
   feedEvents,
   rankSnapshots,
 } from '../db/schema.js';
+import { notify } from './notify.js';
+import { createNextRound, loadSeriesInfo, notifyNewRound, type NextRound } from './recurring.js';
+import { buildTeams, getTeams, getTeamsFor, type TeamRow } from './teams.js';
+import { notifyLeadChange } from './notifyEvents.js';
 import { getUsers, toPublicUser, type UserRow } from './users.js';
 
 export type ChallengeRow = typeof challenges.$inferSelect;
@@ -243,6 +250,43 @@ interface BuildArgs {
   usersById: Map<string, UserRow>;
   /** Set for a solo challenge. */
   solo?: SoloProgress | null;
+  /** This challenge's teams (team challenges only). */
+  teamRows?: TeamRow[];
+  /** Round and season info (recurring series only). */
+  series?: SeriesInfo | null;
+}
+
+/** The team leaderboard, from each person's score (their final score once the challenge is over). */
+function teamsFor(
+  ch: ChallengeRow,
+  teamRows: TeamRow[] | undefined,
+  parts: ParticipantRow[],
+  computed: ComputedStandings,
+) {
+  if (!ch.teamScoring || !teamRows?.length) return null;
+  const finalized = !!ch.finalizedAt;
+  const partByUser = new Map(parts.map((p) => [p.userId, p]));
+  const scoreOf = new Map(
+    computed.standings.map((s) => {
+      const p = partByUser.get(s.userId);
+      return [s.userId, finalized && p?.finalScore != null ? p.finalScore : s.score] as const;
+    }),
+  );
+  // After the end, a team's rank is the one every member was given, so it can't drift.
+  const finalRanks = new Map<string, number>();
+  if (finalized)
+    for (const p of parts)
+      if (p.teamId && p.finalRank != null && p.state === 'joined')
+        finalRanks.set(p.teamId, p.finalRank);
+  return buildTeams({
+    teams: teamRows,
+    mode: ch.teamScoring,
+    scoring: ch.scoring,
+    lowerIsBetter: ch.lowerIsBetter,
+    parts,
+    scoreOf,
+    finalRanks,
+  });
 }
 
 export function buildSummary({
@@ -253,6 +297,7 @@ export function buildSummary({
   computed,
   usersById,
   solo = null,
+  teamRows,
 }: BuildArgs): ChallengeSummary {
   const def = challengeMetricDef(ch);
   const status = challengeStatus(ctx, ch);
@@ -260,7 +305,14 @@ export function buildSummary({
   const finalized = !!ch.finalizedAt;
   const standingFor = (userId: string) => computed.standings.find((s) => s.userId === userId);
   const mine = standingFor(viewerId);
-  const myRank = finalized ? (me?.finalRank ?? mine?.rank ?? null) : (mine?.rank ?? null);
+  // In a team challenge your place is your team's.
+  const teamList = teamsFor(ch, teamRows, parts, computed);
+  const myTeam = teamList?.find((t) => me?.state === 'joined' && t.memberIds.includes(viewerId));
+  const myRank = myTeam
+    ? myTeam.rank
+    : finalized
+      ? (me?.finalRank ?? mine?.rank ?? null)
+      : (mine?.rank ?? null);
   let myScore = finalized ? (me?.finalScore ?? mine?.score ?? null) : (mine?.score ?? null);
   // Against yourself the headline number is the thing being aimed at: % change or streak length.
   if (solo && (solo.kind === 'improve' || solo.kind === 'streak')) myScore = solo.current;
@@ -320,6 +372,9 @@ export function buildSummary({
     featured: ch.featured,
     showEvents: ch.showEvents,
     solo,
+    recurrence: recurrenceSchema.safeParse(ch.recurrence).data ?? null,
+    seriesRound: ch.seriesRound,
+    teamScoring: ch.teamScoring,
   };
 }
 
@@ -335,7 +390,8 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
     return [
       {
         user: toPublicUser(u),
-        rank: finalized && p.finalRank != null ? p.finalRank : s.rank,
+        // A team challenge's final rank is the team's, so people keep their own rank here.
+        rank: finalized && p.finalRank != null && !ch.teamScoring ? p.finalRank : s.rank,
         score: finalized && p.finalScore != null ? p.finalScore : s.score,
         progress: s.progress,
         reachedGoalOn: s.reachedGoalOn,
@@ -343,10 +399,11 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
         state: p.state,
         lastSyncedAt: u.lastSyncedAt?.toISOString() ?? null,
         isMe: s.userId === viewerId,
+        teamId: p.teamId,
       },
     ];
   });
-  if (finalized) standings.sort((a, b) => a.rank - b.rank);
+  if (finalized && !ch.teamScoring) standings.sort((a, b) => a.rank - b.rank);
   const invited = parts
     .filter((p) => p.state === 'invited')
     .map((p) => usersById.get(p.userId))
@@ -362,6 +419,9 @@ export function buildDetail(args: BuildArgs): ChallengeDetail {
     standings,
     invited,
     rematchOf: ch.rematchOf,
+    teams: teamsFor(ch, args.teamRows, parts, computed),
+    myTeamId: mine?.teamId ?? null,
+    series: args.series ?? null,
   };
 }
 
@@ -379,7 +439,9 @@ export async function loadDetail(
     parts.map((p) => p.userId),
   );
   const solo = await soloFor(ctx, ch, computed.byUser);
-  return buildDetail({ ctx, ch, parts, viewerId, computed, usersById, solo });
+  const teamRows = ch.teamScoring ? await getTeams(ctx, ch.id) : [];
+  const series = await loadSeriesInfo(ctx, ch, viewerId);
+  return buildDetail({ ctx, ch, parts, viewerId, computed, usersById, solo, teamRows, series });
 }
 
 export async function listForUser(ctx: AppContext, userId: string): Promise<ChallengeSummary[]> {
@@ -423,11 +485,18 @@ export async function summarize(
     allParts.map((p) => p.userId),
   );
   const out: ChallengeSummary[] = [];
+  const allTeams = await getTeamsFor(
+    ctx,
+    chs.filter((c) => c.teamScoring).map((c) => c.id),
+  );
   for (const ch of chs) {
     const parts = allParts.filter((p) => p.challengeId === ch.id);
     const computed = await computeChallengeStandings(ctx, ch, parts);
     const solo = await soloFor(ctx, ch, computed.byUser);
-    out.push(buildSummary({ ctx, ch, parts, viewerId: userId, computed, usersById, solo }));
+    const teamRows = allTeams.filter((t) => t.challengeId === ch.id);
+    out.push(
+      buildSummary({ ctx, ch, parts, viewerId: userId, computed, usersById, solo, teamRows }),
+    );
   }
   return out;
 }
@@ -460,6 +529,8 @@ export async function openChallengesForUser(
  * loaded earlier: a stale row would carry an out-of-date leader.
  */
 export async function refreshChallenge(ctx: AppContext, challengeId: string): Promise<void> {
+  // Who just lost the lead; told once the transaction (and its lock) is done.
+  let overtaken: { name: string; newLeaderId: string; previousLeaderId: string } | null = null;
   await ctx.db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`challenge:${challengeId}`}, 0))`,
@@ -500,26 +571,48 @@ export async function refreshChallenge(ctx: AppContext, challengeId: string): Pr
         kind: 'took_lead',
         payload: { previousLeaderId: ch.leaderId },
       });
+      overtaken = { name: ch.name, newLeaderId: top.userId, previousLeaderId: ch.leaderId };
     }
   });
+  if (overtaken) {
+    const o = overtaken as { name: string; newLeaderId: string; previousLeaderId: string };
+    await notifyLeadChange(ctx, { id: challengeId, name: o.name }, o.newLeaderId, [
+      o.previousLeaderId,
+    ]).catch((err) => ctx.log.warn({ err: String(err) }, 'lead change notification failed'));
+  }
 }
 
-/** Close challenges whose last day has passed: freeze ranks and announce the winner. */
+/**
+ * Close challenges whose last day has passed: freeze ranks, announce the winner(s), tell everyone
+ * and, for a recurring challenge, start the next round (all in one transaction, so a finished
+ * round never lacks its successor and never gets two).
+ *
+ * In a team challenge each member's final rank is their team's rank (so trophies credit team
+ * podiums) while their final score stays their own.
+ */
 export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Promise<boolean> {
   if (ch.finalizedAt || challengeToday(ctx, ch) <= ch.endDate) return false;
   const parts = await getParticipants(ctx, ch.id);
   const { standings } = await computeChallengeStandings(ctx, ch, parts);
-  await ctx.db.transaction(async (tx) => {
+  const teamRows = ch.teamScoring ? await getTeams(ctx, ch.id) : [];
+  const teamList = teamsFor(ch, teamRows, parts, {
+    standings,
+    asOf: '',
+    bestDays: new Map(),
+    byUser: new Map(),
+  });
+  const teamOf = (userId: string) => teamList?.find((t) => t.memberIds.includes(userId)) ?? null;
+  const result = await ctx.db.transaction(async (tx) => {
     const [claimed] = await tx
       .update(challenges)
       .set({ finalizedAt: ctx.now() })
       .where(and(eq(challenges.id, ch.id), isNull(challenges.finalizedAt)))
       .returning({ id: challenges.id });
-    if (!claimed) return;
+    if (!claimed) return null;
     for (const s of standings) {
       await tx
         .update(challengeParticipants)
-        .set({ finalRank: s.rank, finalScore: s.score })
+        .set({ finalRank: teamOf(s.userId)?.rank ?? s.rank, finalScore: s.score })
         .where(
           and(
             eq(challengeParticipants.challengeId, ch.id),
@@ -527,17 +620,71 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
           ),
         );
     }
-    const winners = standings.filter((s) => s.rank === 1 && s.score != null);
-    for (const w of ch.solo ? [] : winners) {
-      await tx.insert(feedEvents).values({
-        actorId: w.userId,
-        challengeId: ch.id,
-        kind: 'challenge_won',
-        payload: { score: w.score },
-      });
+    if (!ch.solo) {
+      const winners = teamList
+        ? standings.filter((s) => {
+            const t = teamOf(s.userId);
+            return t && t.rank === 1 && t.score != null;
+          })
+        : standings.filter((s) => s.rank === 1 && s.score != null);
+      for (const w of winners) {
+        const team = teamOf(w.userId);
+        await tx.insert(feedEvents).values({
+          actorId: w.userId,
+          challengeId: ch.id,
+          kind: 'challenge_won',
+          payload: team
+            ? { score: w.score, teamName: team.name, teamId: team.id }
+            : { score: w.score },
+        });
+      }
     }
+    const next = ch.recurrence
+      ? await createNextRound({ ...ctx, db: tx as unknown as AppContext['db'] }, ch, parts)
+      : null;
+    return { next };
   });
+  if (!result) return false;
+  // The single place results are announced, once, by whoever closed the challenge (team-aware).
+  if (!ch.solo)
+    await announceFinish(ctx, ch, standings, teamList).catch((err) =>
+      ctx.log.warn({ err: String(err) }, 'challenge result notification failed'),
+    );
+  if (result.next) await notifyNewRound(ctx, ch, result.next satisfies NextRound);
   return true;
+}
+
+/** Tell everyone in a finished challenge how it went. */
+async function announceFinish(
+  ctx: AppContext,
+  ch: ChallengeRow,
+  standings: Standing[],
+  teamList: ReturnType<typeof teamsFor>,
+) {
+  const winningTeams = teamList?.filter((t) => t.rank === 1 && t.score != null) ?? [];
+  const n = teamList?.length ?? standings.length;
+  for (const s of standings) {
+    const team = teamList?.find((t) => t.memberIds.includes(s.userId));
+    const rank = team?.rank ?? s.rank;
+    const hasScore = team ? team.score != null : s.score != null;
+    let body: string;
+    if (!hasScore) body = 'The challenge has ended.';
+    else if (team)
+      body =
+        rank === 1
+          ? `${team.name} won! Great teamwork.`
+          : `${team.name} finished ${ordinal(rank)} of ${n}${
+              winningTeams.length ? `. ${winningTeams.map((t) => t.name).join(' and ')} won` : ''
+            }.`;
+    else body = rank === 1 ? 'You won!' : `You finished ${ordinal(rank)} of ${n}.`;
+    await notify(ctx, s.userId, {
+      kind: 'challenge_finished',
+      title: `${ch.name} is over`,
+      body,
+      url: `/c/${ch.id}/result`,
+      payload: { challengeId: ch.id, rank: hasScore ? rank : null },
+    });
+  }
 }
 
 function sqlExcluded(column: string) {

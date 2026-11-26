@@ -36,6 +36,8 @@ Profiles are **private by default** (only friends and challenge-mates see you). 
 found by name or @handle and to join **public challenges** from Discover; server admins
 (`ADMIN_EMAILS`) can feature them. Public profiles show name, handle and challenge record only.
 
+**Notifications:** friend requests, challenge invites, lead changes, results, nudges, new personal records and a Monday weekly recap show up under the bell on Today, and people choose which ones they want under Me → Notifications. Nothing goes through a third-party service. Browsers and the installed web app get pushes through Web Push signed with keys that belong to your server: run `npx web-push generate-vapid-keys` once and set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (for example `mailto:you@example.com`); without them the settings page says push isn't set up and the in-app list still works. The Android app has no Google services to receive pushes with, so it checks the server every ~15 minutes in the background (turn it on under Me → Notifications → Phone notifications). Notifications older than 60 days are deleted.
+
 **Demo account:** the sign-in screen has a "Try the demo" button. It signs into a built-in account with five made-up friends, 70 days of sample stats and a few challenges (including solo ones), all rebuilt every day. It has no SparkyFitness behind it, so linking apps, fasting and Health Connect are switched off, and it can't add real friends, go public or be deleted. Switch it off with `DEMO_ACCOUNT=false`.
 
 - **PWA** (installable web app) and **Android app** from one React codebase (Capacitor).
@@ -132,6 +134,42 @@ reads them back (CI does this on every push).
 Keep `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET` and the SparkyFitness encryption key stable: changing
 them makes stored keys unreadable and signs everyone out.
 
+## Backups
+
+On a home server nothing else keeps your data safe, so the compose stack includes a `backup` service.
+Every night at `BACKUP_TIME` (default 03:30, in `TZ`) it saves everything that matters into one file,
+and keeps the newest `BACKUP_KEEP` (default 14) of them. If there is no backup yet, it takes one as soon as
+it starts.
+
+- **What is in a backup:** `gauntlet-backup-YYYYMMDD-HHMMSS.tar` holding both Postgres databases
+  (`gauntlet` and `sparkyfitness_db`), the database roles, and SparkyFitness' uploads folder, plus a
+  `manifest.json` (when, Postgres and app version, sizes). Manual backups end in `-manual` (the newest 20
+  are kept), the automatic safety backup taken before a restore ends in `-pre-restore`, and files you upload
+  end in `-uploaded`. Those last two stay until you delete them.
+- **Where they are:** the Docker volume `backups` (at `/backups` in the `backup` and `gauntlet`
+  containers). A volume on the same disk does not protect you from that disk failing, so copy backups off
+  the machine now and then. Download one from **Profile > Server admin** in the app, or run
+  `docker run --rm -v <project>_backups:/b -v "$PWD":/out alpine cp /b/gauntlet-backup-XXXX.tar /out/`
+  (`docker volume ls` shows the project name), or bind-mount a folder instead of the volume in
+  `deploy/docker-compose.yml` (`- /srv/gauntlet-backups:/backups`) and sync that with rsync or a NAS.
+- **The admin page** (`/admin`, only for emails in `ADMIN_EMAILS`) shows when the last backup ran and
+  how big it was, lets you back up now, download, upload, delete and restore.
+- **Restoring** replaces all current data with the backup's. A `-pre-restore` safety backup is taken first,
+  each database is restored in one transaction (a failure leaves it as it was), then the uploads folder is
+  swapped. Afterwards restart the stack, because SparkyFitness caches data:
+  `docker compose -f deploy/docker-compose.yml --env-file deploy/.env restart`.
+- **Restoring from the command line** (works even when the app is down, as long as `db` is up):
+
+  ```bash
+  docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm backup restore gauntlet-backup-YYYYMMDD-HHMMSS.tar
+  docker compose -f deploy/docker-compose.yml --env-file deploy/.env restart
+  ```
+
+  To restore onto a brand-new machine, bring the stack up once with the same `.env` (so the databases and
+  roles exist), copy the backup file into the `backups` volume, then run the command above. Passwords of
+  roles that already exist are kept from the current `.env`, so keep it with your backups (it is not
+  inside them).
+
 ## Android
 
 ```bash
@@ -158,6 +196,20 @@ cd apps/web/android && ./gradlew assembleDebug
   weekday of the last 8 weeks). The app hands the wallpaper its latest numbers through Capacitor
   Preferences, so it shows what Gauntlet last synced. The shader in `apps/web/shaders/` is shared by
   the wallpaper and the in-app preview.
+- **Widget and Wear OS.** The app publishes a small snapshot of Today (steps, active calories and
+  minutes against your goals, plus the featured running challenge with your rank) every time Today
+  refreshes while the app is open.
+  - _Home-screen widget_ ("Gauntlet today"): long-press the home screen, Widgets, Gauntlet. 2x2 shows
+    the three rings and steps; stretch it to 4x2 for the numbers and your challenge (tap it to open
+    that challenge). It only changes when the app publishes, so after a few hours it greys out and
+    says "Open Gauntlet to refresh" instead of showing old numbers as current.
+  - _Wear OS tile_: a steps arc with your challenge rank, in `apps/web/android/wear` (same
+    `cc.randalls.gauntlet` id as the phone app, so the Wearable Data Layer pairs them; it needs Google
+    Play services on the phone and a paired watch). There is no Play Store listing, so each release
+    attaches `gauntlet-wear-<tag>.apk` (+ `.sha256`). Install it from a computer: on the watch enable
+    Developer options, ADB debugging and Debug over Wi-Fi, then
+    `adb connect <watch-ip>:5555` and `adb install gauntlet-wear-<tag>.apk`. Then add the "Gauntlet
+    today" tile from the watch's tile list. Open Gauntlet on the phone once so it sends the first numbers.
 - Icons and splash screens come from `apps/web/public/icons/*.svg`: `pnpm --filter @gauntlet/web icons`.
 
 ## Status

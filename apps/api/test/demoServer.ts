@@ -8,12 +8,16 @@
  * Connect screens: Hevy key good-hevy-key; Strava/Fitbit sign-in code good-code.
  * Garmin screen: runner@garmin.demo / demo, or mfa@garmin.demo / demo with code 123456.
  */
-import { addDays, todayIn } from '@gauntlet/shared';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { addDays, previousIsoWeek, todayIn } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, runMigrations } from '../src/db/index.js';
 import { runSyncCycle } from '../src/scheduler.js';
+import { notify } from '../src/services/notify.js';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
 
@@ -107,6 +111,8 @@ for (const [id, p] of Object.entries(profile)) {
         duration_minutes: Math.round(km * 6),
         calories_burned: Math.round(km * 60),
         exercise_source: p.source,
+        distance: km,
+        avg_heart_rate: 138 + (i % 5) * 4,
       });
     }
     u.sleep.push({
@@ -166,6 +172,17 @@ for (let i = 0; i < 14; i += 2) {
     ],
   });
 }
+// One session with a second lift, so the workout detail has more than one exercise.
+users.you!.exerciseEntries.push({
+  entry_date: d(-1),
+  exercise_name: 'Bench Press',
+  exercise_source: 'liftosaur',
+  duration_minutes: 0,
+  sets: [
+    { set_type: 'Warm-up', reps: 8, weight: 40 },
+    ...[0, 1, 2].map(() => ({ set_type: 'Working Set', reps: 6, weight: 70 })),
+  ],
+});
 // A custom measurement and weigh-ins, so Trends has more than the built-ins to show.
 users.you!.categories.push({
   id: 'cat-mood',
@@ -195,6 +212,31 @@ users.you!.fasts.push({
 
 fake.garminAccounts.set('mfa@garmin.demo', { password: 'demo', mfaCode: '123456' });
 
+// A pretend backup service for the admin page (Riley is the admin): two old backups and a heartbeat.
+const backupDir = mkdtempSync(join(tmpdir(), 'gauntlet-demo-backups-'));
+mkdirSync(join(backupDir, '.status'), { recursive: true });
+writeFileSync(join(backupDir, 'gauntlet-backup-20260101-033000.tar'), Buffer.alloc(3_400_000, 1));
+writeFileSync(join(backupDir, 'gauntlet-backup-20260102-033000.tar'), Buffer.alloc(3_500_000, 1));
+writeFileSync(
+  join(backupDir, '.status', 'last-backup.json'),
+  JSON.stringify({
+    file: 'gauntlet-backup-20260102-033000.tar',
+    sizeBytes: 3_500_000,
+    createdAt: new Date(Date.now() - 6 * 3600_000).toISOString(),
+  }),
+);
+writeFileSync(
+  join(backupDir, '.status', 'schedule.json'),
+  JSON.stringify({ nextAt: new Date(Date.now() + 18 * 3600_000).toISOString(), keep: 14 }),
+);
+const beat = () =>
+  writeFileSync(
+    join(backupDir, '.status', 'heartbeat.json'),
+    JSON.stringify({ at: Math.floor(Date.now() / 1000) }),
+  );
+beat();
+setInterval(beat, 15_000).unref();
+
 const { db, client } = createDb(DB_URL);
 await db.execute(
   sql`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public;`,
@@ -215,6 +257,7 @@ const cfg = loadConfig({
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY ?? Buffer.alloc(32, 3).toString('base64'),
   SYNC_INTERVAL_MINUTES: '0',
   ADMIN_EMAILS: 'riley@example.com',
+  BACKUP_DIR: backupDir,
   // The browser tests sign in many times a minute.
   LOGIN_RATE_LIMIT_MAX: '1000',
   // All the browser tests share one address.
@@ -298,7 +341,9 @@ for (const id of ['maya', 'dre', 'sam'])
   await call(id, 'POST', `/api/challenges/${live.id}/respond`, { accept: true });
 // Show Events on the main challenge; Dre keeps his workouts private.
 await call('you', 'PATCH', `/api/challenges/${live.id}`, { showEvents: true });
-await call('dre', 'PATCH', '/api/me', { settings: { shareEvents: false } });
+await call('dre', 'PATCH', '/api/me', {
+  settings: { shareEvents: false, shareProfileStats: true },
+});
 const cup = await call<{ id: string }>('dre', 'POST', '/api/challenges', {
   name: 'Active Minutes Cup',
   metric: 'active_minutes',
@@ -377,6 +422,36 @@ users.maya!.daily.find((r) => r.entry_date === today)!.total_distance_meters! +=
 users.dre!.daily.find((r) => r.entry_date === today)!.total_steps! += 12_000;
 users.sam!.daily.find((r) => r.entry_date === today)!.total_distance_meters! += 4_000;
 await runSyncCycle(ctx);
+
+// Alex's notifications: the sync cycles above may have produced some (it depends on the day of the
+// week), so start from a known inbox. Three unread, one read; the oldest is what the bell shows last.
+await ctx.db.execute(sql`delete from notifications`);
+const inbox = async (
+  kind: 'nudge' | 'weekly_recap' | 'lead_change' | 'friend_request',
+  title: string,
+  body: string,
+  url: string,
+) => notify(ctx, ids.you!, { kind, title, body, url });
+const nudge = await inbox(
+  'nudge',
+  'Dre nudged you',
+  'Dre is waiting on your steps in Weekend 100K.',
+  `/c/${live.id}`,
+);
+await ctx.db.execute(sql`update notifications set read_at = now() where id = ${nudge!.id}`);
+await inbox(
+  'weekly_recap',
+  'Your week in review',
+  'Last week: 71k steps (+12%), 3 workouts.',
+  `/recap/${previousIsoWeek(today)}`,
+);
+await inbox(
+  'lead_change',
+  'You lost the lead',
+  'Maya just took the lead in Weekend 100K.',
+  `/c/${live.id}`,
+);
+await inbox('friend_request', 'New friend request', 'Riley P. wants to be friends.', '/friends');
 
 const port = Number(process.env.PORT ?? 8080);
 await app.listen({ port, host: '0.0.0.0' });

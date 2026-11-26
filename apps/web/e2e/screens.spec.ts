@@ -654,3 +654,338 @@ test('Trends chart: tap or drag to see a day, arrows to step, Show total to go b
   await expect(page.locator('.big')).toContainText('vs last');
   await expect(days.locator('[aria-selected="true"]')).toHaveCount(0);
 });
+
+test('reacts to and comments on a feed item', async ({ page }) => {
+  await signIn(page);
+  const row = page.locator('.rx-row').first();
+  await expect(row).toBeVisible();
+  await row.getByRole('button', { name: 'Add a reaction' }).click();
+  await row.getByRole('button', { name: 'React 🔥' }).click();
+  await expect(row.getByRole('button', { name: /^🔥 \d+, you reacted$/ })).toBeVisible();
+  await snap(page, '50-feed-reaction');
+
+  // Open the item and leave a comment.
+  await row.getByRole('link', { name: /^Comment/ }).click();
+  await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^🔥 \d+, you reacted$/ })).toBeVisible();
+  await page.getByLabel('Add a comment').fill('Strong work!');
+  await page.getByRole('button', { name: 'Post' }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toBeVisible();
+  await snap(page, '51-feed-comments');
+
+  // The author can delete it again.
+  await page.getByRole('button', { name: /^Delete comment: Strong work/ }).click();
+  await expect(page.locator('.comment .body', { hasText: 'Strong work!' })).toHaveCount(0);
+});
+
+test('nudges a friend from their profile', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/friends');
+  await page.getByText('Maya Rodriguez').first().click();
+  await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+  await snap(page, '52-profile-nudge');
+  await page.getByRole('button', { name: 'Nudge Maya' }).click();
+  await expect(page.getByRole('button', { name: 'Nudged Maya' })).toBeDisabled();
+  await snap(page, '53-nudged');
+});
+
+test('server admin page is for admins only, with backups', async ({ page }) => {
+  // A normal person has no link and is sent home from the address.
+  await signIn(page);
+  await page.goto('/me');
+  await expect(page.getByText('Data sources & privacy')).toBeVisible();
+  await expect(page.getByText('Server admin')).toHaveCount(0);
+  await page.goto('/admin');
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await page.evaluate(() => localStorage.clear());
+  await page.context().clearCookies();
+
+  // Riley is the server admin in the demo.
+  await signIn(page, 'riley@example.com');
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Server admin/ }).click();
+  await expect(page.getByRole('heading', { name: 'Server admin' })).toBeVisible();
+  await expect(page.getByText('Everyone is syncing fine.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back up now' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Download' }).first()).toBeVisible();
+  await snap(page, '5a-admin');
+
+  // Restore needs the word RESTORE typed.
+  await page.getByRole('button', { name: 'Restore' }).first().click();
+  const go = page.getByRole('dialog').getByRole('button', { name: 'Restore' });
+  await expect(go).toBeDisabled();
+  await page.getByLabel('Type RESTORE to confirm').fill('RESTORE');
+  await expect(go).toBeEnabled();
+  await snap(page, '5b-admin-restore');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('team challenge: set up two teams, pick and switch teams, shuffle before the start', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/c/new');
+  await page.getByLabel('Challenge name').fill('Team Sprint');
+  await page.getByRole('button', { name: 'Steps' }).click();
+  // Start tomorrow so teams can still be rearranged.
+  await page
+    .getByRole('group', { name: 'Duration' })
+    .getByRole('button', { name: 'Custom' })
+    .click();
+  const dayOut = (n: number) =>
+    page.evaluate((k) => new Date(Date.now() + k * 864e5).toLocaleDateString('en-CA'), n);
+  await page.getByLabel('End date').fill(await dayOut(4));
+  await page.getByLabel('Start date').fill(await dayOut(1));
+  await page.getByRole('button', { name: 'Invite Maya Rodriguez' }).click();
+  await page.getByRole('switch', { name: 'Play in teams' }).click();
+  await expect(page.getByText('Average of everyone on the team who scored.')).toBeVisible();
+  await page.getByRole('button', { name: 'I’m on this team' }).click();
+  await snap(page, '51-new-team-challenge');
+  await page.getByRole('button', { name: 'Start challenge' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Team Sprint' })).toBeVisible();
+  const board = page.getByLabel('Team leaderboard');
+  await expect(board.getByText('Red Rockets')).toBeVisible();
+  await expect(board.getByText('Blue Blazers')).toBeVisible();
+  // Alex starts on Blue; switch to Red until the challenge starts.
+  const mine = page.getByRole('group', { name: 'Pick a team' });
+  await expect(mine.getByRole('button', { name: /Blue Blazers/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await mine.getByRole('button', { name: /Red Rockets/ }).click();
+  await expect(mine.getByRole('button', { name: /Red Rockets/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Shuffle teams evenly' }).click();
+  await expect(page.getByText('Teams shuffled')).toBeVisible();
+  await snap(page, '52-team-challenge');
+});
+
+test('recurring challenge: repeat weekly, with the repeat label on the page and in the list', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/c/new');
+  await page.getByLabel('Challenge name').fill('Weekly Steps');
+  await page.getByRole('button', { name: 'Steps' }).click();
+  await page.getByRole('button', { name: '7 days' }).click();
+  await page.getByRole('switch', { name: 'Repeat this challenge' }).click();
+  await expect(page.getByText('Each round runs 7 days.')).toBeVisible();
+  await snap(page, '53-new-recurring');
+  await page.getByRole('button', { name: 'Start challenge' }).click();
+  await expect(page.getByRole('heading', { name: 'Weekly Steps' })).toBeVisible();
+  await expect(page.getByText(/Repeats weekly/).first()).toBeVisible();
+  await expect(page.getByLabel('Series').getByText('Round 1')).toBeVisible();
+  await snap(page, '54-recurring-challenge');
+  await page.goto('/challenges');
+  const row = page.locator('.item', { hasText: 'Weekly Steps' });
+  await expect(row.getByText('Weekly', { exact: true })).toBeVisible();
+});
+
+test('head to head on a friend: shared stats side by side, or just the record', async ({
+  page,
+}) => {
+  await signIn(page);
+
+  // Dre shares his stats: numbers for both of you, and the Step Wars record.
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Dre Thomas/ }).click();
+  const h2h = page.getByLabel('Head to head');
+  await expect(h2h).toBeVisible();
+  await expect(h2h.getByLabel('Challenge record')).toContainText(/You \d+ – \d+ Dre/);
+  await expect(h2h.getByRole('group', { name: /^Steps: you [\d,]+, Dre [\d,]+/ })).toBeVisible();
+  await h2h.getByRole('button', { name: 'Month' }).click();
+  await expect(h2h.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(h2h.getByRole('group', { name: /^Steps:/ })).toBeVisible();
+  await snap(page, '60-head-to-head');
+
+  // Maya keeps her stats to herself: only the record and a note.
+  await page.goto('/friends');
+  await page.getByRole('link', { name: /Maya Rodriguez/ }).click();
+  const hidden = page.getByLabel('Head to head');
+  await expect(hidden.getByText(/keeps their stats private/)).toBeVisible();
+  await expect(hidden.getByRole('group')).toHaveCount(0);
+  await snap(page, '60-head-to-head-private');
+
+  // Your own profile has no head to head.
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Your profile/ }).click();
+  await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
+  await expect(page.getByLabel('Head to head')).toHaveCount(0);
+});
+
+test('Trends Compare overlays the previous period and the picked day shows both', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Trends' }).click();
+  const days = page.getByRole('listbox', { name: 'Steps per day' });
+  await expect(days).toBeVisible();
+  await expect(days.locator('.ghost')).toHaveCount(0);
+
+  const compare = page.getByRole('button', { name: 'Compare' });
+  await expect(compare).toHaveAttribute('aria-pressed', 'false');
+  await compare.click();
+  await expect(compare).toHaveAttribute('aria-pressed', 'true');
+  await expect(days.locator('.ghost')).toHaveCount(await days.getByRole('option').count());
+  await expect(page.locator('.chart-legend')).toContainText('This week');
+  await expect(page.locator('.chart-legend')).toContainText('Last week');
+
+  // Pick the first bar (a past day): the headline has this week and last week.
+  await days.getByRole('option').first().click();
+  await expect(page.locator('.big')).toContainText(
+    /on (Mon|Tue|Wed|Thu|Fri|Sat|Sun), .* · [\d,]+ last week/,
+  );
+  await snap(page, '61-trends-compare');
+
+  // It is remembered across visits.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Compare' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Compare' }).click();
+  await expect(page.getByRole('listbox', { name: 'Steps per day' }).locator('.ghost')).toHaveCount(
+    0,
+  );
+});
+
+test('workout detail: from Trends and from What counted', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Trends' }).click();
+  await page.getByLabel('Metric').selectOption('lift_volume');
+  const recent = page.getByLabel('Recent workouts');
+  await expect(recent).toBeVisible();
+
+  // The newest session has Squat and Bench Press, with a warm-up in each.
+  await recent
+    .getByRole('link', { name: /Strength workout · 2 exercises/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: /Strength workout/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Squat' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Bench Press' })).toBeVisible();
+  await expect(page.getByText('Warm-up').first()).toBeVisible();
+  await expect(page.getByText('Best est. 1RM').first()).toBeVisible();
+  await expect(page.getByText('Liftosaur')).toBeVisible();
+  await snap(page, '62-workout-strength');
+
+  // A run from the challenge's What counted list.
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  const section = page.getByLabel('What counted');
+  await section.getByRole('button', { name: 'Previous day' }).click();
+  await section.getByRole('button', { name: 'You' }).click();
+  await section
+    .getByRole('link', { name: /Running/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: 'Running' })).toBeVisible();
+  await expect(page.getByText('avg heart rate (bpm)')).toBeVisible();
+  await expect(page.getByText('minutes', { exact: true })).toBeVisible();
+  await snap(page, '63-workout-run');
+
+  // Someone else's, where Show Events lets you see it.
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  await section.getByRole('button', { name: 'Previous day' }).click();
+  await section.getByRole('button', { name: 'Maya', exact: true }).click();
+  await section
+    .getByRole('link', { name: /Running/ })
+    .first()
+    .click();
+  await expect(page.getByText(/Maya Rodriguez ·/)).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+});
+
+/** ISO week id ("2026-W48") of a date, to open a recap without importing app code. */
+function isoWeek(d: Date): string {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+  const week = Math.floor((t.getTime() - Date.UTC(t.getUTCFullYear(), 0, 1)) / 604_800_000) + 1;
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+test('notifications: the bell, the list, opening one, and the weekly recap', async ({ page }) => {
+  await signIn(page);
+  const bell = page.getByTestId('bell-count');
+  await expect(bell).toBeVisible();
+  const unread = Number(await bell.textContent());
+  expect(unread).toBeGreaterThanOrEqual(3);
+  await snap(page, '70-bell');
+
+  await page.getByRole('link', { name: /^Notifications/ }).click();
+  await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+  await expect(page.getByText('New friend request')).toBeVisible();
+  await expect(page.getByText('Your week in review')).toBeVisible();
+  await snap(page, '71-notifications');
+
+  // Tapping one marks it read and opens what it is about.
+  await page.getByRole('button', { name: /You lost the lead/ }).click();
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  await page.goto('/');
+  await expect(page.getByTestId('bell-count')).toHaveText(String(unread - 1));
+
+  // The recap link opens the week as a card.
+  await page.getByRole('link', { name: /^Notifications/ }).click();
+  await page.getByRole('button', { name: /Your week in review/ }).click();
+  await expect(page).toHaveURL(/\/recap\/\d{4}-W\d{2}$/);
+  await expect(page.getByLabel('Weekly recap')).toBeVisible();
+  await expect(page.getByLabel('Weekly recap').getByText('steps', { exact: true })).toBeVisible();
+  await expect(page.getByText('Distance', { exact: true })).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+  await snap(page, '73-recap');
+
+  // Mark everything read: the badge goes away.
+  await page.goto('/notifications');
+  await page.getByRole('button', { name: 'Mark all read' }).click();
+  await expect(page.getByText(/\d+ unread/)).toHaveCount(0);
+  await page.goto('/');
+  await expect(page.getByTestId('bell-count')).toHaveCount(0);
+});
+
+test('notification settings: a switch per kind that sticks, and honest push status', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/me');
+  await page.getByRole('link', { name: /^Notifications/ }).click();
+  await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+  // This demo server has no push keys, so the page says so instead of offering a dead switch.
+  await expect(page.getByText(/Push isn.t set up on this server/)).toBeVisible();
+
+  const nudges = page.getByRole('switch', { name: 'Nudges from friends' });
+  await expect(nudges).toHaveAttribute('aria-checked', 'true');
+  await nudges.click();
+  await expect(nudges).toHaveAttribute('aria-checked', 'false');
+  await snap(page, '72-notification-settings');
+
+  await page.reload();
+  await expect(page.getByRole('switch', { name: 'Nudges from friends' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
+  await page.getByRole('switch', { name: 'Nudges from friends' }).click();
+  await expect(page.getByRole('switch', { name: 'Nudges from friends' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+});
+
+test('the demo account can open its weekly recap', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Try the demo' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  const week = isoWeek(new Date(Date.now() - 14 * 86_400_000));
+  await page.goto(`/recap/${week}`);
+  await expect(page.getByLabel('Weekly recap')).toBeVisible();
+  await expect(page.getByLabel('Weekly recap').getByText('steps', { exact: true })).toBeVisible();
+  await expect(page.locator('.error')).toHaveCount(0);
+  await snap(page, '74-demo-recap');
+  // Trends links to last week.
+  await page.goto('/trends');
+  await page.getByRole('link', { name: 'Last week' }).click();
+  await expect(page).toHaveURL(/\/recap\/\d{4}-W\d{2}$/);
+});

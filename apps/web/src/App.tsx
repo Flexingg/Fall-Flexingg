@@ -2,6 +2,7 @@ import { App as CapApp } from '@capacitor/app';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { WidgetBridge } from './components/WidgetBridge';
 import { AppBanner } from './components/AppBanner';
 import { PullToRefresh } from './components/PullToRefresh';
 import { AutoRefresh } from './lib/freshness';
@@ -13,12 +14,17 @@ import { syncHealthConnect } from './lib/health';
 import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
+import { AdminPage } from './pages/Admin';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
+import { FeedItemPage } from './pages/FeedItem';
 import { FriendsPage } from './pages/Friends';
 import { JoinPage } from './pages/Join';
 import { LoginPage } from './pages/Login';
 import { MePage } from './pages/Me';
+import { NotificationSettingsPage } from './pages/NotificationSettings';
+import { NotificationsPage } from './pages/Notifications';
+import { RecapPage } from './pages/Recap';
 import { OAuthReturnPage } from './pages/OAuthReturn';
 import { ProfilePage } from './pages/Profile';
 import { NewChallengePage } from './pages/NewChallenge';
@@ -28,6 +34,7 @@ import { SourcesPage } from './pages/Sources';
 import { TodayPage } from './pages/Today';
 import { TrendsPage } from './pages/Trends';
 import { WallpaperPage } from './pages/Wallpaper';
+import { WorkoutPage } from './pages/Workout';
 
 function Private({ children }: { children: ReactNode }) {
   const { status } = useAuth();
@@ -42,6 +49,13 @@ function Private({ children }: { children: ReactNode }) {
 function NeedsServer({ what, children }: { what: string; children: ReactNode }) {
   const { mode } = useAuth();
   return mode === 'direct' ? <ConnectServer what={what} /> : children;
+}
+
+/** Server admin pages: anyone else is sent home. */
+function AdminOnly({ children }: { children: ReactNode }) {
+  const { user, mode } = useAuth();
+  if (!user) return <Splash />;
+  return user.isAdmin && mode !== 'direct' ? children : <Navigate to="/" replace />;
 }
 
 function Splash() {
@@ -65,6 +79,10 @@ function Splash() {
   );
 }
 
+/** Where a tapped notification may take the app (the Android job opens https://<server>/<path>). */
+const NOTIFICATION_PATH =
+  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|u\/[\w-]+|trends|challenges)$/;
+
 /** Android: open invite links in-app, and push Health Connect data when the app comes to the front. */
 function NativeBridge() {
   const navigate = useNavigate();
@@ -72,18 +90,41 @@ function NativeBridge() {
   const { status, user } = useAuth();
   useEffect(() => {
     if (!isNative) return;
+    const openNotification = (url: string) => {
+      try {
+        const path = new URL(url).pathname.replace(/\/+$/, '');
+        if (NOTIFICATION_PATH.test(path)) navigate(path);
+      } catch {
+        // Not a link we understand.
+      }
+    };
+    // The app was closed when a notification was tapped.
+    CapApp.getLaunchUrl()
+      .then((l) => l?.url && openNotification(l.url))
+      .catch(() => undefined);
     const subs = [
       CapApp.addListener('appUrlOpen', ({ url }) => {
+        openNotification(url);
         const m = /\/j\/([\w-]+)/.exec(url);
         if (m) navigate(`/j/${m[1]}`);
         // An app's sign-in page sent the person back: finish connecting it.
         const o = /\/oauth\/(\w+)(\?[^#]*)?/.exec(url);
         if (o) navigate(`/oauth/${o[1]}${o[2] ?? ''}`);
+        // The home-screen widget's challenge line (gauntlet-widget://open/c/<id>).
+        const w = /^gauntlet-widget:\/\/open\/c\/([\w-]+)/.exec(url);
+        if (w) navigate(`/c/${w[1]}`);
       }),
       CapApp.addListener('backButton', ({ canGoBack }) =>
         canGoBack ? window.history.back() : CapApp.minimizeApp(),
       ),
     ];
+    // Tapped the widget's challenge while the app was closed: the link it launched with.
+    CapApp.getLaunchUrl()
+      .then((r) => {
+        const w = r?.url ? /^gauntlet-widget:\/\/open\/c\/([\w-]+)/.exec(r.url) : null;
+        if (w) navigate(`/c/${w[1]}`);
+      })
+      .catch(() => undefined);
     return () => subs.forEach((s) => s.then((h) => h.remove()));
   }, [navigate]);
   useEffect(() => {
@@ -114,6 +155,7 @@ export function App() {
       {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
+        <WidgetBridge />
         <AutoRefresh />
         {status === 'signedIn' && <PullToRefresh />}
         <AppBanner />
@@ -211,6 +253,16 @@ export function App() {
             }
           />
           <Route
+            path="/feed/:eventId"
+            element={
+              <Private>
+                <NeedsServer what="Activity">
+                  <FeedItemPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
             path="/friends"
             element={
               <Private>
@@ -226,6 +278,16 @@ export function App() {
               <Private>
                 <NeedsServer what="Profiles">
                   <ProfilePage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/workouts/:id"
+            element={
+              <Private>
+                <NeedsServer what="Workout details">
+                  <WorkoutPage />
                 </NeedsServer>
               </Private>
             }
@@ -265,10 +327,50 @@ export function App() {
             }
           />
           <Route
+            path="/notifications"
+            element={
+              <Private>
+                <NeedsServer what="Notifications">
+                  <NotificationsPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/me/notifications"
+            element={
+              <Private>
+                <NeedsServer what="Notifications">
+                  <NotificationSettingsPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/recap/:week"
+            element={
+              <Private>
+                <NeedsServer what="Weekly recap">
+                  <RecapPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
             path="/me/wallpaper"
             element={
               <Private>
                 <WallpaperPage />
+              </Private>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <Private>
+                <AdminOnly>
+                  <AdminPage />
+                </AdminOnly>
               </Private>
             }
           />

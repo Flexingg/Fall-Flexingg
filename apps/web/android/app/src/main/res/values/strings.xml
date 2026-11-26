@@ -9,4 +9,8 @@
     <!-- Live wallpaper (system wallpaper picker). -->
     <string name="wallpaper_label">Gauntlet galaxy</string>
     <string name="wallpaper_description">A slowly turning galaxy drawn from today\'s food, water and lifting in Gauntlet. The core is calories, the three arms protein, carbs and fat, the outer ring water, and the jets volume lifted.</string>
+    <!-- Home-screen widget. -->
+    <string name="widget_label">Gauntlet today</string>
+    <string name="widget_description">Today\'s steps, active calories and active minutes as three rings, plus your featured challenge.</string>
+    <string name="widget_rings_description">Today\'s progress rings: steps, active calories and active minutes</string>
 </resources>

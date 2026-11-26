@@ -1,0 +1,164 @@
+/* Stats: Compare on the Trends chart, head to head on profiles, workout detail. */
+
+/* Compare toggle + legend above the chart. */
+.chart-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  min-height: 32px;
+}
+.chart-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--volt);
+}
+.chart-legend i.ghost {
+  background: transparent;
+  border: 2px solid var(--muted);
+}
+
+/* The previous period: an outline drawn over the same slot as the current bar. */
+.chart-col {
+  position: relative;
+}
+.chart-col .ghost {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid var(--muted);
+  border-radius: 6px;
+  pointer-events: none;
+  box-sizing: border-box;
+  opacity: 0.85;
+}
+.chart.dense .chart-col .ghost {
+  border-width: 1px;
+  border-radius: 3px;
+}
+
+/* Head to head. */
+.h2h-row {
+  padding: 10px 14px;
+}
+.h2h-row + .h2h-row {
+  border-top: 1px solid var(--line);
+}
+.h2h-vals {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.h2h-vals .lead {
+  color: var(--volt);
+}
+.h2h-vals .mid {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  flex: 1;
+}
+.h2h-bar {
+  display: flex;
+  gap: 3px;
+  height: 8px;
+  margin-top: 6px;
+}
+.h2h-bar > div {
+  flex: 1;
+  display: flex;
+  background: var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.h2h-bar > div:first-child {
+  justify-content: flex-end;
+}
+.h2h-bar i {
+  display: block;
+  background: var(--muted);
+  border-radius: 4px;
+}
+.h2h-bar i.lead {
+  background: var(--volt);
+}
+.h2h-score {
+  font-size: 26px;
+  font-weight: 800;
+  text-align: center;
+}
+.h2h-score small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Workout detail. */
+.wk-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.wk-stats div {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.wk-stats b {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+}
+.wk-stats span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.wk-sets {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.wk-sets th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 4px 0;
+}
+.wk-sets td {
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.wk-sets .warm td {
+  color: var(--muted);
+}
+.wk-sets td:last-child,
+.wk-sets th:last-child {
+  text-align: right;
+}

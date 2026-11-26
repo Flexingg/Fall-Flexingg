@@ -52,10 +52,11 @@ const live = { refetchInterval: 60_000, refetchOnWindowFocus: true };
 
 // In direct mode (Android talking straight to SparkyFitness) these read from the phone; otherwise
 // they ask the Gauntlet server. Switching modes clears the query cache, so the two never mix.
-export const useToday = () =>
+export const useToday = (enabled = true) =>
   useQuery({
     queryKey: keys.today,
     queryFn: () => (session.direct ? session.direct.today() : get<TodayResponse>('/api/me/today')),
+    enabled,
     ...live,
   });
 /** Today's food, water and lifting against goals: what the live wallpaper draws. */

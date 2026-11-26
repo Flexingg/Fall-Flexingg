@@ -1,0 +1,123 @@
+/* Team challenges and recurring rounds. Team colours always come with the team's name. */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 2px var(--card);
+}
+.swatch[aria-pressed='true'] {
+  border-color: var(--text);
+}
+.swatch:disabled {
+  opacity: 0.25;
+}
+.team-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--tc);
+  border-radius: 12px;
+  background: var(--card-2);
+}
+.team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.team-chip::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tc);
+  flex: none;
+}
+.team-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+.team-picker button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 2px solid var(--line-2);
+  background: var(--card-2);
+  font-weight: 700;
+  text-align: left;
+}
+.team-picker button::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--tc);
+  flex: none;
+}
+.team-picker button[aria-pressed='true'] {
+  border-color: var(--tc);
+}
+.team-picker button:disabled {
+  opacity: 0.5;
+}
+.team-board .item {
+  border-left: 4px solid var(--tc);
+}
+.team-board .item.first .t {
+  color: var(--tc);
+}
+.member-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tc);
+  flex: none;
+}
+.arrange select {
+  min-height: 36px;
+  max-width: 140px;
+  background: var(--card-2);
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 0 8px;
+}
+.season td,
+.season th {
+  padding: 8px 6px;
+  text-align: right;
+  font-size: 14px;
+}
+.season th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.season td:first-child,
+.season th:first-child {
+  text-align: left;
+}
+.season {
+  width: 100%;
+  border-collapse: collapse;
+}
+.round-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

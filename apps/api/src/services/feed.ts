@@ -1,11 +1,27 @@
-import { formatCompact, metricDef, type FeedEvent, type MetricKey } from '@gauntlet/shared';
-import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import {
+  formatCompact,
+  metricDef,
+  REACTIONS,
+  type FeedEvent,
+  type MetricKey,
+} from '@gauntlet/shared';
+import { and, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
-import { challengeParticipants, challenges, feedEvents } from '../db/schema.js';
+import {
+  challengeParticipants,
+  challenges,
+  feedComments,
+  feedEvents,
+  feedReactions,
+} from '../db/schema.js';
 import { friendIds } from './friends.js';
 import { getUsers, shortName, toPublicUser } from './users.js';
 
-export async function feedFor(ctx: AppContext, userId: string, limit = 30): Promise<FeedEvent[]> {
+/**
+ * Which feed events a person may see: everything in challenges they have joined, plus the
+ * challenge-free activity of themselves and their friends. Reactions and comments reuse this.
+ */
+async function visibleTo(ctx: AppContext, userId: string): Promise<SQL> {
   const people = [userId, ...(await friendIds(ctx, userId))];
   const myChallenges = (
     await ctx.db
@@ -16,12 +32,41 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
       )
   ).map((r) => r.id);
 
-  const visible = myChallenges.length
-    ? or(
-        inArray(feedEvents.challengeId, myChallenges),
-        and(isNull(feedEvents.challengeId), inArray(feedEvents.actorId, people)),
-      )
-    : and(isNull(feedEvents.challengeId), inArray(feedEvents.actorId, people));
+  const own = and(isNull(feedEvents.challengeId), inArray(feedEvents.actorId, people))!;
+  return myChallenges.length ? or(inArray(feedEvents.challengeId, myChallenges), own)! : own;
+}
+
+/** The event (just who did it) if this person may see it, else null. */
+export async function canSeeEvent(
+  ctx: AppContext,
+  viewerId: string,
+  eventId: string,
+): Promise<{ id: string; actorId: string } | null> {
+  const [row] = await ctx.db
+    .select({ id: feedEvents.id, actorId: feedEvents.actorId })
+    .from(feedEvents)
+    .where(and(eq(feedEvents.id, eventId), await visibleTo(ctx, viewerId)));
+  return row ?? null;
+}
+
+/** One event as the viewer sees it, or null when they can't see it. */
+export async function feedEventFor(
+  ctx: AppContext,
+  viewerId: string,
+  eventId: string,
+): Promise<FeedEvent | null> {
+  return (await feedFor(ctx, viewerId, 1, eventId))[0] ?? null;
+}
+
+export async function feedFor(
+  ctx: AppContext,
+  userId: string,
+  limit = 30,
+  onlyEventId?: string,
+): Promise<FeedEvent[]> {
+  const visible = onlyEventId
+    ? and(await visibleTo(ctx, userId), eq(feedEvents.id, onlyEventId))
+    : await visibleTo(ctx, userId);
 
   const rows = await ctx.db
     .select({
@@ -41,6 +86,28 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
     ctx,
     rows.map((r) => r.e.actorId),
   );
+  const ids = rows.map((r) => r.e.id);
+  const reactionRows = ids.length
+    ? await ctx.db
+        .select({
+          eventId: feedReactions.eventId,
+          emoji: feedReactions.emoji,
+          count: sql<number>`count(*)::int`,
+          mine: sql<boolean>`bool_or(${feedReactions.userId} = ${userId})`,
+        })
+        .from(feedReactions)
+        .where(inArray(feedReactions.eventId, ids))
+        .groupBy(feedReactions.eventId, feedReactions.emoji)
+    : [];
+  const commentRows = ids.length
+    ? await ctx.db
+        .select({ eventId: feedComments.eventId, count: sql<number>`count(*)::int` })
+        .from(feedComments)
+        .where(inArray(feedComments.eventId, ids))
+        .groupBy(feedComments.eventId)
+    : [];
+  const commentCounts = new Map(commentRows.map((r) => [r.eventId, r.count]));
+
   return rows.flatMap(({ e, chName, chMetric, chLabel, chUnit }) => {
     const actor = usersById.get(e.actorId);
     if (!actor) return [];
@@ -81,7 +148,10 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
         text = `${name} took the lead${challenge ? ` in ${challenge.name}` : ''}`;
         break;
       case 'challenge_won':
-        text = `${name} won ${challenge?.name ?? 'a challenge'}`;
+        text =
+          typeof p.teamName === 'string'
+            ? `${name}'s team ${p.teamName} won ${challenge?.name ?? 'a challenge'}`
+            : `${name} won ${challenge?.name ?? 'a challenge'}`;
         badge = '1st';
         break;
       case 'joined':
@@ -89,6 +159,10 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
         break;
       case 'challenge_created':
         text = `${name} started ${challenge?.name ?? 'a challenge'}`;
+        break;
+      case 'personal_record':
+        text = `${name} set a new ${typeof p.label === 'string' ? p.label : 'personal record'}`;
+        badge = typeof p.badge === 'string' ? p.badge : null;
         break;
       default:
         text = `${name} was active`;
@@ -104,6 +178,11 @@ export async function feedFor(ctx: AppContext, userId: string, limit = 30): Prom
         // Which app the data came from is only shown if the person allows it.
         source: actor.shareWorkoutDetails && typeof p.source === 'string' ? p.source : null,
         createdAt: e.createdAt.toISOString(),
+        reactions: REACTIONS.flatMap((emoji) => {
+          const r = reactionRows.find((x) => x.eventId === e.id && x.emoji === emoji);
+          return r ? [{ emoji, count: r.count, mine: r.mine }] : [];
+        }),
+        commentCount: commentCounts.get(e.id) ?? 0,
       },
     ];
   });
