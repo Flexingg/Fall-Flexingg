@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the launcher icon: Sync now, New challenge. The app reads the gauntlet-shortcut:// link (see Shortcuts.tsx). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="sync_now"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_sync"
+        android:shortcutShortLabel="@string/shortcut_sync_short"
+        android:shortcutLongLabel="@string/shortcut_sync_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="gauntlet-shortcut://sync"
+            android:targetPackage="cc.randalls.gauntlet"
+            android:targetClass="cc.randalls.gauntlet.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="new_challenge"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new"
+        android:shortcutShortLabel="@string/shortcut_new_short"
+        android:shortcutLongLabel="@string/shortcut_new_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="gauntlet-shortcut://new"
+            android:targetPackage="cc.randalls.gauntlet"
+            android:targetClass="cc.randalls.gauntlet.MainActivity" />
+    </shortcut>
+</shortcuts>

@@ -8,6 +8,7 @@ import { Avatar, Empty, ErrorBox, Header, Screen, Skeleton, toast, Toggle } from
 import { ApiError, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { keys, useProfile } from '../lib/queries';
+import { deferAction, usePendingUndo } from '../lib/undo';
 import { HeadToHead } from '../components/HeadToHead';
 
 /** Someone's profile (or your own): record, trophy board, milestones and all-time stats. */
@@ -85,6 +86,7 @@ function FriendActions({ p }: { p: ProfileResponse }) {
   const { user: me } = useAuth();
   const [busy, setBusy] = useState(false);
   const u = p.user;
+  const waiting = usePendingUndo();
   // The demo account's crew is fixed (the server refuses friend changes from it).
   if (me?.demo && u.friendship !== 'me') return null;
 
@@ -101,7 +103,9 @@ function FriendActions({ p }: { p: ProfileResponse }) {
     }
   }
 
-  switch (u.friendship) {
+  // Unfriended a moment ago and still undoable: show it as done.
+  const friendship = waiting.has(`unfriend:${u.id}`) ? 'none' : u.friendship;
+  switch (friendship) {
     case 'me':
       return (
         <Link to="/me" className="btn sm secondary">
@@ -154,14 +158,17 @@ function FriendActions({ p }: { p: ProfileResponse }) {
         <button
           className="btn sm danger"
           disabled={busy}
-          onClick={() => {
-            if (
-              confirm(
-                `Unfriend ${u.displayName}? You'll stay in any challenges you share, but they'll leave your crew and you'll stop seeing each other's activity.`,
-              )
-            )
-              void run(() => del(`/api/friends/${u.id}`), 'Unfriended');
-          }}
+          onClick={() =>
+            deferAction({
+              key: `unfriend:${u.id}`,
+              message: `Unfriended ${u.displayName}`,
+              commit: () => del(`/api/friends/${u.id}`),
+              settle: (err) => {
+                if (err) toast(err instanceof Error ? err.message : 'Something went wrong');
+                void qc.invalidateQueries();
+              },
+            })
+          }
         >
           Unfriend
         </button>

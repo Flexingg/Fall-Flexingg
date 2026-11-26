@@ -21,8 +21,10 @@ import type {
   WallpaperResponse,
 } from '@gauntlet/shared';
 import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { ApiError, get } from './api';
 import { connections, garmin, session } from './session';
+import { usePendingUndo } from './undo';
 
 export const keys = {
   today: ['today'] as const,
@@ -75,13 +77,20 @@ export const useFeed = () =>
     enabled: !session.direct,
     ...live,
   });
-export const useChallenges = (enabled = true) =>
-  useQuery({
+export const useChallenges = (enabled = true) => {
+  // A challenge you just left (still undoable) is already gone from the list.
+  const waiting = usePendingUndo();
+  return useQuery({
     queryKey: keys.challenges,
     queryFn: () => get<ChallengeSummary[]>('/api/challenges'),
     enabled,
+    select: useCallback(
+      (list: ChallengeSummary[]) => list.filter((c) => !waiting.has(`leave:${c.id}`)),
+      [waiting],
+    ),
     ...live,
   });
+};
 export const useDiscover = (enabled = true) =>
   useQuery({
     queryKey: keys.discover,
@@ -127,12 +136,22 @@ export const useResult = (id: string) =>
     queryKey: keys.result(id),
     queryFn: () => get<ChallengeResult>(`/api/challenges/${id}/result`),
   });
-export const useFriends = () =>
-  useQuery({
+export const useFriends = () => {
+  // Someone you just unfriended (still undoable) is already gone from the crew.
+  const waiting = usePendingUndo();
+  return useQuery({
     queryKey: keys.friends,
     queryFn: () => get<FriendsResponse>('/api/friends'),
+    select: useCallback(
+      (d: FriendsResponse) => ({
+        ...d,
+        friends: d.friends.filter((f) => !waiting.has(`unfriend:${f.id}`)),
+      }),
+      [waiting],
+    ),
     ...live,
   });
+};
 export const useTrendsOverview = (range: 'day' | 'week' | 'month') =>
   useQuery({
     queryKey: ['trends-overview', range] as const,

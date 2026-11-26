@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon';
 import { Avatar, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { loadVibration, setVibration } from '../lib/haptics';
 import { isNative } from '../lib/platform';
 import { LegalLinks } from '../components/LegalLinks';
 import { useAndroidRelease } from '../lib/queries';
@@ -20,6 +21,10 @@ export function MePage() {
   useEffect(() => setHandle(user?.handle ?? ''), [user?.handle]);
   const [error, setError] = useState<unknown>(null);
   const android = useAndroidRelease(!isNative);
+  const [vibration, setVibrationOn] = useState(true);
+  useEffect(() => {
+    if (isNative) void loadVibration().then(setVibrationOn);
+  }, []);
   if (!user) return null;
 
   async function saveName() {
@@ -179,6 +184,23 @@ export function MePage() {
             <div className="grow t">Live wallpaper</div>
             <Icon name="chevron" size={18} />
           </Link>
+        )}
+        {isNative && (
+          <div className="item">
+            <Icon name="pulse" size={20} />
+            <div className="grow">
+              <div className="t">Vibration</div>
+              <small>A little buzz when you react, refresh or take the lead</small>
+            </div>
+            <Toggle
+              checked={vibration}
+              onChange={(on) => {
+                setVibrationOn(on);
+                void setVibration(on);
+              }}
+              label="Vibration"
+            />
+          </div>
         )}
         <div className="item">
           <Icon name="today" size={20} />

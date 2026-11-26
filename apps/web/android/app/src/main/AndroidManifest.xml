@@ -47,6 +47,9 @@
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
 
+            <!-- Long-press the launcher icon: "Sync now" and "New challenge". -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+
         </activity>
 
         <!-- Health Connect (Android 14+) privacy policy entry point. -->

@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { WidgetBridge } from './components/WidgetBridge';
 import { AppBanner } from './components/AppBanner';
 import { PullToRefresh } from './components/PullToRefresh';
+import { Shortcuts } from './components/Shortcuts';
 import { AutoRefresh } from './lib/freshness';
 import { ConnectServer } from './components/ConnectServer';
 import { LaunchSplash, shouldShowSplash } from './components/LaunchSplash';
@@ -155,6 +156,7 @@ export function App() {
       {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
+        <Shortcuts />
         <WidgetBridge />
         <AutoRefresh />
         {status === 'signedIn' && <PullToRefresh />}

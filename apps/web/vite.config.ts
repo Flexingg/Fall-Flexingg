@@ -25,6 +25,19 @@ export default defineConfig(({ mode }) => ({
           start_url: '/',
           scope: '/',
           categories: ['fitness', 'health', 'sports'],
+          // Long-press the installed app's icon.
+          shortcuts: [
+            {
+              name: 'Sync now',
+              url: '/?sync=1',
+              icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            },
+            {
+              name: 'New challenge',
+              url: '/c/new',
+              icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            },
+          ],
           icons: [
             { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
