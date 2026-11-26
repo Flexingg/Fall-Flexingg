@@ -688,3 +688,34 @@ test('nudges a friend from their profile', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Nudged Maya' })).toBeDisabled();
   await snap(page, '53-nudged');
 });
+
+test('server admin page is for admins only, with backups', async ({ page }) => {
+  // A normal person has no link and is sent home from the address.
+  await signIn(page);
+  await page.goto('/me');
+  await expect(page.getByText('Data sources & privacy')).toBeVisible();
+  await expect(page.getByText('Server admin')).toHaveCount(0);
+  await page.goto('/admin');
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await page.evaluate(() => localStorage.clear());
+  await page.context().clearCookies();
+
+  // Riley is the server admin in the demo.
+  await signIn(page, 'riley@example.com');
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Server admin/ }).click();
+  await expect(page.getByRole('heading', { name: 'Server admin' })).toBeVisible();
+  await expect(page.getByText('Everyone is syncing fine.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back up now' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Download' }).first()).toBeVisible();
+  await snap(page, '5a-admin');
+
+  // Restore needs the word RESTORE typed.
+  await page.getByRole('button', { name: 'Restore' }).first().click();
+  const go = page.getByRole('dialog').getByRole('button', { name: 'Restore' });
+  await expect(go).toBeDisabled();
+  await page.getByLabel('Type RESTORE to confirm').fill('RESTORE');
+  await expect(go).toBeEnabled();
+  await snap(page, '5b-admin-restore');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+});

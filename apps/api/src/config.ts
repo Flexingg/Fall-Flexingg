@@ -24,6 +24,11 @@ const envSchema = z.object({
   WEB_DIST: z.string().optional(),
   /** Directory holding the released APK and latest.json, served under /downloads. */
   DOWNLOADS_DIR: z.string().optional(),
+  /** Shared folder with the backup service (docker compose mounts it); unset = backups not set up. */
+  BACKUP_DIR: z
+    .string()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
   /** "owner/name": keep DOWNLOADS_DIR filled from this repository's latest GitHub release. */
   GITHUB_RELEASES_REPO: z
     .string()

@@ -10,3 +10,4 @@ export * from './profile.js';
 export * from './notify.js';
 export * from './social.js';
 export * from './widget.js';
+export * from './admin.js';

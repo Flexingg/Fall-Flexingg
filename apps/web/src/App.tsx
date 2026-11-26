@@ -14,6 +14,7 @@ import { syncHealthConnect } from './lib/health';
 import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
+import { AdminPage } from './pages/Admin';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
 import { FeedItemPage } from './pages/FeedItem';
@@ -44,6 +45,13 @@ function Private({ children }: { children: ReactNode }) {
 function NeedsServer({ what, children }: { what: string; children: ReactNode }) {
   const { mode } = useAuth();
   return mode === 'direct' ? <ConnectServer what={what} /> : children;
+}
+
+/** Server admin pages: anyone else is sent home. */
+function AdminOnly({ children }: { children: ReactNode }) {
+  const { user, mode } = useAuth();
+  if (!user) return <Splash />;
+  return user.isAdmin && mode !== 'direct' ? children : <Navigate to="/" replace />;
 }
 
 function Splash() {
@@ -292,6 +300,16 @@ export function App() {
             element={
               <Private>
                 <WallpaperPage />
+              </Private>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <Private>
+                <AdminOnly>
+                  <AdminPage />
+                </AdminOnly>
               </Private>
             }
           />

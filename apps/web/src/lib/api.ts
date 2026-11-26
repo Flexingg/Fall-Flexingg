@@ -108,6 +108,12 @@ export async function api<T>(
   return parse<T>(res);
 }
 
+/** The sign-in header, for requests made outside fetch (an upload that reports progress). */
+export async function authHeader(): Promise<Record<string, string>> {
+  if (!accessToken) await refreshSession();
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
 export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(path: string, json: unknown = {}) => api<T>(path, { method: 'POST', json });
 export const patch = <T>(path: string, json: unknown) => api<T>(path, { method: 'PATCH', json });

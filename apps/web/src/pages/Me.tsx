@@ -159,6 +159,13 @@ export function MePage() {
           <div className="grow t">Data sources & privacy</div>
           <Icon name="chevron" size={18} />
         </Link>
+        {user.isAdmin && !direct && (
+          <Link to="/admin" className="item">
+            <Icon name="pulse" size={20} />
+            <div className="grow t">Server admin</div>
+            <Icon name="chevron" size={18} />
+          </Link>
+        )}
         {isNative && (
           <Link to="/me/wallpaper" className="item">
             <Icon name="moon" size={20} />
