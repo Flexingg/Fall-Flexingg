@@ -15,6 +15,7 @@ import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
+import { FeedItemPage } from './pages/FeedItem';
 import { FriendsPage } from './pages/Friends';
 import { JoinPage } from './pages/Join';
 import { LoginPage } from './pages/Login';
@@ -206,6 +207,16 @@ export function App() {
               <Private>
                 <NeedsServer what="Result">
                   <ResultPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/feed/:eventId"
+            element={
+              <Private>
+                <NeedsServer what="Activity">
+                  <FeedItemPage />
                 </NeedsServer>
               </Private>
             }

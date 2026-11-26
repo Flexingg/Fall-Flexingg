@@ -8,6 +8,7 @@ import { isMetricKey, type MetricAggregate, type MetricGroup, type MetricKey } f
 import { isTrendMetric } from './derive.js';
 import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
+import type { Reaction } from './notify.js';
 
 const dateString = z.string().refine(isDateString, 'Expected a YYYY-MM-DD date');
 
@@ -395,6 +396,9 @@ export interface FeedEvent {
   badge: string | null;
   source: string | null;
   createdAt: string;
+  /** Emoji people left on it (only those used at least once). Absent where reactions don't exist. */
+  reactions?: { emoji: Reaction; count: number; mine: boolean }[];
+  commentCount?: number;
 }
 
 // ---------- Today / trends ----------
