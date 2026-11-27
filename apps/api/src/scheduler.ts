@@ -3,6 +3,7 @@ import type { AppContext } from './context.js';
 import { challengeParticipants, challenges, users } from './db/schema.js';
 import { maintainDemo } from './services/demo.js';
 import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
+import { maybeRunScheduledImport } from './services/badgeImport/runner.js';
 import { pruneNotifications } from './services/push.js';
 import { sendWeeklyRecaps } from './services/recap.js';
 import { sendMonthReviews } from './services/review.js';
@@ -79,6 +80,10 @@ export function startScheduler(ctx: AppContext, minutes: number): () => void {
   const tick = async () => {
     if (running) return;
     running = true;
+    // Weekly Garmin badge check: runs on its own (guarded by its lock), never slows the cycle.
+    void maybeRunScheduledImport(ctx).catch((err) =>
+      ctx.log.warn({ err }, 'badge import check failed'),
+    );
     try {
       const r = await runSyncCycle(ctx);
       if (r.synced || r.finalized) ctx.log.info(r, 'sync cycle');

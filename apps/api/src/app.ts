@@ -28,6 +28,7 @@ import { socialRoutes } from './routes/social.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { pushRoutes } from './routes/push.js';
 import { reviewRoutes } from './routes/review.js';
+import { badgeSuggestionRoutes } from './routes/badgeSuggestions.js';
 import { registerPushDelivery } from './services/push.js';
 import { SparkyError } from '@gauntlet/sparky';
 import { markKeyInvalid } from './services/users.js';
@@ -117,6 +118,7 @@ export async function buildApp(
   notificationRoutes(app, full);
   pushRoutes(app, full);
   reviewRoutes(app, full);
+  badgeSuggestionRoutes(app, full);
   registerPushDelivery();
   downloadRoutes(app, full.cfg);
   legalRoutes(app, full);
