@@ -63,7 +63,7 @@ export async function buildStatSource(
   const origin = await originFor(ctx, userId, date, metric);
 
   const apps: PhoneAppShare[] = (origin?.apps ?? [])
-    .map((a) => ({ ...a, name: healthAppName(a.packageName) }))
+    .map((a) => ({ ...a, name: a.name?.trim() || healthAppName(a.packageName) }))
     .sort((a, b) => b.value - a.value);
   const chosenKey = row?.source ? sourceKey(row.source) : null;
   const detail = row?.detail ?? null;

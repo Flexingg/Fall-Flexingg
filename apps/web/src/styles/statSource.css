@@ -90,6 +90,7 @@
 .ss-name {
   display: flex;
   flex-direction: column;
+  flex: 1 1 0;
   min-width: 0;
   font-size: 15px;
   font-weight: 600;
@@ -99,6 +100,34 @@
   font-size: 12px;
   font-weight: 500;
   overflow-wrap: anywhere;
+}
+/* Friendly name big; the long package name small, on one line, cut with an ellipsis. */
+.ss-app {
+  overflow-wrap: anywhere;
+}
+.ss-name .ss-pkg {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+.ss-list li.off {
+  opacity: 0.55;
+}
+.ss-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--volt);
+}
+.ss-choose {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
 }
 .ss-name em {
   display: inline-flex;
@@ -111,6 +140,7 @@
   color: var(--volt);
 }
 .ss-list b {
+  flex: none;
   font-size: 15px;
   font-weight: 800;
   white-space: nowrap;
@@ -123,6 +153,7 @@
   background: color-mix(in srgb, var(--danger) 12%, var(--card));
   font-size: 13px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .ss-foot {
   display: block;

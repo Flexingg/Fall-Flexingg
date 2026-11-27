@@ -43,6 +43,7 @@ import { ProfilePage } from './pages/Profile';
 import { NewChallengePage } from './pages/NewChallenge';
 import { ResultPage } from './pages/Result';
 import { SignupPage } from './pages/Signup';
+import { PhoneAppsIndexPage, PhoneAppsPage } from './pages/PhoneApps';
 import { SourcesPage } from './pages/Sources';
 import { TodayPage } from './pages/Today';
 import { TrendsPage } from './pages/Trends';
@@ -387,6 +388,22 @@ export function App() {
             element={
               <Private>
                 <SourcesPage />
+              </Private>
+            }
+          />
+          <Route
+            path="/sources/phone-apps"
+            element={
+              <Private>
+                <PhoneAppsIndexPage />
+              </Private>
+            }
+          />
+          <Route
+            path="/sources/phone-apps/:metric"
+            element={
+              <Private>
+                <PhoneAppsPage />
               </Private>
             }
           />

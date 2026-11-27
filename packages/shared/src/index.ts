@@ -31,3 +31,4 @@ export * from './statSource.js';
 export * from './hcOriginMetrics.js';
 export * from './statSourceMeta.js';
 export * from './hcApps.js';
+export * from './hcAppsSeen.js';

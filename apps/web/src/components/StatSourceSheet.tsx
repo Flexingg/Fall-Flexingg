@@ -4,16 +4,20 @@
  * reported it, and (when the phone sent it) which Health Connect apps wrote it, with a warning when
  * two or more wrote the same thing. Swipe down or tap the grab bar to close.
  */
-import { formatQuantityFlexible, todayIn, addDays } from '@gauntlet/shared';
+import { formatQuantityFlexible, isHcOriginMetric, todayIn, addDays } from '@gauntlet/shared';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import { useAuth } from '../lib/auth';
 import { useDisplay } from '../lib/display';
 import { fmtDate, timeAgo } from '../lib/format';
+import { useHcApps } from '../lib/hcAppsQueries';
 import { useStatSource } from '../lib/statSourceQueries';
 import {
+  appLabel,
   capitalise,
+  countedVsSum,
+  filterText,
   overlapHint,
   recordsText,
   usesSourceOrder,
@@ -39,6 +43,7 @@ export function StatSourceSheet({
   const { user, mode } = useAuth();
   const display = useDisplay();
   const q = useStatSource(date, metric);
+  const hcApps = useHcApps();
   const drag = useSheetDrag(onClose);
   const r = q.data;
   const direct = mode === 'direct';
@@ -58,7 +63,11 @@ export function StatSourceSheet({
         : fmtDate(date, { weekday: 'long', month: 'short', day: 'numeric' });
   const fmt = (v: number | null) =>
     formatQuantityFlexible(v, r?.unit ?? '', r?.decimals ?? 0, display);
-  const hint = r?.phone ? overlapHint(r.label, r.phone.apps) : null;
+  const chosen = hcApps.data?.order[metric] ?? [];
+  const filtered = chosen.length > 0;
+  // With apps chosen, an overlap is no longer a problem to warn about: only those apps count.
+  const hint = r?.phone && !filtered ? overlapHint(r.label, r.phone.apps) : null;
+  const sumNote = r?.phone ? countedVsSum(metric, r.phone.apps, r.phone.counted, fmt) : null;
 
   // In the page body, so a Today that is mid pull-to-refresh can't move or clip it.
   return createPortal(
@@ -139,27 +148,46 @@ export function StatSourceSheet({
                 <div className="lbl">On your phone</div>
                 <p className="ss-note">
                   Apps that wrote this to Health Connect
-                  {r.phone.counted != null && (
+                  {r.phone.counted != null && !sumNote && (
                     <>
                       . Health Connect counted <b className="num">{fmt(r.phone.counted)}</b>
                     </>
                   )}
                   .
                 </p>
-                <ul className="ss-list">
-                  {r.phone.apps.map((a) => (
-                    <li key={a.packageName}>
-                      <span className="ss-name">
-                        <span>{a.name}</span>
-                        {a.name !== a.packageName && <small>{a.packageName}</small>}
-                        <small>
-                          {recordsText(a.records)}
-                          {a.devices.length > 0 && ` · ${a.devices.map(capitalise).join(', ')}`}
-                        </small>
-                      </span>
-                      <b className="num">{fmt(a.value)}</b>
-                    </li>
-                  ))}
+                {sumNote && (
+                  <p className="ss-note" data-testid="stat-source-sum">
+                    {sumNote}
+                  </p>
+                )}
+                {filtered && (
+                  <p className="ss-filter" data-testid="stat-source-filter">
+                    <Icon name="check" size={13} /> {filterText(chosen, r.phone.apps)}
+                  </p>
+                )}
+                <ul className="ss-list ss-apps">
+                  {r.phone.apps.map((a) => {
+                    const label = appLabel(a.name, a.packageName);
+                    const ignored = filtered && !chosen.includes(a.packageName);
+                    return (
+                      <li key={a.packageName} className={ignored ? 'off' : ''}>
+                        <span className="ss-name">
+                          <span className="ss-app">{label}</span>
+                          {a.packageName !== label && (
+                            <small className="ss-pkg" title={a.packageName}>
+                              {a.packageName}
+                            </small>
+                          )}
+                          <small>
+                            {recordsText(a.records)}
+                            {a.devices.length > 0 && ` · ${a.devices.map(capitalise).join(', ')}`}
+                            {ignored && ' · Ignored'}
+                          </small>
+                        </span>
+                        <b className="num">{fmt(a.value)}</b>
+                      </li>
+                    );
+                  })}
                 </ul>
                 {hint && (
                   <p className="ss-warn" role="note" data-testid="stat-source-overlap">
@@ -171,6 +199,16 @@ export function StatSourceSheet({
                     Your phone stopped reading at its limit, so the app numbers here may be a little
                     short.
                   </p>
+                )}
+                {isHcOriginMetric(metric) && !user?.demo && (
+                  <Link
+                    to={`/sources/phone-apps/${encodeURIComponent(metric)}`}
+                    className="btn ghost sm ss-choose"
+                    data-testid="stat-source-choose"
+                    onClick={onClose}
+                  >
+                    Choose which apps count
+                  </Link>
                 )}
               </section>
             )}
