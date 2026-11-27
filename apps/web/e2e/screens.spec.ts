@@ -2320,3 +2320,98 @@ test.describe('badge status, race and timeline', () => {
     await expect(sheet).toBeHidden();
   });
 });
+
+test.describe('rings, day stats and badges on Today', () => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+
+  test('Today rings open the day stats, and the rings can be edited', async ({ page }) => {
+    await signIn(page);
+    const card = page.getByTestId('ring-card');
+    await expect(card).toBeVisible();
+    // Each ring says what it is, how far along it is and its goal.
+    await expect(card.getByText('Steps')).toBeVisible();
+    await expect(card.getByText('Active kcal')).toBeVisible();
+    await expect(card.getByText('of 10,000')).toBeVisible();
+    await snap(page, '160-today-rings');
+
+    await card.click();
+    await expect(page.getByRole('heading', { name: 'Day stats' })).toBeVisible();
+    await expect(page.getByTestId('day-when')).toContainText('Today');
+    await expect(page.getByText('Activity', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('day-stat').first()).toBeVisible();
+    await snap(page, '161-day-stats');
+
+    // Page back a day and forward again; there is nothing after today.
+    await expect(page.getByRole('button', { name: 'Next day' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Previous day' }).click();
+    await expect(page.getByTestId('day-when')).toContainText('Yesterday');
+    await page.getByRole('button', { name: 'Next day' }).click();
+    await expect(page.getByTestId('day-when')).toContainText('Today');
+
+    // Make the outer ring distance with an 8 km goal.
+    await page.getByRole('link', { name: 'Edit rings' }).click();
+    await expect(page.getByRole('heading', { name: 'Edit rings' })).toBeVisible();
+    await page.getByLabel('Outer ring stat').selectOption('distance');
+    await expect(page.getByLabel('Outer ring daily goal')).toHaveValue('5');
+    await page.getByLabel('Outer ring daily goal').fill('8');
+    // Each ring needs a different stat: the others' picks are not on offer.
+    await expect(
+      page.getByLabel('Middle ring stat').locator('option[value=distance]'),
+    ).toHaveAttribute('disabled', '');
+    await snap(page, '162-edit-rings');
+    await page.getByRole('button', { name: 'Save rings' }).click();
+    await expect(page.getByRole('heading', { name: 'Day stats' })).toBeVisible();
+    await expect(page.getByTestId('ring-legend').getByText('Distance')).toBeVisible();
+    await expect(page.getByTestId('ring-legend').getByText('of 8 km')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Today' }).first().click();
+    await expect(page.getByTestId('ring-card').getByText('Distance')).toBeVisible();
+
+    // Put it back so the other tests (and the next run) see the usual rings.
+    await page.goto('/day/rings');
+    await page.getByRole('button', { name: 'Reset to default' }).click();
+    await expect(page.getByLabel('Outer ring stat')).toHaveValue('steps');
+    await page.getByRole('button', { name: 'Save rings' }).click();
+    // Saving goes back to wherever you came from (Today, here).
+    await expect(page.getByTestId('ring-card').getByText('Steps')).toBeVisible();
+  });
+
+  test('a goal is typed in miles for people on imperial units', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/me');
+    await page.getByRole('button', { name: 'Imperial (mi, lb)' }).click();
+    await expect(page.getByTestId('display-preview')).toContainText('mi');
+    await page.goto('/day/rings');
+    await page.getByLabel('Middle ring stat').selectOption('distance');
+    await expect(page.getByLabel('Middle ring daily goal')).toHaveValue('3.1');
+    await expect(page.getByText('mi', { exact: true }).first()).toBeVisible();
+    await page.getByLabel('Middle ring daily goal').fill('0');
+    await expect(page.getByText('Every ring needs a goal bigger than zero.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save rings' })).toBeDisabled();
+    // Leave the account the way the other tests expect it.
+    await page.goto('/me');
+    await page.getByRole('button', { name: 'Metric (km, kg)' }).click();
+    await expect(page.getByTestId('display-preview')).toContainText('km');
+  });
+
+  test('level and badges are one tap from Today and the profile', async ({ page }) => {
+    await signIn(page);
+    const pill = page.getByTestId('level-pill');
+    await expect(pill).toBeVisible();
+    await expect(pill).toContainText(/Lv \d+/);
+    const card = page.getByTestId('badges-today');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(/XP/);
+    await snap(page, '163-today-badges');
+
+    await card.click();
+    await expect(page.getByRole('heading', { name: /Badges/ }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/badges$/);
+
+    await page.goto('/me');
+    await expect(page.getByTestId('badges-today')).toBeVisible();
+    await page.goto('/');
+    await page.getByTestId('level-pill').click();
+    await expect(page).toHaveURL(/\/badges$/);
+  });
+});

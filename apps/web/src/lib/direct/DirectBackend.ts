@@ -6,7 +6,15 @@
  * Deliberately free of browser/Capacitor imports so it can be unit-tested in Node with a fake server.
  */
 import {
+  buildDay,
+  buildRingsFromRows,
   buildToday,
+  DAY_HISTORY_DAYS,
+  isDateString,
+  ringConfigSchema,
+  ringsOf,
+  type DayResponse,
+  type RingConfig,
   buildTrends,
   buildWallpaper,
   initials,
@@ -118,6 +126,8 @@ const FRESH_MS = 2 * 60_000;
 const ROWS_KEY = 'gauntlet.direct.rows';
 const ME_KEY = 'gauntlet.direct.me';
 const SETTINGS_KEY = 'gauntlet.direct.settings';
+/** The person's Today rings (which stats, which goals), kept on the phone. */
+export const RINGS_KEY = 'gauntlet.direct.rings';
 
 interface Cached {
   savedAt: string;
@@ -251,10 +261,36 @@ export class DirectBackend {
     const today = this.today_();
     return {
       ...buildToday(rows, today),
+      rings: buildRingsFromRows(await this.rings(), rows, today),
       lastSyncedAt: savedAt,
       featured: null,
       hasSources: await this.hasSources(rows, today),
     };
+  }
+
+  async rings(): Promise<RingConfig> {
+    const raw = await this.o.kv.get(RINGS_KEY);
+    try {
+      return ringsOf(raw ? JSON.parse(raw) : null);
+    } catch {
+      return ringsOf(null);
+    }
+  }
+
+  async saveRings(config: unknown): Promise<RingConfig> {
+    const rings = ringConfigSchema.parse(config) as RingConfig;
+    await this.o.kv.set(RINGS_KEY, JSON.stringify(rings));
+    return rings;
+  }
+
+  /** Every stat for one day from the cached rows (the last couple of months). */
+  async day(date?: string): Promise<DayResponse> {
+    const { rows } = await this.load();
+    const today = this.today_();
+    const d = date ?? today;
+    if (!isDateString(d) || d > today || d < addDays(today, -DAY_HISTORY_DAYS))
+      throw new DirectError('That day is out of range', 'bad_date');
+    return buildDay({ rows, date: d, today, config: await this.rings() });
   }
 
   async wallpaper(): Promise<WallpaperResponse> {

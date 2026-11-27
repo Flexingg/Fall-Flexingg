@@ -4,6 +4,7 @@
  * available. Keeping the builder here makes the wording testable without a phone.
  */
 import type { ChallengeSummary, TodayResponse } from './api.js';
+import { formatRingGoal, formatRingValue, ringShowsUnit, ringsOfToday } from './dayStats.js';
 import { DEFAULT_DISPLAY, type DisplayPrefs } from './format.js';
 import { formatMetricValue } from './metrics.js';
 import { ordinal } from './scoring.js';
@@ -12,6 +13,19 @@ import { SOLO_STATUS_LABELS } from './solo.js';
 export interface WidgetChannel {
   value: number | null;
   goal: number | null;
+}
+
+/** One of the three rings as the widget draws it: its own label and text, already in the person's units. */
+export interface WidgetRing {
+  metric: string;
+  /** "Steps", "Distance": the legend's label. */
+  label: string;
+  value: number | null;
+  goal: number | null;
+  /** "6,200" or "5.2 mi": the value, ready to print. */
+  valueText: string;
+  /** The goal the same way ("10,000", "6.2 mi"); the widget adds "of". */
+  goalText: string;
 }
 
 export interface WidgetChallenge {
@@ -32,6 +46,11 @@ export interface WidgetSnapshot {
   updatedAt: string;
   /** The day the numbers are for (YYYY-MM-DD). */
   date: string;
+  /**
+   * The three rings the person chose (outer first). Native code reads these; `steps`, `activeCalories`
+   * and `activeMinutes` below stay filled in for builds that predate configurable rings.
+   */
+  rings: WidgetRing[];
   steps: WidgetChannel;
   activeCalories: WidgetChannel;
   activeMinutes: WidgetChannel;
@@ -81,6 +100,20 @@ function widgetChallenge(c: ChallengeSummary | null, prefs: Display): WidgetChal
   };
 }
 
+function widgetRings(today: TodayResponse, prefs: Display): WidgetRing[] {
+  return ringsOfToday(today).map((r) => {
+    const unit = ringShowsUnit(r.unit);
+    return {
+      metric: r.metric,
+      label: r.label,
+      value: r.value,
+      goal: r.goal > 0 ? r.goal : null,
+      valueText: formatRingValue(r, prefs, unit),
+      goalText: formatRingGoal(r, prefs, unit),
+    };
+  });
+}
+
 export function buildWidgetSnapshot(
   today: TodayResponse,
   now: Date = new Date(),
@@ -89,6 +122,7 @@ export function buildWidgetSnapshot(
   return {
     updatedAt: now.toISOString(),
     date: today.date,
+    rings: widgetRings(today, prefs),
     steps: channel(today, 'steps'),
     activeCalories: channel(today, 'active_calories'),
     activeMinutes: channel(today, 'active_minutes'),

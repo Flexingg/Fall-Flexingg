@@ -11,8 +11,8 @@
     <string name="wallpaper_description">A slowly turning galaxy drawn from today\'s food, water and lifting in Gauntlet. The core is calories, the three arms protein, carbs and fat, the outer ring water, and the jets volume lifted.</string>
     <!-- Home-screen widget. -->
     <string name="widget_label">Gauntlet today</string>
-    <string name="widget_description">Today\'s steps, active calories and active minutes as three rings, plus your featured challenge.</string>
-    <string name="widget_rings_description">Today\'s progress rings: steps, active calories and active minutes</string>
+    <string name="widget_description">Today\'s three rings (the stats you pick in the app, steps, active calories and active minutes to start), plus your featured challenge.</string>
+    <string name="widget_rings_description">Today\'s progress rings</string>
     <!-- Launcher shortcuts (long-press the app icon). -->
     <string name="shortcut_sync_short">Sync now</string>
     <string name="shortcut_sync_long">Sync now</string>

@@ -1,5 +1,7 @@
 package cc.randalls.gauntlet.widget;
 
+import java.text.NumberFormat;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -34,6 +36,25 @@ public final class WidgetData {
         }
     }
 
+    /**
+     * One of the three rings the person chose (outer first): its own label ("Steps", "Distance") and
+     * the value and goal as the app already formatted them in the person's units ("5.2 mi").
+     */
+    public static final class Ring {
+        public final String label;
+        public final String valueText;
+        /** Without "of": "10,000" or "6.2 mi". Empty when the ring has no goal. */
+        public final String goalText;
+        public final Channel channel;
+
+        Ring(String label, String valueText, String goalText, Channel channel) {
+            this.label = label;
+            this.valueText = valueText;
+            this.goalText = goalText;
+            this.channel = channel;
+        }
+    }
+
     public static final class Challenge {
         public final String id;
         public final String name;
@@ -54,16 +75,25 @@ public final class WidgetData {
     public final Channel steps;
     public final Channel activeCalories;
     public final Channel activeMinutes;
+    /** Always three: the rings the person chose, or steps, active kcal and active min from older apps. */
+    public final Ring[] rings;
     /** Null when there is no running featured challenge. */
     public final Challenge challenge;
 
     private WidgetData(
-            long updatedAtMillis, String date, Channel steps, Channel cal, Channel min, Challenge challenge) {
+            long updatedAtMillis,
+            String date,
+            Channel steps,
+            Channel cal,
+            Channel min,
+            Ring[] rings,
+            Challenge challenge) {
         this.updatedAtMillis = updatedAtMillis;
         this.date = date;
         this.steps = steps;
         this.activeCalories = cal;
         this.activeMinutes = min;
+        this.rings = rings;
         this.challenge = challenge;
     }
 
@@ -73,6 +103,39 @@ public final class WidgetData {
         double value = o.isNull("value") ? Double.NaN : o.optDouble("value", Double.NaN);
         double goal = o.isNull("goal") ? Double.NaN : o.optDouble("goal", Double.NaN);
         return new Channel(value, goal);
+    }
+
+    private static String plain(double v) {
+        return NumberFormat.getIntegerInstance().format(Math.round(v));
+    }
+
+    /** A ring from older snapshots (no "rings" array): the channel with a fixed label. */
+    private static Ring legacyRing(String label, Channel c) {
+        return new Ring(label, c.hasValue() ? plain(c.value) : "–", c.hasGoal() ? plain(c.goal) : "", c);
+    }
+
+    private static Ring[] parseRings(JSONObject root, Channel steps, Channel cal, Channel min) {
+        Ring[] legacy = {
+            legacyRing("Steps", steps), legacyRing("Active kcal", cal), legacyRing("Active min", min)
+        };
+        JSONArray arr = root.optJSONArray("rings");
+        if (arr == null || arr.length() < 3) return legacy;
+        Ring[] out = new Ring[3];
+        for (int i = 0; i < 3; i++) {
+            JSONObject o = arr.optJSONObject(i);
+            if (o == null) return legacy;
+            double value = o.isNull("value") ? Double.NaN : o.optDouble("value", Double.NaN);
+            double goal = o.isNull("goal") ? Double.NaN : o.optDouble("goal", Double.NaN);
+            Channel c = new Channel(value, goal);
+            String label = o.optString("label", "");
+            if (label.isEmpty()) label = legacy[i].label;
+            String valueText = o.optString("valueText", "");
+            if (valueText.isEmpty()) valueText = c.hasValue() ? plain(value) : "–";
+            String goalText = o.optString("goalText", "");
+            if (goalText.isEmpty() && c.hasGoal()) goalText = plain(goal);
+            out[i] = new Ring(label, valueText, c.hasGoal() ? goalText : "", c);
+        }
+        return out;
     }
 
     public static WidgetData parse(String json) throws JSONException {
@@ -95,12 +158,16 @@ public final class WidgetData {
                     c.optString("rankText", ""),
                     c.optString("line", ""));
         }
+        Channel steps = channel(root, "steps");
+        Channel cal = channel(root, "activeCalories");
+        Channel min = channel(root, "activeMinutes");
         return new WidgetData(
                 updated,
                 root.optString("date", ""),
-                channel(root, "steps"),
-                channel(root, "activeCalories"),
-                channel(root, "activeMinutes"),
+                steps,
+                cal,
+                min,
+                parseRings(root, steps, cal, min),
                 challenge);
     }
 }

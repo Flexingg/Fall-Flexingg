@@ -10,6 +10,7 @@ import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.Wearable;
 import java.text.NumberFormat;
 import java.time.LocalDate;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -26,15 +27,31 @@ final class WearData {
     final double steps;
     final double goal;
     final String date;
+    /** The outer ring's label ("Steps", "Distance") and its value and goal as the phone formatted them. */
+    final String label;
+    final String valueText;
+    final String goalValueText;
     /** "2nd of 5"; empty when there is no running challenge. */
     final String rankText;
     final String challengeName;
     final String challengeLine;
 
-    private WearData(double steps, double goal, String date, String rankText, String name, String line) {
+    private WearData(
+            double steps,
+            double goal,
+            String date,
+            String label,
+            String valueText,
+            String goalValueText,
+            String rankText,
+            String name,
+            String line) {
         this.steps = steps;
         this.goal = goal;
         this.date = date;
+        this.label = label;
+        this.valueText = valueText;
+        this.goalValueText = goalValueText;
         this.rankText = rankText;
         this.challengeName = name;
         this.challengeLine = line;
@@ -59,17 +76,39 @@ final class WearData {
         return LocalDate.now().toString().equals(date);
     }
 
+    /** The outer ring's value ("6,200", "5.2 mi"). */
     String stepsText() {
-        return hasSteps() ? NumberFormat.getIntegerInstance().format(Math.round(steps)) : "–";
+        if (!hasSteps()) return "–";
+        return valueText.isEmpty() ? NumberFormat.getIntegerInstance().format(Math.round(steps)) : valueText;
     }
 
+    /** "of 10,000 steps": the goal and the ring's label, or just the label without a goal. */
     String goalText() {
-        return hasGoal() ? "of " + NumberFormat.getIntegerInstance().format(Math.round(goal)) : "steps";
+        String name = label.toLowerCase();
+        if (!hasGoal()) return name;
+        String g = goalValueText.isEmpty()
+                ? NumberFormat.getIntegerInstance().format(Math.round(goal))
+                : goalValueText;
+        return "of " + g + " " + name;
     }
 
     static WearData parse(String json) throws JSONException {
         JSONObject root = new JSONObject(json);
+        // Newer phones send the three rings the person chose; the outer one is what the tile shows.
+        // Older ones only have "steps".
         JSONObject steps = root.optJSONObject("steps");
+        String label = "Steps";
+        String valueText = "";
+        String goalValueText = "";
+        JSONArray rings = root.optJSONArray("rings");
+        JSONObject first = rings == null ? null : rings.optJSONObject(0);
+        if (first != null) {
+            steps = first;
+            label = first.optString("label", "Steps");
+            if (label.isEmpty()) label = "Steps";
+            valueText = first.optString("valueText", "");
+            goalValueText = first.optString("goalText", "");
+        }
         double value = Double.NaN;
         double goal = Double.NaN;
         if (steps != null) {
@@ -85,7 +124,8 @@ final class WearData {
             name = c.optString("name", "");
             line = c.optString("line", "");
         }
-        return new WearData(value, goal, root.optString("date", ""), rank, name, line);
+        return new WearData(
+                value, goal, root.optString("date", ""), label, valueText, goalValueText, rank, name, line);
     }
 
     /** Null before the phone has sent anything. */

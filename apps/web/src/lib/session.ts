@@ -62,7 +62,12 @@ export async function clearStored() {
 }
 
 async function clearDirectCaches() {
-  for (const k of ['gauntlet.direct.rows', 'gauntlet.direct.me', 'gauntlet.direct.settings'])
+  for (const k of [
+    'gauntlet.direct.rows',
+    'gauntlet.direct.me',
+    'gauntlet.direct.settings',
+    'gauntlet.direct.rings',
+  ])
     await storage.set(k, null);
 }
 
