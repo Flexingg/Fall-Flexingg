@@ -166,10 +166,18 @@ async function upsertPerson(ctx: AppContext, p: Persona): Promise<UserRow> {
       timezone: 'UTC',
       isDemo: true,
       visibility: 'private',
+      // The cast shares its stats, so the demo's badge race and friends' badges have something to show.
+      shareProfileStats: true,
     })
     .onConflictDoUpdate({
       target: users.sparkyUserId,
-      set: { displayName: p.name, isDemo: true, keyStatus: 'active', visibility: 'private' },
+      set: {
+        displayName: p.name,
+        isDemo: true,
+        keyStatus: 'active',
+        visibility: 'private',
+        shareProfileStats: true,
+      },
     })
     .returning();
   return row!;

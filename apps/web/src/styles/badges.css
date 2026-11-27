@@ -210,7 +210,8 @@ small .lvl {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.72);
+  /* --sheet-dim fades with a swipe-to-close drag (lib/useSheetDrag.ts). */
+  background: rgba(0, 0, 0, calc(0.72 * var(--sheet-dim, 1)));
 }
 .bd-sheet {
   width: 100%;
@@ -269,13 +270,6 @@ small .lvl {
 }
 .bd-rung.todo .t {
   color: var(--muted);
-}
-.bd-grab {
-  width: 40px;
-  height: 4px;
-  border-radius: 4px;
-  background: var(--line-2);
-  margin: -6px auto 14px;
 }
 .bd-ctx {
   display: flex;

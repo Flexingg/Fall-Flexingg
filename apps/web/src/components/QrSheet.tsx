@@ -1,5 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
+import { useSheetDrag } from '../lib/useSheetDrag';
+import { SheetHandle } from './SheetHandle';
 import { toast } from './ui';
 import '../styles/challenges.css';
 
@@ -20,6 +22,7 @@ export function QrSheet({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
+  const drag = useSheetDrag(onClose);
 
   useEffect(() => {
     if (!canvas.current) return;
@@ -52,13 +55,15 @@ export function QrSheet({
   });
   return (
     <div
+      ref={drag.overlayRef}
       className="qr-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="Invite QR code"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="card stack qr-sheet" style={{ gap: 12 }}>
+      <div ref={drag.sheetRef} className="card stack qr-sheet" style={{ gap: 12 }}>
+        <SheetHandle drag={drag} />
         <b style={{ fontSize: 18 }}>{title}</b>
         <div>
           {failed ? (

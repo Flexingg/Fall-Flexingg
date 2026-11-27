@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import type { AppContext } from '../context.js';
+import { badgeTargetFor } from '../services/badges/access.js';
 import { loadImage } from '../services/badges/admin.js';
 import { notFound } from '../context.js';
 import {
@@ -18,22 +19,10 @@ import {
   markSeen,
   setShowcase,
 } from '../services/badges/views.js';
-import { canSeeUser } from '../services/privacy.js';
-import { getUsers } from '../services/users.js';
-
-const isId = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
 
 export function badgeRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };
-
-  /** Whose badges the viewer may open: themselves, or someone visible who shares their stats. */
-  async function targetFor(viewerId: string, id: string): Promise<string> {
-    if (id === viewerId) return viewerId;
-    const u = isId(id) ? (await getUsers(ctx, [id])).get(id) : undefined;
-    if (!u || !(await canSeeUser(ctx, viewerId, u)) || !u.shareProfileStats)
-      throw notFound('Person not found');
-    return u.id;
-  }
+  const targetFor = (viewerId: string, id: string) => badgeTargetFor(ctx, viewerId, id);
 
   app.get('/api/badges', auth, async (req) => buildCatalog(ctx, req.userId, req.userId));
 

@@ -373,8 +373,12 @@ export interface BadgeView {
   tiers: BadgeTierView[];
   /** Highest tier reached (0 = none yet). */
   tier: number;
-  /** Progress toward the next tier: current value and that tier's threshold (null when maxed/hidden). */
-  progress: { value: number; target: number; label: string } | null;
+  /**
+   * Progress toward the next tier: current value and that tier's threshold (null when maxed/hidden).
+   * For streak badges `value` is the streak you're on now (what you can still build on) and `best`
+   * is your longest one, which is what tiers are awarded on. Other rules leave `best` out.
+   */
+  progress: { value: number; target: number; label: string; best?: number | null } | null;
   earnedAt: string | null;
   /** Only on your own catalog: earned but not celebrated yet. */
   unseen?: boolean;
@@ -392,13 +396,50 @@ export interface BadgeCatalogResponse {
 export interface BadgeEarnedEntry {
   tier: number;
   earnedAt: string;
+  /**
+   * The day it was really earned (YYYY-MM-DD, the owner's own date). Same as earnedAt for live
+   * earns; for backfilled ones (launch, publish, history import) the day the threshold was crossed.
+   */
+  date: string;
   /** e.g. { challengeId, challengeName } or { date }. */
   context: Record<string, unknown>;
+  /**
+   * How it was earned, worded for the viewer: "A 22-day streak, Mar 2 – Mar 23, 2026",
+   * "Won Spring Steps", "A 12.4 km run on Mar 3". Null when there's nothing more to say.
+   */
+  how: string | null;
+  /** Opens what earned it: `/c/:id` for a challenge (only when the viewer may see it). */
+  to: string | null;
+}
+
+/** One line of a badge's "Your status" box, worded by the server in the viewer's units. */
+export interface BadgeStat {
+  kind: 'current' | 'best' | 'total' | 'latest' | 'period' | 'years';
+  /** "Current streak", "Best streak", "Total so far", "Best day", "This week so far"... */
+  label: string;
+  /** "3 days", "1,240,000", "12.4 km". */
+  value: string;
+  /** "Since Nov 25", "Mar 2 – Mar 23, 2026", "Spring Steps". */
+  detail: string | null;
+  /** Opens a challenge (`/c/:id`) when the line is about one. */
+  to: string | null;
+}
+
+/** Where you stand on a badge right now. Only on your own live badges. */
+export interface BadgeStanding {
+  stats: BadgeStat[];
+  /**
+   * What to do next, in one sentence: "Log sleep today to keep your 3-day streak going.",
+   * "27 more days in a row reaches Gold.", "60,000 more steps reaches Silver.". Null when maxed out.
+   */
+  next: string | null;
 }
 
 export interface BadgeDetailResponse {
   badge: BadgeView;
   history: BadgeEarnedEntry[];
+  /** Your own live badges only (null for someone else's, drafts, retired and hidden ones). */
+  standing: BadgeStanding | null;
   /** How many of the viewer's friends have it, and everyone on the server. */
   friendsWithIt: number;
   earnedByCount: number;
@@ -423,6 +464,54 @@ export interface BadgeFeedPayload {
   imageUrl: string | null;
   /** More earned in the same sync, shown as "+2 more". */
   more: number;
+}
+
+// ---------- Timeline and the XP race ----------
+
+/** One tier earned, for the timeline (newest first). */
+export interface BadgeTimelineEntry {
+  key: string;
+  name: string;
+  icon: BadgeIcon;
+  imageUrl: string | null;
+  tier: number;
+  /** Tiers the badge has (1 = single-tier). */
+  tierCount: number;
+  tierName: TierName | null;
+  xp: number;
+  /** The day it was really earned (see BadgeEarnedEntry.date). */
+  date: string;
+  how: string | null;
+  to: string | null;
+  /** Earned quietly by a launch/publish backfill or a history import rather than live. */
+  backfilled: boolean;
+  secret: boolean;
+}
+
+export interface BadgeTimelineResponse {
+  user: PublicUser;
+  entries: BadgeTimelineEntry[];
+  /** Pass as `?before=` for the next (older) page; null at the end. */
+  nextCursor: string | null;
+}
+
+export const XP_RACE_RANGES = ['30d', '90d', '1y', 'all'] as const;
+export type XpRaceRange = (typeof XP_RACE_RANGES)[number];
+
+/**
+ * Total XP over time for you and your friends, shaped like a challenge's progress graph so the same
+ * chart draws it: values are each person's total XP at the end of each date (daily up to a year,
+ * weekly beyond). Only friends who share their stats are in it; the top 7 by XP plus you.
+ */
+export interface XpRaceResponse {
+  range: XpRaceRange;
+  dates: string[];
+  series: { user: PublicUser; rank: number; isMe: boolean; values: (number | null)[] }[];
+  /** More friends could be drawn than are (the top 7 plus you are). */
+  truncated: boolean;
+  total: number;
+  /** XP each person gained within the range, same order as series. */
+  gained: number[];
 }
 
 // ---------- Admin ----------

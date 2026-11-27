@@ -9,11 +9,7 @@
  */
 import {
   BADGE_FAMILIES,
-  formatFlexible,
-  formatInt,
-  formatQuantityFlexible,
   levelFor,
-  metricDef,
   ruleTiers,
   tierName,
   todayIn,
@@ -25,48 +21,23 @@ import {
   type BadgeRule,
   type BadgeTierView,
   type BadgeView,
-  type DisplayPrefs,
-  type MetricKey,
   type UnseenBadgesResponse,
 } from '@gauntlet/shared';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppContext } from '../../context.js';
 import { HttpError, notFound } from '../../context.js';
-import {
-  badgeDefinitions,
-  challengeParticipants,
-  challenges,
-  userBadges,
-  users,
-} from '../../db/schema.js';
+import { badgeDefinitions, userBadges, users } from '../../db/schema.js';
 import { displayFor } from '../display.js';
 import { friendIds } from '../friends.js';
 import { getUser, toPublicUser } from '../users.js';
 import { evalDefOf, type DefinitionRow } from './engine.js';
-import { evaluateRule } from './evaluate.js';
+import { challengeAccess, describeEarn, earnedDay } from './earned.js';
+import { evaluateRule, type Evaluation } from './evaluate.js';
+import { buildStanding, formatValue, type Prefs } from './wording.js';
 
-type Prefs = Pick<DisplayPrefs, 'units' | 'locale'>;
+export { formatValue };
+
 type EarnedRow = typeof userBadges.$inferSelect;
-
-/** A threshold or progress value in the reader's units; only km/kg/L carry their unit into "{n}". */
-export function formatValue(rule: BadgeRule, n: number, prefs: Prefs): string {
-  let unit = '';
-  if (rule.type === 'lifetime_total' || rule.type === 'best_period') {
-    try {
-      unit = metricDef(rule.metric as MetricKey).unit;
-    } catch {
-      unit = '';
-    }
-  } else if (
-    (rule.type === 'single_activity' || rule.type === 'activity_total') &&
-    rule.measure === 'distance_km'
-  ) {
-    unit = 'km';
-  }
-  if (unit === 'km' || unit === 'kg' || unit === 'L')
-    return formatQuantityFlexible(n, unit, 1, prefs);
-  return Number.isInteger(n) ? formatInt(n, prefs) : formatFlexible(n, prefs, 1);
-}
 
 export function tierLabel(
   d: Pick<DefinitionRow, 'description' | 'rule'>,
@@ -92,7 +63,7 @@ export function viewOf(
   d: DefinitionRow,
   rows: EarnedRow[],
   prefs: Prefs,
-  opts: { progressValue?: number | null; own?: boolean } = {},
+  opts: { progressValue?: number | null; progressBest?: number | null; own?: boolean } = {},
 ): BadgeView {
   const thresholds = ruleTiers(d.rule);
   const reached = rows.length ? Math.max(...rows.map((r) => r.tier)) : 0;
@@ -149,6 +120,8 @@ export function viewOf(
             value,
             target: next.threshold,
             label: `${formatValue(d.rule, value, prefs)} of ${formatValue(d.rule, next.threshold, prefs)}`,
+            // A streak's tiers go to the longest one, so say that too ("3 of 30", best 22).
+            ...(opts.progressBest != null ? { best: opts.progressBest } : {}),
           }
         : null,
     earnedAt,
@@ -176,13 +149,13 @@ async function progressFor(
   ctx: AppContext,
   user: { id: string; timezone: string },
   defs: DefinitionRow[],
-): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
+): Promise<Map<string, Evaluation>> {
+  const out = new Map<string, Evaluation>();
   for (let i = 0; i < defs.length; i += 6) {
     await Promise.all(
       defs.slice(i, i + 6).map(async (d) => {
         try {
-          out.set(d.key, (await evaluateRule(ctx, user, evalDefOf(d))).value);
+          out.set(d.key, await evaluateRule(ctx, user, evalDefOf(d)));
         } catch (err) {
           ctx.log.warn({ err: String(err), key: d.key }, 'badge progress failed');
         }
@@ -190,6 +163,14 @@ async function progressFor(
     );
   }
   return out;
+}
+
+/** What progress shows for an evaluation: a streak's current run (with the best), else the value. */
+function progressOf(ev: Evaluation | undefined): { value?: number; best?: number } {
+  if (!ev) return {};
+  return ev.facts?.type === 'streak'
+    ? { value: ev.facts.current, best: ev.value }
+    : { value: ev.value };
 }
 
 /** A person's catalog as `viewerId` sees it (viewer's units; progress only when it is their own). */
@@ -221,10 +202,15 @@ export async function buildCatalog(
           (d) => d.status === 'live' && !(earned.get(d.key)?.length === thresholdsOf(d)),
         ),
       )
-    : new Map<string, number>();
-  const badges = shown.map((d) =>
-    viewOf(d, earned.get(d.key) ?? [], prefs, { progressValue: progress.get(d.key), own }),
-  );
+    : new Map<string, Evaluation>();
+  const badges = shown.map((d) => {
+    const p = progressOf(progress.get(d.key));
+    return viewOf(d, earned.get(d.key) ?? [], prefs, {
+      progressValue: p.value,
+      progressBest: p.best,
+      own,
+    });
+  });
   const earnedKeys = new Set(badges.filter((b) => b.tier > 0).map((b) => b.key));
   return {
     user: toPublicUser(target),
@@ -236,25 +222,6 @@ export async function buildCatalog(
 }
 
 const thresholdsOf = (d: DefinitionRow) => ruleTiers(d.rule).length;
-
-async function canSeeChallenge(ctx: AppContext, viewerId: string, challengeId: string) {
-  const [row] = await ctx.db
-    .select({ vis: challenges.visibility })
-    .from(challenges)
-    .where(eq(challenges.id, challengeId));
-  if (!row) return false;
-  if (row.vis === 'public') return true;
-  const [mine] = await ctx.db
-    .select({ s: challengeParticipants.state })
-    .from(challengeParticipants)
-    .where(
-      and(
-        eq(challengeParticipants.challengeId, challengeId),
-        eq(challengeParticipants.userId, viewerId),
-      ),
-    );
-  return !!mine && mine.s !== 'declined';
-}
 
 export async function buildDetail(
   ctx: AppContext,
@@ -273,21 +240,53 @@ export async function buildDetail(
   const rows = (await earnedBy(ctx, targetId)).get(key) ?? [];
   if (!isVisible(d, rows.length > 0, todayIn(viewer.timezone, ctx.now())))
     throw notFound('Badge not found');
-  const progress =
-    own && d.status === 'live' ? (await progressFor(ctx, target, [d])).get(key) : undefined;
+  const today = todayIn(viewer.timezone, ctx.now());
+  const reached = rows.length ? Math.max(...rows.map((r) => r.tier)) : 0;
+  const hidden = d.secret && reached === 0;
+  // Where you stand: your own live badge only (the evaluation also feeds the progress bar).
+  const ev =
+    own && d.status === 'live' && !hidden
+      ? await evaluateRule(ctx, target, evalDefOf(d), { facts: true }).catch((err) => {
+          ctx.log.warn({ err: String(err), key }, 'badge standing failed');
+          return undefined;
+        })
+      : undefined;
+  const canSee = challengeAccess(ctx, viewerId);
+  const standing = ev
+    ? buildStanding({
+        rule: d.rule,
+        window: windowOf(d),
+        reached,
+        value: ev.value,
+        facts: ev.facts,
+        prefs,
+        today,
+        canOpenChallenge:
+          ev.facts?.type === 'challenge_result' && ev.facts.latest
+            ? await canSee(ev.facts.latest.id)
+            : false,
+      })
+    : null;
 
   const history = [];
   for (const r of rows) {
-    let context = r.context;
-    // Someone else's earn shouldn't leak the name of a private challenge you aren't in.
-    if (!own && typeof context.challengeId === 'string') {
-      if (!(await canSeeChallenge(ctx, viewerId, context.challengeId))) {
-        const { challengeId: _a, challengeName: _b, ...rest } = context;
-        context = rest;
-      }
-    }
-    history.push({ tier: r.tier, earnedAt: r.earnedAt.toISOString(), context });
+    const e = await describeEarn(canSee, {
+      own,
+      rule: d.rule,
+      row: r,
+      prefs,
+      thisYear: today.slice(0, 4),
+    });
+    history.push({
+      tier: r.tier,
+      earnedAt: r.earnedAt.toISOString(),
+      date: earnedDay(r, target.timezone),
+      context: e.context,
+      how: e.how,
+      to: e.to,
+    });
   }
+  const p = progressOf(ev);
   const friends = await friendIds(ctx, viewerId);
   const [withIt] = friends.length
     ? await ctx.db
@@ -301,8 +300,9 @@ export async function buildDetail(
     .innerJoin(users, eq(users.id, userBadges.userId))
     .where(and(eq(userBadges.badgeKey, key), eq(users.isDemo, false)));
   return {
-    badge: viewOf(d, rows, prefs, { progressValue: progress, own }),
+    badge: viewOf(d, rows, prefs, { progressValue: p.value, progressBest: p.best, own }),
     history,
+    standing,
     friendsWithIt: withIt?.n ?? 0,
     earnedByCount: all?.n ?? 0,
   };

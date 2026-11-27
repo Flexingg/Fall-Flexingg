@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb, runMigrations } from './db/index.js';
+import { redateBackfilledBadges } from './services/badges/redate.js';
 import { seedBadges } from './services/badges/seed.js';
 import { refreshDemo } from './services/demo.js';
 import { startScheduler } from './scheduler.js';
@@ -18,6 +19,8 @@ const { app, ctx } = await buildApp(
 );
 // The launch badges (before the demo account, whose sample badges point at them).
 await seedBadges(ctx).catch((err) => ctx.log.warn({ err }, 'badge seed failed'));
+// Backfilled badges learn the day they were really earned (once, in the background).
+void redateBackfilledBadges(ctx).catch((err) => ctx.log.warn({ err }, 'badge redate failed'));
 void refreshDemo(ctx).catch((err) => ctx.log.warn({ err }, 'demo setup failed'));
 // An import a restart cut short carries on from where it was.
 void resumeHistoryImports(ctx).catch((err) =>

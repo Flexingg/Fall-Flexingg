@@ -18,6 +18,7 @@ import { loadConfig } from '../src/config.js';
 import { createDb, runMigrations } from '../src/db/index.js';
 import { runSyncCycle } from '../src/scheduler.js';
 import {
+  badgeDefinitions,
   badgeSuggestions,
   feedEvents,
   serverState,
@@ -25,6 +26,7 @@ import {
   users as usersTable,
 } from '../src/db/schema.js';
 import { createDraftBadge, publishBadge } from '../src/services/badges/admin.js';
+import { recomputeXp } from '../src/services/badges/engine.js';
 import { seedBadges } from '../src/services/badges/seed.js';
 import { settleBadgeTasks } from '../src/services/badges/tasks.js';
 import { refreshDemo } from '../src/services/demo.js';
@@ -512,6 +514,8 @@ await call('you', 'PATCH', `/api/challenges/${live.id}`, { showEvents: true });
 await call('dre', 'PATCH', '/api/me', {
   settings: { shareEvents: false, shareProfileStats: true },
 });
+// Sam shares his stats too, so the badge race has more than one friend (Maya keeps hers private).
+await call('sam', 'PATCH', '/api/me', { settings: { shareProfileStats: true } });
 const cup = await call<{ id: string }>('dre', 'POST', '/api/challenges', {
   name: 'Active Minutes Cup',
   metric: 'active_minutes',
@@ -617,6 +621,82 @@ const sprint: BadgeDraft = {
 await createDraftBadge(ctx, sprint, 'admin');
 await publishBadge(ctx, 'summer-sprint');
 await settleBadgeTasks();
+// Badges earned over the last three months, so the timeline and the XP race have something to draw.
+// The launch backfill dated everyone's badges "today"; spread what they have across ~90 days (higher
+// tiers later) and add a few more for the friends who share their stats. All already seen, so
+// nobody is greeted by a celebration. Their XP follows the rows, as it does for real earns.
+{
+  const EXTRA: Record<string, [string, number][]> = {
+    you: [
+      ['trail-mix', 1],
+      ['inner-calm', 1],
+    ],
+    maya: [
+      ['mile-eater', 2],
+      ['trail-mix', 2],
+      ['habit-forming', 1],
+      ['podium-regular', 1],
+    ],
+    dre: [
+      ['mile-eater', 1],
+      ['wheelhouse', 2],
+      ['inner-calm', 1],
+    ],
+    sam: [
+      ['trail-mix', 1],
+      ['wheelhouse', 1],
+      ['habit-forming', 1],
+    ],
+    jordan: [
+      ['mile-eater', 1],
+      ['inner-calm', 2],
+    ],
+  };
+  const known = new Set(
+    (await ctx.db.select({ key: badgeDefinitions.key }).from(badgeDefinitions)).map((x) => x.key),
+  );
+  const cast = ['you', 'maya', 'dre', 'sam', 'jordan'];
+  for (const [pi, who] of cast.entries()) {
+    const userId = ids[who]!;
+    const mine = await ctx.db.select().from(userBadges).where(eq(userBadges.userId, userId));
+    const tiersBy = new Map<string, number>();
+    for (const r of mine) tiersBy.set(r.badgeKey, Math.max(tiersBy.get(r.badgeKey) ?? 0, r.tier));
+    const fresh: (typeof userBadges.$inferInsert)[] = [];
+    for (const [key, tiers] of EXTRA[who] ?? []) {
+      if (!known.has(key) || tiersBy.has(key)) continue;
+      tiersBy.set(key, tiers);
+      for (let t = 1; t <= tiers; t++) fresh.push({ userId, badgeKey: key, tier: t });
+    }
+    const stamp = (key: string, tier: number, i: number) => {
+      const top = tiersBy.get(key) ?? tier;
+      const ago = Math.min(89, ((pi * 7 + i * 11) % 80) + 2 + (top - tier) * 9);
+      return { at: new Date(`${d(-ago)}T20:00:00Z`), date: d(-ago) };
+    };
+    const order = [...tiersBy.keys()].sort();
+    for (const r of mine) {
+      const { at, date } = stamp(r.badgeKey, r.tier, order.indexOf(r.badgeKey));
+      await ctx.db
+        .update(userBadges)
+        .set({ earnedAt: at, context: { date }, backfilled: false, seenAt: new Date() })
+        .where(
+          and(
+            eq(userBadges.userId, userId),
+            eq(userBadges.badgeKey, r.badgeKey),
+            eq(userBadges.tier, r.tier),
+          ),
+        );
+    }
+    if (fresh.length)
+      await ctx.db.insert(userBadges).values(
+        fresh.map((r) => {
+          const { at, date } = stamp(r.badgeKey, r.tier, order.indexOf(r.badgeKey));
+          return { ...r, earnedAt: at, context: { date }, backfilled: false, seenAt: new Date() };
+        }),
+      );
+    await recomputeXp(ctx, userId);
+  }
+}
+
 const idea = (n: number, name: string, description: string) => ({
   sourceRef: String(9000 + n),
   sourceName: name,

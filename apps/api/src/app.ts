@@ -12,6 +12,7 @@ import { adminRoutes } from './routes/admin.js';
 import { adminBadgeRoutes } from './routes/adminBadges.js';
 import { adminUserRoutes } from './routes/adminUsers.js';
 import { badgeRoutes } from './routes/badges.js';
+import { badgeTimelineRoutes } from './routes/badgeTimeline.js';
 import { registerBadgeHooks } from './services/badges/hooks.js';
 import { authRoutes } from './routes/auth.js';
 import { challengeRoutes } from './routes/challenges.js';
@@ -106,6 +107,7 @@ export async function buildApp(
   adminBadgeRoutes(app, full);
   adminUserRoutes(app, full);
   badgeRoutes(app, full);
+  badgeTimelineRoutes(app, full);
   meRoutes(app, full);
   statsRoutes(app, full);
   friendRoutes(app, full);

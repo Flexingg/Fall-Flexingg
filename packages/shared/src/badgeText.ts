@@ -64,7 +64,7 @@ function amount(n: number, unit = ''): string {
 
 const list = (tiers: number[], unit = '') => tiers.map((t) => amount(t, unit)).join(' · ');
 
-const SPORT_LABEL: Record<ActivitySport, string> = {
+export const SPORT_LABEL: Record<ActivitySport, string> = {
   any: 'activities',
   run: 'runs',
   walk: 'walks',
@@ -76,7 +76,7 @@ const SPORT_LABEL: Record<ActivitySport, string> = {
   cardio: 'cardio sessions',
   other: 'other workouts',
 };
-const SPORT_ONE: Record<ActivitySport, string> = {
+export const SPORT_ONE: Record<ActivitySport, string> = {
   any: 'activity',
   run: 'run',
   walk: 'walk',
@@ -93,7 +93,7 @@ const MEASURE_UNIT: Record<ActivityMeasure, string> = {
   minutes: 'min',
   kcal: 'kcal',
 };
-const SOCIAL_LABEL: Record<SocialEvent, string> = {
+export const SOCIAL_LABEL: Record<SocialEvent, string> = {
   reactions_sent: 'Reactions sent',
   comments_sent: 'Comments sent',
   challenges_created: 'Challenges created',
@@ -105,7 +105,7 @@ const SOCIAL_LABEL: Record<SocialEvent, string> = {
   rematches_won: 'Rematches won',
   personal_records: 'Personal records set',
 };
-const DRAMA_LABEL: Record<ChallengeDrama, string> = {
+export const DRAMA_LABEL: Record<ChallengeDrama, string> = {
   comeback: 'Come-from-behind wins',
   photo_finish: 'Photo-finish wins',
   wire_to_wire: 'Wins from the first day to the last',
@@ -114,7 +114,7 @@ const DRAMA_LABEL: Record<ChallengeDrama, string> = {
 
 const hourText = (h: number) =>
   `${h === 0 || h === 24 ? 12 : h > 12 ? h - 12 : h}${h >= 12 && h < 24 ? ' pm' : ' am'}`;
-const hoursText = (r?: { from: number; to: number }) =>
+export const hoursText = (r?: { from: number; to: number }) =>
   r ? `, between ${hourText(r.from)} and ${hourText(r.to)}` : '';
 
 const MONTHS = [
