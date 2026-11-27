@@ -21,7 +21,7 @@ Nothing else: no heart rate, HRV, stress, body battery, pulse ox, GPS locations,
 Skip (decision "skip", with a short reason) when the badge needs data Gauntlet does not have or is not about general fitness: golf, diving, Tacx or indoor-trainer apps, Garmin Connect app or device features (connecting a device, syncing, setting up, premium or specific-watch features), heart rate, HRV, stress, body battery, pulse ox, specific real-world races, events or locations, "with a dog", likes or photos on Garmin, or anything you cannot express faithfully. Match (decision "match") only when one rule can express what the badge asks for. If unsure, skip.
 
 Writing the draft
-- Never reuse Garmin's name or wording. Write a fresh, punchy name (40 characters or fewer) and one plain sentence of description (160 or fewer) saying what to do; "{n}" may stand for the tier threshold. Keep it friendly, no jargon.
+- Never reuse Garmin's name or wording. The name must be clearly your own: don't keep Garmin's name pattern or change just a word or letter of it (for "December Step Month", "Snow Miles" is good, "December Step March" is not). Write a fresh, punchy name (40 characters or fewer) and one plain sentence of description (160 or fewer) saying what to do; "{n}" may stand for the tier threshold. Keep it friendly, no jargon.
 - key: g-<slug>-<garmin id>, lowercase letters, digits and dashes only (the id is given below).
 - family: one of ${BADGE_FAMILIES.join(', ')}. A limited-time badge (it has dates) uses "seasonal".
 - icon: one of ${BADGE_ICONS.join(', ')}.

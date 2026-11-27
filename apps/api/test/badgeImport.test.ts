@@ -219,11 +219,11 @@ describe('diff and LLM step', () => {
     expect(c.headers['anthropic-version']).toBe('2023-06-01');
     expect(c.body).toMatchObject({
       model: 'test-model',
-      temperature: 0,
       max_tokens: 1500,
       tool_choice: { type: 'tool', name: 'propose_badge' },
     });
     expect(JSON.stringify(c.body)).not.toContain('sk-ant-test');
+    expect(c.body).not.toHaveProperty('temperature');
     expect(c.body.messages[0].content).toContain('Do thing 5');
   });
 

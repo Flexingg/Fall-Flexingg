@@ -37,7 +37,6 @@ async function callModel(ctx: AppContext, messages: Message[]): Promise<ToolUse>
   const body = JSON.stringify({
     model: ctx.cfg.BADGE_IMPORT_MODEL,
     max_tokens: 1500,
-    temperature: 0,
     system: SYSTEM_PROMPT,
     tools: [buildProposeBadgeTool()],
     tool_choice: { type: 'tool', name: TOOL_NAME },
