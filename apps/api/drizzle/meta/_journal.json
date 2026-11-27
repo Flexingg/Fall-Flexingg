@@ -92,6 +92,13 @@
       "when": 1795776840412,
       "tag": "0012_account_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795793142369,
+      "tag": "0013_ring_config",
+      "breakpoints": true
     }
   ]
 }

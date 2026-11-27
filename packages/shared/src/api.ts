@@ -10,6 +10,7 @@ import { isTrendMetric } from './derive.js';
 import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
 import type { BadgeFeedPayload } from './badges.js';
+import type { TodayRing } from './rings.js';
 import { recurrenceSchema, type Reaction, type Recurrence } from './notify.js';
 import { teamsInputSchema, type ChallengeTeam, type TeamScoring } from './teams.js';
 import type { SeriesInfo } from './recurring.js';
@@ -481,6 +482,12 @@ export interface TodayResponse {
   }[];
   featured: ChallengeSummary | null;
   /**
+   * The person's three rings (outer first) from their ring config (see rings.ts): GET/PUT
+   * /api/me/rings saves it. Optional only so older servers still parse; the app falls back to
+   * DEFAULT_RINGS read from `metrics`.
+   */
+  rings?: TodayRing[];
+  /**
    * False when nothing feeds this account yet (no data in the last 30 days, no linked app, no
    * Health Connect): the app nudges the person to connect a source.
    */
@@ -693,28 +700,53 @@ export interface SourceChoice {
   label: string;
 }
 
+/** Where the default order (for every stat without its own) lives in users.sourcePriorities. */
+export const DEFAULT_PRIORITY_KEY = '*';
+
 export interface SourcePriorityResponse {
+  /** The order used for every stat that has no order of its own. */
+  default: {
+    /** Most preferred first; empty means automatic (the highest number each day). */
+    order: string[];
+    /** Every source the person could have, for any stat. */
+    sources: SourceChoice[];
+  };
   metrics: {
     key: (typeof PRIORITY_METRIC_KEYS)[number];
     label: string;
-    /** Sources seen for this metric recently (plus the preferred one, if it has gone quiet). */
+    /** Every source this stat could come from: seen recently, connected apps, phone, SparkyFitness. */
     sources: SourceChoice[];
-    /** Null: automatic (the highest single source each day). */
+    /** This stat's own order, most preferred first. Empty: it follows the default order. */
+    order: string[];
+    /** The first source of `order`, or null. Kept for older app versions. */
     preferred: string | null;
   }[];
 }
 
-export const setSourcePrioritySchema = z.object({
-  metric: z.enum(PRIORITY_METRIC_KEYS),
-  /** A source key, or null for automatic. */
-  preferred: z
-    .string()
-    .trim()
-    .min(1)
-    .max(40)
-    .regex(/^[a-z0-9_-]+$/)
-    .nullable(),
-});
+const sourceKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(40)
+  .regex(/^[a-z0-9_-]+$/);
+
+/**
+ * Set an order for one stat, or for all of them with metric "*". An empty order clears it (a stat
+ * then follows the default; the default then goes back to automatic). The older `{ metric,
+ * preferred }` shape still works: one source, or null for automatic.
+ */
+export const setSourcePrioritySchema = z.union([
+  z.object({
+    metric: z.enum([...PRIORITY_METRIC_KEYS, DEFAULT_PRIORITY_KEY]),
+    order: z
+      .array(sourceKeySchema)
+      .max(16)
+      .refine((o) => new Set(o).size === o.length, 'Each source can only be listed once'),
+  }),
+  z
+    .object({ metric: z.enum(PRIORITY_METRIC_KEYS), preferred: sourceKeySchema.nullable() })
+    .transform((b) => ({ metric: b.metric, order: b.preferred ? [b.preferred] : [] })),
+]);
 
 export const syncRequestSchema = z
   .object({

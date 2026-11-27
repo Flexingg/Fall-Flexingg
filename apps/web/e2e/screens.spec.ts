@@ -712,21 +712,22 @@ test('fresh data: sync now, pull to refresh, and choosing which source counts', 
   await page.getByRole('button', { name: 'Sync now' }).click();
   await expect(page.locator('.toast')).toHaveText(/Up to date|Updated/);
 
-  // Distance comes from the watch and from logged workouts: pick one, then go back to automatic.
+  // Distance comes from the watch and from logged workouts: give it its own order, then undo.
   const distance = page.getByRole('group', { name: 'Distance source' });
   await expect(distance).toBeVisible();
-  await expect(distance.getByRole('button', { name: 'Automatic' })).toHaveAttribute(
+  await expect(distance.getByRole('button', { name: 'Same as default' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await distance.getByRole('button', { name: 'Logged workouts' }).click();
-  await expect(distance.getByRole('button', { name: 'Logged workouts' })).toHaveAttribute(
+  await distance.getByRole('button', { name: 'Custom order' }).click();
+  await expect(distance.getByRole('button', { name: 'Custom order' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
+  await expect(page.getByRole('list', { name: 'Distance order of sources' })).toBeVisible();
   await snap(page, '43-source-priority');
-  await distance.getByRole('button', { name: 'Automatic' }).click();
-  await expect(distance.getByRole('button', { name: 'Automatic' })).toHaveAttribute(
+  await distance.getByRole('button', { name: 'Same as default' }).click();
+  await expect(distance.getByRole('button', { name: 'Same as default' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -2318,5 +2319,134 @@ test.describe('badge status, race and timeline', () => {
     sheet = await open();
     await page.getByTestId('sheet-handle').click();
     await expect(sheet).toBeHidden();
+  });
+});
+
+test('Data sources: rank which source counts with up and down buttons', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/sources');
+  const mode = page.getByRole('group', { name: 'Default order mode' });
+  await expect(mode).toBeVisible();
+  await expect(mode.getByRole('button', { name: 'Automatic (highest number)' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await mode.getByRole('button', { name: 'My order' }).click();
+  const list = page.getByRole('list', { name: 'Default order of sources' });
+  await expect(list).toBeVisible();
+  const rows = list.getByRole('listitem');
+  const first = (await rows.nth(0).innerText()).replace(/^\d+\s*/, '').trim();
+  const second = (await rows.nth(1).innerText()).replace(/^\d+\s*/, '').trim();
+  await rows
+    .nth(1)
+    .getByRole('button', { name: /Move .* up/ })
+    .click();
+  await expect(rows.nth(0)).toContainText(second);
+  await expect(rows.nth(1)).toContainText(first);
+  await snap(page, '150-source-priority');
+
+  // It is saved: still ranked after a reload, then back to automatic.
+  await page.reload();
+  const again = page.getByRole('list', { name: 'Default order of sources' });
+  await expect(again.getByRole('listitem').nth(0)).toContainText(second);
+  await page
+    .getByRole('group', { name: 'Default order mode' })
+    .getByRole('button', { name: 'Automatic (highest number)' })
+    .click();
+  await expect(again).toHaveCount(0);
+});
+
+test.describe('rings, day stats and badges on Today', () => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+
+  test('Today rings open the day stats, and the rings can be edited', async ({ page }) => {
+    await signIn(page);
+    const card = page.getByTestId('ring-card');
+    await expect(card).toBeVisible();
+    // Each ring says what it is, how far along it is and its goal.
+    await expect(card.getByText('Steps')).toBeVisible();
+    await expect(card.getByText('Active kcal')).toBeVisible();
+    await expect(card.getByText('of 10,000')).toBeVisible();
+    await snap(page, '160-today-rings');
+
+    await card.click();
+    await expect(page.getByRole('heading', { name: 'Day stats' })).toBeVisible();
+    await expect(page.getByTestId('day-when')).toContainText('Today');
+    await expect(page.getByText('Activity', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('day-stat').first()).toBeVisible();
+    await snap(page, '161-day-stats');
+
+    // Page back a day and forward again; there is nothing after today.
+    await expect(page.getByRole('button', { name: 'Next day' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Previous day' }).click();
+    await expect(page.getByTestId('day-when')).toContainText('Yesterday');
+    await page.getByRole('button', { name: 'Next day' }).click();
+    await expect(page.getByTestId('day-when')).toContainText('Today');
+
+    // Make the outer ring distance with an 8 km goal.
+    await page.getByRole('link', { name: 'Edit rings' }).click();
+    await expect(page.getByRole('heading', { name: 'Edit rings' })).toBeVisible();
+    await page.getByLabel('Outer ring stat').selectOption('distance');
+    await expect(page.getByLabel('Outer ring daily goal')).toHaveValue('5');
+    await page.getByLabel('Outer ring daily goal').fill('8');
+    // Each ring needs a different stat: the others' picks are not on offer.
+    await expect(
+      page.getByLabel('Middle ring stat').locator('option[value=distance]'),
+    ).toHaveAttribute('disabled', '');
+    await snap(page, '162-edit-rings');
+    await page.getByRole('button', { name: 'Save rings' }).click();
+    await expect(page.getByRole('heading', { name: 'Day stats' })).toBeVisible();
+    await expect(page.getByTestId('ring-legend').getByText('Distance')).toBeVisible();
+    await expect(page.getByTestId('ring-legend').getByText('of 8 km')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Today' }).first().click();
+    await expect(page.getByTestId('ring-card').getByText('Distance')).toBeVisible();
+
+    // Put it back so the other tests (and the next run) see the usual rings.
+    await page.goto('/day/rings');
+    await page.getByRole('button', { name: 'Reset to default' }).click();
+    await expect(page.getByLabel('Outer ring stat')).toHaveValue('steps');
+    await page.getByRole('button', { name: 'Save rings' }).click();
+    // Saving goes back to wherever you came from (Today, here).
+    await expect(page.getByTestId('ring-card').getByText('Steps')).toBeVisible();
+  });
+
+  test('a goal is typed in miles for people on imperial units', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/me');
+    await page.getByRole('button', { name: 'Imperial (mi, lb)' }).click();
+    await expect(page.getByTestId('display-preview')).toContainText('mi');
+    await page.goto('/day/rings');
+    await page.getByLabel('Middle ring stat').selectOption('distance');
+    await expect(page.getByLabel('Middle ring daily goal')).toHaveValue('3.1');
+    await expect(page.getByText('mi', { exact: true }).first()).toBeVisible();
+    await page.getByLabel('Middle ring daily goal').fill('0');
+    await expect(page.getByText('Every ring needs a goal bigger than zero.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save rings' })).toBeDisabled();
+    // Leave the account the way the other tests expect it.
+    await page.goto('/me');
+    await page.getByRole('button', { name: 'Metric (km, kg)' }).click();
+    await expect(page.getByTestId('display-preview')).toContainText('km');
+  });
+
+  test('level and badges are one tap from Today and the profile', async ({ page }) => {
+    await signIn(page);
+    const pill = page.getByTestId('level-pill');
+    await expect(pill).toBeVisible();
+    await expect(pill).toContainText(/Lv \d+/);
+    const card = page.getByTestId('badges-today');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(/XP/);
+    await snap(page, '163-today-badges');
+
+    await card.click();
+    await expect(page.getByRole('heading', { name: /Badges/ }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/badges$/);
+
+    await page.goto('/me');
+    await expect(page.getByTestId('badges-today')).toBeVisible();
+    await page.goto('/');
+    await page.getByTestId('level-pill').click();
+    await expect(page).toHaveURL(/\/badges$/);
   });
 });

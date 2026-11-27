@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
             return;
         }
         add(data.stepsText(), 32, "#c6ff00", true);
-        add(data.goalText() + (data.hasGoal() ? " steps" : ""), 13, "#8b8b86", false);
+        add(data.goalText(), 13, "#8b8b86", false);
         if (!data.rankText.isEmpty()) {
             add(data.rankText, 16, "#f2f2f0", true);
             add(data.challengeName, 12, "#8b8b86", false);

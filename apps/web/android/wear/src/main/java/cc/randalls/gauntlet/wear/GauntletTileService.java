@@ -105,7 +105,7 @@ public class GauntletTileService extends TileService {
         LayoutElementBuilders.Column.Builder column = new LayoutElementBuilders.Column.Builder()
                 .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                 .addContent(text(data.stepsText(), 28f, VOLT, true))
-                .addContent(text(data.goalText() + (data.hasGoal() ? " steps" : ""), 12f, MUTED, false));
+                .addContent(text(data.goalText(), 12f, MUTED, false));
         if (!data.rankText.isEmpty()) {
             column.addContent(text(data.rankText, 14f, LIGHT, true));
         }

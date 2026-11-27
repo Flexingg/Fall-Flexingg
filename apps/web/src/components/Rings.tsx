@@ -1,6 +1,18 @@
-/** Three concentric activity rings, as in the Today mockup. Values are 0..1+. */
-export function Rings({ values, size = 110 }: { values: [number, number, number]; size?: number }) {
-  const colors = ['var(--volt)', 'var(--text)', 'var(--muted)'];
+/**
+ * Three concentric rings, as in the Today mockup. Values are 0..1+ (a ring stops at full). Optionally
+ * labelled for screen readers with what each ring is.
+ */
+export const RING_COLORS = ['var(--volt)', 'var(--text)', 'var(--muted)'];
+
+export function Rings({
+  values,
+  size = 110,
+  label = "Today's progress rings",
+}: {
+  values: [number, number, number];
+  size?: number;
+  label?: string;
+}) {
   const radii = [48, 34, 20];
   return (
     <svg
@@ -10,7 +22,7 @@ export function Rings({ values, size = 110 }: { values: [number, number, number]
       fill="none"
       strokeLinecap="round"
       role="img"
-      aria-label="Today's progress rings"
+      aria-label={label}
     >
       {radii.map((r, i) => {
         const c = 2 * Math.PI * r;
@@ -23,7 +35,7 @@ export function Rings({ values, size = 110 }: { values: [number, number, number]
                 cx="55"
                 cy="55"
                 r={r}
-                stroke={colors[i]}
+                stroke={RING_COLORS[i]}
                 strokeWidth="10"
                 strokeDasharray={c}
                 strokeDashoffset={c * (1 - p)}

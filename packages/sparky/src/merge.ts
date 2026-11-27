@@ -14,6 +14,7 @@
  */
 import {
   adherenceScore,
+  DEFAULT_PRIORITY_KEY,
   DEFAULT_DISPLAY,
   epley1rm,
   formatFlexible,
@@ -70,6 +71,7 @@ export interface MergeInput {
   /**
    * Preferred sources per metric (source keys, see sourceKey), most preferred first. A day uses the
    * first listed source that has a value; days none of them cover fall back to the usual rule.
+   * The reserved key DEFAULT_PRIORITY_KEY ("*") is the order for every metric with no list of its own.
    */
   priorities?: Record<string, string[]>;
 }
@@ -104,7 +106,10 @@ export function sourceKey(raw: string | null | undefined): string {
     RESTING_HR_CATEGORIES.includes(s)
   )
     return 'health_connect';
-  if (s === 'workouts' || s === 'wearable') return s;
+  if (s === 'workouts') return s;
+  // Data typed into SparkyFitness itself carries no provider. "wearable" is what older Gauntlet
+  // versions called it, so stored priorities that name it keep working.
+  if (s === 'wearable' || s === 'manual' || s === 'sparkyfitness') return 'sparkyfitness';
   return s.replace(/\s+/g, '_');
 }
 
@@ -118,7 +123,7 @@ const SOURCE_LABELS: Record<string, string> = {
   strava: 'Strava',
   health_connect: 'Health Connect & phone',
   workouts: 'Logged workouts',
-  wearable: 'Wearable',
+  sparkyfitness: 'SparkyFitness',
   demo: 'Demo',
 };
 
@@ -211,7 +216,7 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
 
   // Wearable daily summaries (Garmin, Polar, ...).
   for (const row of input.daily) {
-    const src = row.source_provider ?? 'wearable';
+    const src = row.source_provider || 'sparkyfitness';
     if (pos(row.total_steps)) t.add(row.entry_date, 'steps', row.total_steps, src);
     if (pos(row.total_distance_meters))
       t.add(row.entry_date, 'distance', num(row.total_distance_meters)! / 1000, src);
@@ -305,7 +310,11 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
 
   const prio = input.priorities ?? {};
   const values = t.collect((metric, cands) => {
-    const order = prio[metric];
+    const own = prio[metric];
+    const fallback = (PRIORITY_METRICS as readonly string[]).includes(metric)
+      ? prio[DEFAULT_PRIORITY_KEY]
+      : undefined;
+    const order = (own?.length ? own : fallback)?.map((k) => sourceKey(k));
     if (order?.length) {
       for (const key of order) {
         const mine = cands.filter((c) => sourceKey(c.source) === key);

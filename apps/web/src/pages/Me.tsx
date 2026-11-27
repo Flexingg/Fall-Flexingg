@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { DisplaySettings } from '../components/DisplaySettings';
 import { Icon } from '../components/Icon';
 import { LevelChip } from '../components/LevelChip';
+import { BadgeProgressCard } from '../components/TodayBadges';
 import { Avatar, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -87,6 +88,7 @@ export function MePage() {
           </div>
         </div>
       </div>
+      {!direct && <BadgeProgressCard />}
       <ErrorBox error={error} />
       {user.sparkyKeyStatus !== 'active' && (
         <div className="error" style={{ marginBottom: 12 }}>

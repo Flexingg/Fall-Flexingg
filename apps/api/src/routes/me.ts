@@ -1,17 +1,21 @@
 import {
   addDays,
   buildOverview,
+  buildRingsFromRows,
   buildToday,
   buildTrends,
   buildWallpaper,
+  DEFAULT_PRIORITY_KEY,
   isMetricKey,
   metricDef,
   PRIORITY_METRIC_KEYS,
   setSourcePrioritySchema,
   syncRequestSchema,
+  type SourceChoice,
   type SourcePriorityResponse,
   type SyncResponse,
   personalBests,
+  ringsOf,
   todayIn,
   trendsNeedFrom,
   trendsQuerySchema,
@@ -51,29 +55,56 @@ import {
   listConnections,
   RESTING_HR_CATEGORIES,
   SparkyError,
+  sourceKey,
   sourceLabel,
   type FastRow,
 } from '@gauntlet/sparky';
 import { connectionsEnv } from './connections.js';
 import { pullConnectedApps } from '../services/pull.js';
 
-/** The choices on Data sources → Which source counts. */
-function sourcePriorities(user: UserRow): SourcePriorityResponse {
-  return {
-    metrics: PRIORITY_METRIC_KEYS.map((key) => {
-      const preferred = user.sourcePriorities[key]?.[0] ?? null;
-      const seen = user.seenSources[key] ?? [];
-      const keys = [...new Set([...seen, ...(preferred ? [preferred] : [])])].filter(
-        (k) => k !== 'unknown',
-      );
-      return {
-        key,
-        label: metricDef(key).label,
-        sources: keys.map((k) => ({ key: k, label: sourceLabel(k) })),
-        preferred,
-      };
-    }),
-  };
+/**
+ * The choices on Data sources → Which source counts. Every source a person could have is offered,
+ * not just those already seen: connected apps, the phone (when Health Connect sync is on) and
+ * SparkyFitness itself (numbers typed in by hand), so an order can be set before data arrives.
+ */
+async function sourcePriorities(ctx: AppContext, user: UserRow): Promise<SourcePriorityResponse> {
+  const extra = new Set<string>();
+  if (user.healthConnectSync) extra.add('health_connect');
+  if (!user.isDemo && user.keyStatus === 'active' && user.sparkyKeyEnc) {
+    const apps = await listConnections(
+      ctx.sparky,
+      sparkyToken(ctx, user),
+      connectionsEnv(ctx),
+    ).catch((err) => {
+      ctx.log.warn({ err: String(err) }, 'could not list apps for source priority');
+      return [];
+    });
+    for (const c of apps)
+      if (c.state === 'connected' && c.id !== 'wger') extra.add(sourceKey(c.id));
+  }
+  const stored = user.sourcePriorities;
+  const norm = (order: string[] | undefined) => [
+    ...new Set((order ?? []).map((k) => sourceKey(k)).filter((k) => k !== 'unknown')),
+  ];
+  const choices = (keys: Iterable<string>): SourceChoice[] =>
+    [...new Set(keys)].map((k) => ({ key: k, label: sourceLabel(k) }));
+  const all = new Set<string>();
+  const metrics = PRIORITY_METRIC_KEYS.map((key) => {
+    const order = norm(stored[key]);
+    const seen = norm(user.seenSources[key]);
+    const keys = [...new Set([...order, ...seen, ...extra, 'sparkyfitness'])];
+    for (const k of keys) all.add(k);
+    return {
+      key,
+      label: metricDef(key).label,
+      sources: choices(keys),
+      order,
+      preferred: order[0] ?? null,
+    };
+  });
+  const defOrder = norm(stored[DEFAULT_PRIORITY_KEY]);
+  for (const k of defOrder) all.add(k);
+  return { default: { order: defOrder, sources: choices(all) }, metrics };
 }
 
 const WALLPAPER_METRICS = [
@@ -158,10 +189,10 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /** Which source counts for each metric that more than one source reports. */
   app.get('/api/me/source-priority', auth, async (req): Promise<SourcePriorityResponse> =>
-    sourcePriorities(await getUser(ctx, req.userId)),
+    sourcePriorities(ctx, await getUser(ctx, req.userId)),
   );
 
-  /** Prefer one source for a metric (or go back to automatic), then re-sync with it. */
+  /** Set an order of sources for one stat or for all (metric "*"), then re-sync with it. */
   app.put(
     '/api/me/source-priority',
     { ...auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
@@ -169,11 +200,11 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       const body = setSourcePrioritySchema.parse(req.body);
       const user = await getUser(ctx, req.userId);
       const next = { ...user.sourcePriorities };
-      if (body.preferred) next[body.metric] = [body.preferred];
+      if (body.order.length) next[body.metric] = body.order;
       else delete next[body.metric];
       await ctx.db.update(users).set({ sourcePriorities: next }).where(eq(users.id, user.id));
       await syncUser(ctx, user.id);
-      return sourcePriorities(await getUser(ctx, user.id));
+      return sourcePriorities(ctx, await getUser(ctx, user.id));
     },
   );
 
@@ -190,6 +221,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       ) ?? null;
     return {
       ...buildToday(rows, date),
+      rings: buildRingsFromRows(ringsOf(user.ringConfig), rows, date),
       lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
       featured,
       hasSources: await hasSources(ctx, user, date),
