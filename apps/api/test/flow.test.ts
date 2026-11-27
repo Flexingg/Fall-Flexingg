@@ -358,13 +358,17 @@ describe('Gauntlet end to end', () => {
     });
     expect(res.forwarded).toBe(1);
     expect(sam.ingested[0]).toMatchObject({ type: 'step', source: 'Health Connect' });
-    await call(
-      'sam',
-      'POST',
-      '/api/ingest/health-connect',
-      { records: [{ type: 'Nutrition' }] },
-      400,
-    );
+    await call('sam', 'POST', '/api/ingest/health-connect', { records: [{ type: 'Mood' }] }, 400);
+    // The wider Health Connect set (vitals, body, food) is accepted too.
+    const more = await call<{ forwarded: number }>('sam', 'POST', '/api/ingest/health-connect', {
+      records: [
+        { type: 'heart_rate_avg', value: 64, date: '2026-10-02', unit: 'bpm' },
+        { type: 'blood_pressure_systolic', value: 120, date: '2026-10-02', unit: 'mmHg' },
+        { type: 'TotalCaloriesBurned', value: 2400, date: '2026-10-02', unit: 'kcal' },
+        { type: 'water', value: 1750, date: '2026-10-02', unit: 'ml', source_id: 'w1' },
+      ],
+    });
+    expect(more.forwarded).toBe(4);
     await syncUser(ctx, tokens.sam!.id);
     const today = await call<TodayResponse>('sam', 'GET', '/api/me/today');
     expect(today.metrics.find((m) => m.key === 'steps')!.value).toBe(12_345);

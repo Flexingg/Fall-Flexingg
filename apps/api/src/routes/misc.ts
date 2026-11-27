@@ -1,4 +1,4 @@
-import { ingestSchema, type SourcesResponse } from '@gauntlet/shared';
+import { HEALTH_INGEST_TYPES, ingestSchema, type SourcesResponse } from '@gauntlet/shared';
 import { describeSources } from '@gauntlet/sparky';
 import type { FastifyInstance } from 'fastify';
 import { requireUser } from '../auth.js';
@@ -8,18 +8,7 @@ import { feedFor } from '../services/feed.js';
 import { syncUser } from '../services/sync.js';
 import { getUser, sparkyToken } from '../services/users.js';
 
-/** Record types the Android app may forward from Health Connect. */
-const INGEST_TYPES = new Set([
-  'step',
-  'steps',
-  'distance',
-  'Active Calories',
-  'active_calories',
-  'resting_heart_rate',
-  'weight',
-  'SleepSession',
-  'ExerciseSession',
-]);
+const INGEST_TYPES = new Set(HEALTH_INGEST_TYPES);
 
 export function miscRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = { preHandler: requireUser(ctx) };

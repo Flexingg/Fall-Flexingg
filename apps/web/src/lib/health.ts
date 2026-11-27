@@ -13,19 +13,41 @@ import {
   type HealthConnectProgress,
 } from '@gauntlet/shared';
 import { historyAccessOf, resumePoint, type HistoryAccess } from './historyPlan';
+import {
+  basalBodyTemperatureRecords,
+  basalRecords,
+  bloodGlucoseRecords,
+  bloodPressureRecords,
+  bodyFatRecords,
+  bodyTemperatureRecords,
+  CORE_TYPE,
+  floorsRecords,
+  heartRateRecords,
+  heightRecords,
+  hrvRecords,
+  mindfulnessRecords,
+  nutritionRecords,
+  oxygenRecords,
+  READ_TYPES,
+  respiratoryRateRecords,
+  restingHeartRateRecords,
+  SAMPLE_CAP,
+  syncDays,
+  syncStart,
+  totalCaloriesRecords,
+  vo2MaxRecords,
+  waterRecords,
+  weightRecords,
+  type AggregatedBucket,
+  type HcRecord,
+  type Sample,
+} from './healthRecords';
 import { combineSleep } from './sleepSessions';
 import { sendHealthRecords } from './session';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
 
-const READ: HealthDataType[] = [
-  'steps',
-  'distance',
-  'calories',
-  'restingHeartRate',
-  'sleep',
-  'workouts',
-];
+const READ = READ_TYPES;
 const LAST_SYNC_KEY = 'gauntlet.hc.lastSync';
 const CHUNK = 500;
 
@@ -45,14 +67,37 @@ export async function requestHealthAccess(): Promise<boolean> {
     write: [],
     requestHistoryAccess: true,
   });
-  return status.readAuthorized.includes('steps');
+  return status.readAuthorized.includes(CORE_TYPE);
+}
+
+/** Which of the types we read are currently allowed in Health Connect (null when it can't say). */
+export async function healthAllowed(): Promise<string[] | null> {
+  if (!isNative) return null;
+  try {
+    const s = await Health.checkAuthorization({ read: READ, write: [] });
+    return s.readAuthorized;
+  } catch {
+    return null;
+  }
+}
+
+/** Ask for every type again. Returns what is allowed afterwards. */
+export async function askHealthAccessAgain(): Promise<string[] | null> {
+  try {
+    const s = await Health.requestAuthorization({
+      read: READ,
+      write: [],
+      requestHistoryAccess: true,
+    });
+    return s.readAuthorized;
+  } catch {
+    return null;
+  }
 }
 
 export async function openHealthSettings() {
   await Health.openHealthConnectSettings();
 }
-
-type HcRecord = Record<string, unknown> & { type: string };
 
 const day = (iso: string) => localDate(new Date(iso), timezone);
 
@@ -64,37 +109,66 @@ async function readRange(
 ): Promise<HcRecord[]> {
   const records: HcRecord[] = [];
   const source = 'Health Connect';
-  const daily = async (
+  /** Run one type's read; a type that isn't allowed (or fails) just adds nothing. */
+  const attempt = async (read: () => Promise<HcRecord[]>) => {
+    try {
+      records.push(...(await read()));
+    } catch {
+      /* permission not granted for this type */
+    }
+  };
+  const samples = async (dataType: HealthDataType): Promise<Sample[]> =>
+    (await Health.readSamples({ ...range, dataType, limit: SAMPLE_CAP })).samples;
+  const buckets = async (
+    dataType: HealthDataType,
+    aggregation: 'sum' | 'average' | 'min' | 'max' | ('average' | 'min' | 'max')[],
+  ): Promise<AggregatedBucket[]> =>
+    (await Health.queryAggregated({ ...range, dataType, bucket: 'day', aggregation })).samples;
+  const daily = (
     dataType: HealthDataType,
     aggregation: 'sum' | 'average',
     type: string,
     unit: string,
-  ) => {
-    try {
-      const { samples } = await Health.queryAggregated({
-        ...range,
-        dataType,
-        bucket: 'day',
-        aggregation,
-      });
-      for (const s of samples) {
-        if (!Number.isFinite(s.value) || s.value <= 0) continue;
-        records.push({
+  ) =>
+    attempt(async () =>
+      (await buckets(dataType, aggregation))
+        .filter((s) => Number.isFinite(s.value) && s.value > 0)
+        .map((s) => ({
           type,
           value: Math.round(s.value * 100) / 100,
           date: day(s.startDate),
           unit,
           source,
-        });
-      }
-    } catch {
-      /* permission not granted for this type */
-    }
-  };
+        })),
+    );
   await daily('steps', 'sum', 'step', 'count');
   await daily('distance', 'sum', 'distance', 'm');
   await daily('calories', 'sum', 'Active Calories', 'kcal');
-  await daily('restingHeartRate', 'average', 'resting_heart_rate', 'bpm');
+  await attempt(async () =>
+    restingHeartRateRecords(await buckets('restingHeartRate', 'average'), day),
+  );
+  await attempt(async () =>
+    heartRateRecords(await buckets('heartRate', ['min', 'max', 'average']), day),
+  );
+  await attempt(async () => waterRecords(await buckets('dietaryWater', 'sum'), day));
+  await attempt(async () => totalCaloriesRecords(await samples('totalCalories'), day));
+  await attempt(async () => basalRecords(await samples('basalCalories'), day));
+  await attempt(async () => floorsRecords(await samples('flightsClimbed'), day));
+  await attempt(async () => nutritionRecords(await samples('dietaryEnergyConsumed'), day));
+  await attempt(async () => weightRecords(await samples('weight'), day));
+  await attempt(async () => bodyFatRecords(await samples('bodyFat'), day));
+  await attempt(async () => heightRecords(await samples('height'), day));
+  await attempt(async () => hrvRecords(await samples('heartRateVariability'), day));
+  await attempt(async () => respiratoryRateRecords(await samples('respiratoryRate'), day));
+  await attempt(async () => oxygenRecords(await samples('oxygenSaturation'), day));
+  await attempt(async () => vo2MaxRecords(await samples('vo2Max'), day));
+  await attempt(async () => bloodPressureRecords(await samples('bloodPressure'), day));
+  await attempt(async () => bloodGlucoseRecords(await samples('bloodGlucose'), day));
+  await attempt(async () => bodyTemperatureRecords(await samples('bodyTemperature'), day));
+  await attempt(async () =>
+    basalBodyTemperatureRecords(await samples('basalBodyTemperature'), day),
+  );
+  await attempt(async () => mindfulnessRecords(await samples('mindfulness'), day));
 
   // Sleep: one entry per night (SparkyFitness keeps one per day and source, so separate sessions
   // would overwrite each other). Read from a day early so a night that started the evening before
@@ -172,11 +246,9 @@ async function sendAll(records: HcRecord[]): Promise<number> {
 export async function syncHealthConnect(opts: { days?: number } = {}): Promise<number> {
   if (!isNative) return 0;
   const last = await storage.get(LAST_SYNC_KEY);
-  const days = opts.days ?? (last ? 7 : 30);
   const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - days);
-  start.setHours(0, 0, 0, 0);
+  // Re-sends the last week every time (see RESEND_DAYS), so late data and sleep totals overwrite.
+  const start = syncStart(end, syncDays(!!last, opts.days));
   const records = await readRange(
     { startDate: start.toISOString(), endDate: end.toISOString() },
     { from: day(start.toISOString()), to: day(end.toISOString()) },

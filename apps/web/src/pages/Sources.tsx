@@ -1,17 +1,13 @@
 import type { MeUser } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
 import { Connections } from '../components/Connections';
+import { HealthAccess } from '../components/HealthAccess';
 import { HistoryImport } from '../components/HistoryImport';
 import { Icon } from '../components/Icon';
 import { ErrorBox, Header, Screen, Skeleton, toast, Toggle } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { fmtInt } from '../lib/format';
-import {
-  healthAvailable,
-  openHealthSettings,
-  requestHealthAccess,
-  syncHealthConnect,
-} from '../lib/health';
+import { healthAvailable, requestHealthAccess, syncHealthConnect } from '../lib/health';
 import { isNative } from '../lib/platform';
 import { useSources, useToday } from '../lib/queries';
 import { SourcePriority, SyncNowCard } from '../components/SourcePriority';
@@ -136,7 +132,7 @@ export function SourcesPage() {
               {isNative
                 ? hc?.available === false
                   ? (hc.reason ?? 'Not available on this device')
-                  : 'Steps, distance, calories, sleep, workouts'
+                  : 'Activity, body, heart, sleep, nutrition and more'
                 : 'Available in the Android app'}
             </small>
           </div>
@@ -151,14 +147,7 @@ export function SourcesPage() {
             />
           )}
         </div>
-        {isNative && user?.settings.healthConnectSync && (
-          <button className="item" onClick={() => openHealthSettings()}>
-            <div className="grow">
-              <div className="t">Health Connect permissions</div>
-            </div>
-            <Icon name="chevron" size={18} />
-          </button>
-        )}
+        {isNative && user?.settings.healthConnectSync && <HealthAccess />}
       </div>
       {isNative && hasHcInSparky && !user?.settings.healthConnectSync && (
         <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
