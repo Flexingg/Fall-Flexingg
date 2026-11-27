@@ -9,7 +9,8 @@
  *   highest value any single source reports for the day. Sources overlap (a
  *   watch and a phone both count the same walk), so they are never added.
  * - Workouts are counted from exercise entries only.
- * - Sleep takes the source with the most sleep that night.
+ * - Sleep takes the source with the most sleep that night. Within one source, rows that are copies
+ *   of the same sleep (the same bedtime to wake time stored twice) count once.
  * - Resting heart rate prefers wearable daily summaries, then measurements.
  */
 import {
@@ -259,6 +260,42 @@ function toMerged(date: string, metric: string, all: Candidate[], d: Decision): 
   };
 }
 
+interface SleepPart {
+  secs: number;
+  /** Bedtime and wake time in ms, when the row has both. */
+  start?: number;
+  end?: number;
+}
+
+function sleepSpan(s: { bedtime?: string | null; wake_time?: string | null }) {
+  const start = Date.parse(s.bedtime ?? '');
+  const end = Date.parse(s.wake_time ?? '');
+  return Number.isFinite(start) && Number.isFinite(end) && end > start ? { start, end } : {};
+}
+
+/** Rows overlapping by more than this share of the shorter one are the same sleep. */
+const SAME_SLEEP_OVERLAP = 0.5;
+
+/**
+ * One source's rows for a night, without copies: a row that mostly overlaps a longer row's
+ * bedtime-to-wake span is the same sleep stored again, so only the longer counts. Rows that don't
+ * overlap (a night and a nap) add up, as do rows with no times (nothing to compare).
+ */
+export function withoutSleepCopies(parts: SleepPart[]): SleepPart[] {
+  const kept: SleepPart[] = [];
+  for (const p of [...parts].sort((a, b) => b.secs - a.secs)) {
+    const copy = kept.some((k) => {
+      if (p.start == null || p.end == null || k.start == null || k.end == null) return false;
+      const overlap = Math.min(p.end, k.end) - Math.max(p.start, k.start);
+      return (
+        overlap > 0 && overlap / Math.min(p.end - p.start, k.end - k.start) > SAME_SLEEP_OVERLAP
+      );
+    });
+    if (!copy) kept.push(p);
+  }
+  return kept;
+}
+
 /** The usual winner among candidates: lowest rank, then the highest value. */
 const highest = (cands: Candidate[]) =>
   cands.reduce((best, c) =>
@@ -354,8 +391,9 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
   for (const [d, v] of activeCal)
     if (v > 0) t.add(d, 'active_calories', v, 'Health Connect', 1, true);
 
-  // Sleep: total per source per night, then the biggest source.
-  const sleepBySource = new Map<string, number>();
+  // Sleep: total per source per night, then the biggest source. A source can hold the same night
+  // twice (an interrupted upload retried), which must not double it.
+  const sleepRows = new Map<string, SleepPart[]>();
   for (const s of input.sleep) {
     const d = normDate(s.entry_date);
     const asleep = num(s.time_asleep_in_seconds);
@@ -364,10 +402,11 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     const secs = asleep && inBed ? Math.min(asleep, inBed) : asleep || inBed;
     if (!d || !secs) continue;
     const key = `${d}|${s.source ?? 'sleep'}`;
-    sleepBySource.set(key, (sleepBySource.get(key) ?? 0) + secs);
+    sleepRows.set(key, [...(sleepRows.get(key) ?? []), { secs, ...sleepSpan(s) }]);
   }
-  for (const [key, secs] of sleepBySource) {
+  for (const [key, parts] of sleepRows) {
     const [d, src] = key.split('|') as [string, string];
+    const secs = withoutSleepCopies(parts).reduce((a, p) => a + p.secs, 0);
     t.add(d, 'sleep', secs / 3600, src);
   }
 

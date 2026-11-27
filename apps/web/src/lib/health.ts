@@ -3,12 +3,13 @@
  * the Gauntlet API. Record shapes match what the SparkyFitness mobile app
  * sends, so the two can coexist without duplicating data.
  */
-import { Health, type HealthDataType } from '@capgo/capacitor-health';
+import { Health, type HealthDataType, type Workout } from '@capgo/capacitor-health';
 import {
   addDays,
   type HcOrigin,
   localDate,
   planChunks,
+  type HcAppOrder,
   todayIn,
   windowDays,
   type HealthConnectProgress,
@@ -50,8 +51,18 @@ import {
   type OriginSleepSample,
   type OriginWorkout,
 } from './hcOriginsRead';
+import { nameOrigins } from './appLabels';
+import {
+  activeOrder,
+  dayWindows,
+  filteredSampleTypes,
+  keepChosenApp,
+  readInWindows,
+  recordsFromOrigins,
+  replacedRecordTypes,
+} from './hcAppFilter';
 import { combineSleep } from './sleepSessions';
-import { sendHealthOrigins, sendHealthRecords } from './session';
+import { hcApps, sendHealthOrigins, sendHealthRecords } from './session';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
 
@@ -114,7 +125,13 @@ async function readRange(
   range: { startDate: string; endDate: string },
   /** Local days (inclusive) whose sleep this read sends: each night is sent whole, once. */
   sleepDays: { from: string; to: string },
+  /** Which apps count per stat (see hcAppFilter.ts); `{}` is Health Connect's own totals. */
+  appOrder: HcAppOrder = {},
 ): Promise<{ records: HcRecord[]; origins: HcOrigin[] }> {
+  const order = activeOrder(appOrder);
+  // Stats with a chosen app are read a day at a time, so a busy day can't push another app's
+  // samples out of the plugin's newest-N window.
+  const perDay = filteredSampleTypes(order);
   const records: HcRecord[] = [];
   const source = 'Health Connect';
   /** Run one type's read; a type that isn't allowed (or fails) just adds nothing. */
@@ -130,8 +147,12 @@ async function readRange(
   const samples = async (dataType: HealthDataType): Promise<OriginSample[]> => {
     const have = sampleReads.get(dataType);
     if (have) return have;
-    const got = (await Health.readSamples({ ...range, dataType, limit: readCapOf(dataType) }))
-      .samples;
+    const limit = readCapOf(dataType);
+    const read = async (w: { startDate: string; endDate: string }) =>
+      (await Health.readSamples({ ...w, dataType, limit })).samples;
+    const got = perDay.has(dataType)
+      ? await readInWindows(read, dayWindows(range.startDate, range.endDate), limit)
+      : await read(range);
     sampleReads.set(dataType, got);
     return got;
   };
@@ -215,7 +236,14 @@ async function readRange(
       limit: SLEEP_READ_CAP,
     });
     sleepRead = samples;
-    for (const n of combineSleep(samples, day)) {
+    // Only the chosen app's sessions (if the person picked one), then the usual one entry a night.
+    const counted = keepChosenApp(
+      samples,
+      order.sleep,
+      (x) => day(x.endDate),
+      (x) => x.sourceId || 'unknown',
+    );
+    for (const n of combineSleep(counted, day)) {
       if (n.date < sleepDays.from || n.date > sleepDays.to) continue;
       records.push({
         type: 'SleepSession',
@@ -231,6 +259,9 @@ async function readRange(
         rem_sleep_seconds: n.remSeconds,
         awake_sleep_seconds: n.awakeSeconds,
         sleep_score: 0,
+        // SparkyFitness works the night out from these, not from the totals above: sending the real
+        // stages every time makes each upload replace what an earlier, partial one left behind.
+        stage_events: n.stageEvents,
       });
     }
   } catch {
@@ -239,30 +270,38 @@ async function readRange(
 
   const workoutsRead: OriginWorkout[] = [];
   try {
+    const found: { w: Workout; date: string }[] = [];
     let anchor: string | undefined;
     do {
       const res = await Health.queryWorkouts({ ...range, limit: 100, anchor });
       for (const w of res.workouts) {
         workoutsRead.push({ startDate: w.startDate, sourceId: w.sourceId });
-        const date = day(w.startDate);
-        records.push({
-          type: 'ExerciseSession',
-          source,
-          source_id: w.platformId ?? `${w.sourceId ?? 'hc'}-${w.startDate}`,
-          date,
-          entry_date: date,
-          timestamp: w.startDate,
-          startTime: w.startDate,
-          endTime: w.endDate,
-          duration: w.duration,
-          activityType: w.workoutType,
-          title: w.workoutType.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()),
-          caloriesBurned: Math.round((w.totalEnergyBurned ?? 0) * 100) / 100,
-          distance: Math.round(((w.totalDistance ?? 0) / 1000) * 100) / 100,
-        });
+        found.push({ w, date: day(w.startDate) });
       }
       anchor = res.anchor;
     } while (anchor);
+    for (const { w, date } of keepChosenApp(
+      found,
+      order.workouts,
+      (x) => x.date,
+      (x) => x.w.sourceId || 'unknown',
+    )) {
+      records.push({
+        type: 'ExerciseSession',
+        source,
+        source_id: w.platformId ?? `${w.sourceId ?? 'hc'}-${w.startDate}`,
+        date,
+        entry_date: date,
+        timestamp: w.startDate,
+        startTime: w.startDate,
+        endTime: w.endDate,
+        duration: w.duration,
+        activityType: w.workoutType,
+        title: w.workoutType.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()),
+        caloriesBurned: Math.round((w.totalEnergyBurned ?? 0) * 100) / 100,
+        distance: Math.round(((w.totalDistance ?? 0) / 1000) * 100) / 100,
+      });
+    }
   } catch {
     /* no workout permission */
   }
@@ -280,7 +319,20 @@ async function readRange(
   } catch {
     /* origins are extra: never let them break the sync */
   }
-  return { records, origins };
+
+  // Stats with a chosen app: swap Health Connect's day total for that app's own value (made from
+  // the origins above, which always cover every app so the settings screen can list them all).
+  let sent = records;
+  try {
+    if (Object.keys(order).length) {
+      const gone = replacedRecordTypes(order);
+      const own = recordsFromOrigins(order, origins, (d) => localMidnight(d).toISOString());
+      sent = [...records.filter((r) => !gone.has(r.type)), ...own];
+    }
+  } catch {
+    /* a filter that can't be applied leaves Health Connect's own totals */
+  }
+  return { records: sent, origins: await nameOrigins(origins) };
 }
 
 /** Send origins (extra information: a failure here never fails the sync). */
@@ -311,6 +363,7 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
   const { records, origins } = await readRange(
     { startDate: start.toISOString(), endDate: end.toISOString() },
     { from: day(start.toISOString()), to: day(end.toISOString()) },
+    (await hcApps()).order,
   );
   await sendAll(records);
   await sendOrigins(origins);
@@ -414,6 +467,7 @@ export async function importHealthConnectHistory(
   let emptyRun = 0;
   let reason: HealthHistoryResult['reason'] = 'done';
   let doneDays = resumeFrom ? daysSpan(resumeFrom, today) : 0;
+  const appOrder = (await hcApps()).order;
 
   for (const w of planChunks(target, first, HC_HISTORY_CHUNK_DAYS)) {
     if (signal?.aborted) {
@@ -426,6 +480,7 @@ export async function importHealthConnectHistory(
         endDate: localMidnight(addDays(w.end, 1)).toISOString(),
       },
       { from: w.start, to: w.end },
+      appOrder,
     );
     sent += await sendAll(records);
     await sendOrigins(origins);

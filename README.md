@@ -131,7 +131,9 @@ Cloudflare, backups and costs (about $11–13 a month): [`deploy/fly/README.md`]
 To run the same backend on any machine with Docker: copy `deploy/.env.example` to `deploy/.env`,
 fill in the secrets, and run `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build`.
 `deploy/smoke.sh <gauntlet url> <sparkyfitness url>` then signs up a test account, pushes steps and
-reads them back (CI does this on every push).
+reads them back (CI does this on every push). `deploy/sleep-smoke.sh <gauntlet url>` checks sleep the
+same way: a night sent partway, then whole, ends up whole in SparkyFitness (see the stages note in
+`apps/web/src/lib/sleepSessions.ts`).
 
 Keep `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET` and the SparkyFitness encryption key stable: changing
 them makes stored keys unreadable and signs everyone out.

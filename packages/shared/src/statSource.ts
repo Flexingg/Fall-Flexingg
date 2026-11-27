@@ -155,8 +155,17 @@ export const KNOWN_HEALTH_APPS: Record<string, string> = {
   'com.samsung.android.wear.shealth': 'Samsung Health (watch)',
   'com.sparkyfitness.mobile': 'SparkyFitness',
   'cc.randalls.gauntlet': 'Gauntlet',
+  'com.urbandroid.sleep': 'Sleep as Android',
 };
 
-export function healthAppName(packageName: string): string {
-  return KNOWN_HEALTH_APPS[packageName] ?? packageName;
+/** The phone's own sensors (its step counter) write under a package like this plus a hash. */
+const PHONE_PACKAGE_PREFIX = 'com.android.healthconnect.phone';
+
+/**
+ * A friendly name for a Health Connect app: our own wording for the ones we know, else the name
+ * Android gave the phone (`phoneName`, from HcOriginApp.name), else the package name.
+ */
+export function healthAppName(packageName: string, phoneName?: string): string {
+  if (packageName.startsWith(PHONE_PACKAGE_PREFIX)) return 'This phone';
+  return KNOWN_HEALTH_APPS[packageName] ?? (phoneName?.trim() || packageName);
 }

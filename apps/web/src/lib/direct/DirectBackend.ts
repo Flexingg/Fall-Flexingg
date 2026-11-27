@@ -316,7 +316,7 @@ export class DirectBackend {
     const { rows } = await this.load();
     const value = rows.find((r) => r.date === date && r.metric === metric)?.value ?? null;
     const apps = (origin?.apps ?? [])
-      .map((a) => ({ ...a, name: healthAppName(a.packageName) }))
+      .map((a) => ({ ...a, name: healthAppName(a.packageName, a.name) }))
       .sort((a, b) => b.value - a.value);
     return {
       date,

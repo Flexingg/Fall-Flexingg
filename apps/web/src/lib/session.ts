@@ -6,6 +6,7 @@
 import {
   addDays,
   todayIn,
+  type HcAppsResponse,
   type HcOrigin,
   type SyncResponse,
   type ConnectionInfo,
@@ -20,6 +21,7 @@ import {
 import { DirectBackend } from './direct/DirectBackend';
 import { secret } from './direct/secret';
 import { get, post, patch } from './api';
+import { HC_APP_ORDER_KEY, loadHcAppOrder } from './hcAppOrder';
 import { saveOrigins } from './hcOrigins';
 import { deviceLocale, timezone } from './platform';
 import { storage } from './storage';
@@ -71,6 +73,7 @@ async function clearDirectCaches() {
     'gauntlet.direct.me',
     'gauntlet.direct.settings',
     'gauntlet.direct.rings',
+    HC_APP_ORDER_KEY,
   ])
     await storage.set(k, null);
 }
@@ -100,6 +103,22 @@ export async function updateSettings(settings: Partial<UserSettings>): Promise<M
 export async function sendHealthRecords(records: Record<string, unknown>[]): Promise<void> {
   if (session.direct) await session.direct.ingest(records);
   else await post('/api/ingest/health-connect', { records });
+}
+
+/**
+ * Which Health Connect apps count for each stat (0.18). Server mode asks the Gauntlet server
+ * (GET /api/me/hc-apps, which also says which apps it has seen writing each stat); direct mode
+ * reads the choice kept on the phone (see hcAppOrder.ts) and has no `seen` list. Never throws: a
+ * server that can't answer (offline, an older server without the endpoint) means no filter, so a
+ * sync still goes through.
+ */
+export async function hcApps(): Promise<HcAppsResponse> {
+  try {
+    if (session.direct) return { order: await loadHcAppOrder(), seen: {} };
+    return await get<HcAppsResponse>('/api/me/hc-apps');
+  } catch {
+    return { order: {}, seen: {} };
+  }
 }
 
 /** The server refuses origins older than this (a bit under what it allows, for clock skew). */

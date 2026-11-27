@@ -166,6 +166,9 @@ export interface SleepRow {
   duration_in_seconds?: number | null;
   time_asleep_in_seconds?: number | null;
   source?: string | null;
+  /** When the sleep started and ended (ISO), used to spot two rows that are copies of one night. */
+  bedtime?: string | null;
+  wake_time?: string | null;
 }
 
 export interface SyncedSource {

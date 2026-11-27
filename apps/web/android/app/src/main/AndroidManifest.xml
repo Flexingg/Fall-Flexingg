@@ -164,7 +164,19 @@
     <uses-permission android:name="android.permission.health.WRITE_HYDRATION" tools:node="remove" />
     <uses-permission android:name="android.permission.health.WRITE_NUTRITION" tools:node="remove" />
 
+    <!--
+      Apps that read or write Health Connect, so AppLabelsPlugin can look up their names (Android 11+
+      hides other apps unless they are declared here). Every app that works with Health Connect has
+      to answer one of these two.
+    -->
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+            <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+        </intent>
     </queries>
 </manifest>
