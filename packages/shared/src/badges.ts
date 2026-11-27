@@ -489,6 +489,8 @@ export interface BadgeImportStatus {
     matched: number;
     skipped: number;
     failed: number;
+    /** Why the run stopped early (Garmin unreachable, API key refused), if it did. */
+    error?: string | null;
   } | null;
   counts: Record<SuggestionStatus, number>;
 }
