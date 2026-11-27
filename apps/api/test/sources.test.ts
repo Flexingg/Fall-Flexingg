@@ -181,9 +181,7 @@ describe('ranked source priorities', () => {
     expect(p.default.sources.map((s) => s.key)).toEqual(
       expect.arrayContaining(['garmin', 'health_connect', 'sparkyfitness']),
     );
-    expect(p.default.sources.find((s) => s.key === 'sparkyfitness')!.label).toBe(
-      'SparkyFitness',
-    );
+    expect(p.default.sources.find((s) => s.key === 'sparkyfitness')!.label).toBe('SparkyFitness');
   });
 
   it("applies the default order to every stat, and a stat's own order wins", async () => {

@@ -216,7 +216,12 @@ describe('aggregated and keyed records', () => {
       day,
     );
     expect(r).toHaveLength(1);
-    expect(r[0]).toMatchObject({ type: 'dietary_energy', value: 1200, unit: 'kcal', date: '2026-05-20' });
+    expect(r[0]).toMatchObject({
+      type: 'dietary_energy',
+      value: 1200,
+      unit: 'kcal',
+      date: '2026-05-20',
+    });
   });
 });
 
