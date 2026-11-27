@@ -43,7 +43,7 @@ import { buildStakeInfo, loadRematchSeries, outcomeOf } from './stakes.js';
 import { createNextRound, loadSeriesInfo, notifyNewRound, type NextRound } from './recurring.js';
 import { buildTeams, getTeams, getTeamsFor, type TeamRow } from './teams.js';
 import { notifyLeadChange } from './notifyEvents.js';
-import { getUsers, toPublicUser, type UserRow } from './users.js';
+import { getUser, getUsers, isAdmin, toPublicUser, type UserRow } from './users.js';
 
 export type ChallengeRow = typeof challenges.$inferSelect;
 export type ParticipantRow = typeof challengeParticipants.$inferSelect;
@@ -94,12 +94,15 @@ export async function assertCanView(
   ctx: AppContext,
   ch: ChallengeRow,
   userId: string,
-  opts: { allowPublic?: boolean } = {},
+  opts: { allowPublic?: boolean; allowAdmin?: boolean } = {},
 ): Promise<ParticipantRow[]> {
   const parts = await getParticipants(ctx, ch.id);
   if (opts.allowPublic && ch.visibility === 'public') return parts;
-  if (!parts.some((p) => p.userId === userId))
+  if (!parts.some((p) => p.userId === userId)) {
+    // Server admins may look (read-only: only callers that pass allowAdmin), e.g. from admin → Challenges.
+    if (opts.allowAdmin && isAdmin(ctx, await getUser(ctx, userId))) return parts;
     throw forbidden('You are not part of this challenge');
+  }
   return parts;
 }
 
@@ -448,7 +451,7 @@ export async function loadDetail(
   viewerId: string,
 ): Promise<ChallengeDetail> {
   const ch = await getChallenge(ctx, challengeId);
-  const parts = await assertCanView(ctx, ch, viewerId, { allowPublic: true });
+  const parts = await assertCanView(ctx, ch, viewerId, { allowPublic: true, allowAdmin: true });
   const computed = await computeChallengeStandings(ctx, ch, parts);
   const usersById = await getUsers(
     ctx,

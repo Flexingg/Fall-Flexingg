@@ -221,6 +221,15 @@ cd apps/web/android && ./gradlew assembleDebug
 - Health Connect: the app asks for read access only (steps, distance, active calories, resting heart
   rate, sleep, exercise, history) and syncs when opened or resumed. Records use the same format and
   source name as the SparkyFitness app, so if you already run that, you only need one of them syncing.
+- **History import** (Me → Data sources → Import history): up to five years back. On a server it is
+  a background job per person (`/api/me/history-import`): it asks each linked app SparkyFitness can
+  pull a date range from (Garmin, Strava, Fitbit, Oura, COROS, Liftosaur; Hevy hands over everything;
+  Polar only has its last 4 weeks), in chunks, newest first, then reads SparkyFitness in 90-day
+  chunks. Records are brought up to date without alerts for old days, challenges re-ranked once, and
+  the badges the history unlocked arrive as one notification. Health Connect's older data is read on
+  the phone (needs the "past data" permission on Android 14+ / a recent Health Connect, otherwise it
+  stops at 30 days). Without a server the phone only fills SparkyFitness; Gauntlet itself then shows
+  the last two months.
 - **Live wallpaper** (Me → Live wallpaper): a GLES 2 spiral galaxy drawn from today's calories (core),
   protein/carbs/fat (three arms), water (outer ring) and volume lifted (jets, against your best same
   weekday of the last 8 weeks). The app hands the wallpaper its latest numbers through Capacitor

@@ -60,6 +60,7 @@ export function toMe(u: UserRow, ctx: Pick<AppContext, 'cfg'>): MeUser {
     handle: u.handle,
     isAdmin: isAdmin(ctx, u),
     demo: u.isDemo,
+    deletionScheduledAt: u.deletionScheduledAt?.toISOString() ?? null,
   };
 }
 

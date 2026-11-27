@@ -16,8 +16,8 @@ import { and, count, eq, max, sql } from 'drizzle-orm';
 import type { AppContext } from '../../context.js';
 import { badRequest, HttpError, notFound } from '../../context.js';
 import { badgeDefinitions, badgeImages, userBadges, users } from '../../db/schema.js';
-import { backfillBadge, stableJson, type DefinitionRow } from './engine.js';
-import { runInBackground } from './tasks.js';
+import { stableJson, type DefinitionRow } from './engine.js';
+import { enqueueBackfill } from './publishAll.js';
 
 const IMAGE_URL_PREFIX = '/api/badge-images/';
 
@@ -169,7 +169,7 @@ export async function updateBadge(
     })
     .where(eq(badgeDefinitions.key, key))
     .returning();
-  if (bump) runInBackground(ctx, 'badge backfill', () => backfillBadge(ctx, key));
+  if (bump) await enqueueBackfill(ctx, [key]);
   return toAdminBadge(row!, (await earnedCounts(ctx)).get(key) ?? 0);
 }
 
@@ -183,7 +183,7 @@ export async function publishBadge(ctx: AppContext, key: string): Promise<AdminB
     .set({ status: 'live', publishedAt: ctx.now(), retiredAt: null, updatedAt: ctx.now() })
     .where(eq(badgeDefinitions.key, key))
     .returning();
-  runInBackground(ctx, 'badge backfill', () => backfillBadge(ctx, key));
+  await enqueueBackfill(ctx, [key]);
   return toAdminBadge(row!, (await earnedCounts(ctx)).get(key) ?? 0);
 }
 

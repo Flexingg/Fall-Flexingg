@@ -77,6 +77,12 @@ export const users = pgTable('users', {
   badgeXp: integer('badge_xp').notNull().default(0),
   /** Up to 3 badge keys pinned to the profile. */
   badgeShowcase: jsonb('badge_showcase').$type<string[]>().notNull().default([]),
+  /** Last time the person used Gauntlet (signed in, refreshed a session, opened the app). */
+  lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
+  /** Set by an admin: the account is deleted on this date unless the person is active before then. */
+  deletionScheduledAt: timestamp('deletion_scheduled_at', { withTimezone: true }),
+  /** Why it was scheduled (shown to admins). */
+  deletionReason: text('deletion_reason'),
   createdAt: createdAt(),
 });
 

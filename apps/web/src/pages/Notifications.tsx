@@ -22,6 +22,7 @@ const ICONS: Record<NotificationKind, IconName> = {
   new_round: 'refresh',
   month_review: 'trends',
   badge: 'trophy',
+  account: 'user',
 };
 
 export function NotificationsPage() {

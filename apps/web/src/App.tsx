@@ -19,6 +19,9 @@ import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
 import { AdminPage } from './pages/Admin';
 import { AdminBadgesPage } from './pages/AdminBadges';
+import { AdminChallengesPage } from './pages/AdminChallenges';
+import { AdminUserPage } from './pages/AdminUser';
+import { AdminUsersPage } from './pages/AdminUsers';
 import { BadgesPage } from './pages/Badges';
 import { BadgeCelebration } from './components/BadgeCelebration';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
@@ -420,6 +423,36 @@ export function App() {
               <Private>
                 <AdminOnly>
                   <AdminBadgesPage />
+                </AdminOnly>
+              </Private>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <Private>
+                <AdminOnly>
+                  <AdminUsersPage />
+                </AdminOnly>
+              </Private>
+            }
+          />
+          <Route
+            path="/admin/users/:id"
+            element={
+              <Private>
+                <AdminOnly>
+                  <AdminUserPage />
+                </AdminOnly>
+              </Private>
+            }
+          />
+          <Route
+            path="/admin/challenges"
+            element={
+              <Private>
+                <AdminOnly>
+                  <AdminChallengesPage />
                 </AdminOnly>
               </Private>
             }

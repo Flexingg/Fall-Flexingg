@@ -40,6 +40,7 @@ import {
   keepSynced,
   listConnections,
   syncProvider,
+  syncProviderRange,
   describeSources,
   fetchMerged,
   SparkyClient,
@@ -173,6 +174,7 @@ export class DirectBackend {
       handle: null,
       isAdmin: false,
       demo: false,
+      deletionScheduledAt: null,
     };
     await this.o.kv.set(ME_KEY, JSON.stringify(me));
     return me;
@@ -426,6 +428,24 @@ export class DirectBackend {
       throw explainGarmin(err, this.o.sparkyUrl);
     }
     return { ok: true };
+  }
+
+  /**
+   * Ask an app (through SparkyFitness) for one older date range. History import calls this chunk
+   * by chunk; Gauntlet's own two-month cache is cleared so it reads again.
+   */
+  async pullAppRange(
+    id: ProviderId,
+    start: string,
+    end: string,
+    opts: { full?: boolean } = {},
+  ): Promise<void> {
+    try {
+      await syncProviderRange(this.client, this.o.apiKey, id, start, end, opts);
+    } catch (err) {
+      throw explainGarmin(err, this.o.sparkyUrl);
+    }
+    await this.o.kv.set(ROWS_KEY, null);
   }
 
   private syncInBackground(id: ProviderId, days: number) {

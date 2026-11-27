@@ -47,6 +47,11 @@ export interface CheckOptions {
   reason: CheckReason;
   /** Quietly award everything already earned (no celebration). */
   backfill?: boolean;
+  /**
+   * A history import just stored older data: award what it unlocked quietly (no per-badge
+   * celebration or feed post) and tell the person once, "Your history unlocked N badges".
+   */
+  history?: boolean;
 }
 
 export interface EarnedBadge {
@@ -124,9 +129,11 @@ async function doCheck(
   if (!live.length) return [];
   const initialised = await isInitialised(ctx, userId);
   const firstCheck = !initialised;
-  const backfill = !!opts.backfill || firstCheck;
+  const everything = !!opts.backfill || firstCheck;
+  // A history import is quiet like a backfill, but only data-driven badges can have changed.
+  const backfill = everything || !!opts.history;
 
-  const defs = live.filter((d) => backfill || relevant(opts.reason, d.rule.type, d.rule));
+  const defs = live.filter((d) => everything || relevant(opts.reason, d.rule.type, d.rule));
   const owned = new Set(
     (
       await ctx.db
@@ -165,12 +172,14 @@ async function doCheck(
   if (inserted.length) {
     const byKey = new Map(live.map((d) => [d.key, d]));
     if (!backfill) await announce(ctx, userId, inserted, byKey);
-    else if (firstCheck) {
+    else if (firstCheck || opts.history) {
       const n = new Set(inserted.map((r) => r.badgeKey)).size;
       await notify(ctx, userId, {
         kind: 'badge',
-        title: 'Your badges are in',
-        body: `You've unlocked ${n} ${n === 1 ? 'badge' : 'badges'} — take a look`,
+        title: opts.history ? 'Your history unlocked badges' : 'Your badges are in',
+        body: opts.history
+          ? `Your history unlocked ${n} ${n === 1 ? 'badge' : 'badges'} — take a look`
+          : `You've unlocked ${n} ${n === 1 ? 'badge' : 'badges'} — take a look`,
         url: '/badges',
         payload: { keys: [...new Set(inserted.map((r) => r.badgeKey))], summary: true },
       });

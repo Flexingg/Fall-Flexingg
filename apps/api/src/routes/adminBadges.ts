@@ -2,7 +2,7 @@
  * Admin → Badges: list, create drafts, edit, preview who would earn one, publish, retire, delete
  * drafts, and upload badge art. Admin only, like the rest of /api/admin, and written to the log.
  */
-import { badgeDraftSchema } from '@gauntlet/shared';
+import { badgeDraftSchema, publishAllSchema } from '@gauntlet/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
@@ -20,6 +20,7 @@ import {
   updateBadge,
 } from '../services/badges/admin.js';
 import { previewDraft } from '../services/badges/engine.js';
+import { backfillStatus, publishAllDrafts } from '../services/badges/publishAll.js';
 import { getUser, isAdmin } from '../services/users.js';
 
 const keySchema = z.string().regex(/^[a-z0-9][a-z0-9-]{1,63}$/);
@@ -44,6 +45,17 @@ export function adminBadgeRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/admin/badges', auth, async (req) => {
     audit(req, 'list badges');
     return listAdminBadges(ctx);
+  });
+
+  /** Progress of the quiet "award everyone who already qualifies" runs that follow publishing. */
+  app.get('/api/admin/badges/backfill', auth, async () => backfillStatus(ctx));
+
+  /** Publish every draft (or `keys`). Awarding happens one badge after another in the background. */
+  app.post('/api/admin/badges/publish-all', auth, async (req) => {
+    const { keys } = publishAllSchema.parse(req.body ?? {});
+    const published = await publishAllDrafts(ctx, keys);
+    audit(req, 'publish all badges', { published });
+    return { published };
   });
 
   app.post('/api/admin/badges', auth, async (req, reply) => {

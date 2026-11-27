@@ -18,7 +18,14 @@ export const NOTIFICATION_KINDS = {
   new_round: { label: 'A recurring challenge starts a new round', default: true },
   month_review: { label: 'Your month in review (and year in review)', default: true },
   badge: { label: 'Badges you earn', default: true },
+  /** Notices from the server admin about your account. Always delivered; not in the settings list. */
+  account: { label: 'Your account', default: true, alwaysOn: true },
 } as const;
+
+/** Kinds people cannot switch off. */
+export const alwaysOnKinds = (
+  Object.keys(NOTIFICATION_KINDS) as (keyof typeof NOTIFICATION_KINDS)[]
+).filter((k) => 'alwaysOn' in NOTIFICATION_KINDS[k]);
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;
 export const notificationKinds = Object.keys(NOTIFICATION_KINDS) as NotificationKind[];
@@ -28,6 +35,7 @@ export const isNotificationKind = (k: string): k is NotificationKind => k in NOT
 export type NotificationPrefs = Partial<Record<NotificationKind, boolean>>;
 
 export function wantsNotification(prefs: NotificationPrefs, kind: NotificationKind): boolean {
+  if ((alwaysOnKinds as string[]).includes(kind)) return true;
   return prefs[kind] ?? NOTIFICATION_KINDS[kind].default;
 }
 
