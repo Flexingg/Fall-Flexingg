@@ -11,26 +11,46 @@ import {
   todayIn,
   type DayStat,
 } from '@gauntlet/shared';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
 import { Icon } from '../components/Icon';
 import { RingLegend, ringValues } from '../components/RingCard';
 import { Rings } from '../components/Rings';
+import { STAT_HINT_ID, StatSourceHint } from '../components/StatSourceHint';
+import { StatSourceSheet } from '../components/StatSourceSheet';
 import { SkeletonCard } from '../components/Skeleton';
 import { Empty, ErrorBox, Header, Screen } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { useDisplay } from '../lib/display';
 import { fmtDate } from '../lib/format';
 import { useDay } from '../lib/ringQueries';
+import { useLongPress } from '../lib/useLongPress';
 import '../styles/rings.css';
 
-function StatRow({ s }: { s: DayStat }) {
+/** One stat. Press and hold (or right-click, or the Menu key) to see where it came from. */
+function StatRow({ s, onSource }: { s: DayStat; onSource: (s: DayStat) => void }) {
   const display = useDisplay();
+  const press = useLongPress(() => onSource(s));
   const value = formatQuantityFlexible(s.value, s.unit, s.decimals, display);
   const goal = s.goal ? formatQuantityFlexible(s.goal, s.unit, s.decimals, display) : null;
   const pct = s.goal ? Math.min(100, (s.value / s.goal) * 100) : null;
   return (
-    <div className="stat-item" data-testid="day-stat">
+    <div
+      className="stat-item ss-press"
+      data-testid="day-stat"
+      role="button"
+      tabIndex={0}
+      aria-label={`${s.label}, ${value}${goal ? ` of ${goal}` : ''}`}
+      aria-describedby={STAT_HINT_ID}
+      {...press}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSource(s);
+        } else press.onKeyDown(e);
+      }}
+    >
       <span className="t">{s.label}</span>
       <span className="v num">
         {value}
@@ -56,6 +76,8 @@ export function DayPage() {
   const go = (d: string) => setParams(d >= today ? {} : { date: d }, { replace: true });
   const title = shown === today ? 'Today' : shown === addDays(today, -1) ? 'Yesterday' : null;
   const d = q.data;
+  const [source, setSource] = useState<{ metric: string; label: string } | null>(null);
+  const openSource = (m: { metric: string; label: string }) => setSource(m);
   return (
     <Screen>
       <Header title="Day stats" back="/" />
@@ -89,11 +111,15 @@ export function DayPage() {
         <>
           <div className="card day-rings">
             <Rings values={ringValues(d.rings)} size={160} />
-            <RingLegend rings={d.rings} />
+            <RingLegend
+              rings={d.rings}
+              onSource={(r) => openSource({ metric: r.metric, label: r.label })}
+            />
             <Link to="/day/rings" className="btn secondary day-edit">
               Edit rings
             </Link>
           </div>
+          {d.sections.length > 0 && <StatSourceHint />}
           {d.sections.length === 0 && (
             <div className="list" style={{ marginTop: 16 }}>
               <Empty title="Nothing recorded yet">
@@ -108,13 +134,25 @@ export function DayPage() {
               <div className="lbl">{sec.label}</div>
               <div className="list">
                 {sec.stats.map((s) => (
-                  <StatRow key={s.key} s={s} />
+                  <StatRow
+                    key={s.key}
+                    s={s}
+                    onSource={(x) => openSource({ metric: x.key, label: x.label })}
+                  />
                 ))}
               </div>
             </section>
           ))}
         </>
       ) : null}
+      {source && (
+        <StatSourceSheet
+          date={shown}
+          metric={source.metric}
+          label={source.label}
+          onClose={() => setSource(null)}
+        />
+      )}
     </Screen>
   );
 }

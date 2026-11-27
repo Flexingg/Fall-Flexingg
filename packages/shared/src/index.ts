@@ -28,3 +28,4 @@ export * from './dayStats.js';
 export * from './badgeSummary.js';
 export * from './healthMetrics.js';
 export * from './statSource.js';
+export * from './statSourceMeta.js';
