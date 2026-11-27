@@ -17,6 +17,7 @@ export const NOTIFICATION_KINDS = {
   weekly_recap: { label: 'Weekly recap (Mondays)', default: true },
   new_round: { label: 'A recurring challenge starts a new round', default: true },
   month_review: { label: 'Your month in review (and year in review)', default: true },
+  badge: { label: 'Badges you earn', default: true },
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;

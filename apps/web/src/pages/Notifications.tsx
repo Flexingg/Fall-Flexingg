@@ -21,6 +21,7 @@ const ICONS: Record<NotificationKind, IconName> = {
   weekly_recap: 'trends',
   new_round: 'refresh',
   month_review: 'trends',
+  badge: 'trophy',
 };
 
 export function NotificationsPage() {

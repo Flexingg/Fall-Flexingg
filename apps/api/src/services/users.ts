@@ -1,4 +1,4 @@
-import { initials, type MeUser, type PublicUser } from '@gauntlet/shared';
+import { initials, levelFor, type MeUser, type PublicUser } from '@gauntlet/shared';
 import { eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { HttpError, notFound } from '../context.js';
@@ -16,8 +16,16 @@ export function shortName(name: string): string {
   return `${parts[0]} ${parts[parts.length - 1]![0]!.toUpperCase()}.`;
 }
 
-export function toPublicUser(u: Pick<UserRow, 'id' | 'displayName'>): PublicUser {
-  return { id: u.id, displayName: u.displayName, initials: initials(u.displayName) };
+export function toPublicUser(
+  u: Pick<UserRow, 'id' | 'displayName'> & Partial<Pick<UserRow, 'badgeXp'>>,
+): PublicUser {
+  const card: PublicUser = {
+    id: u.id,
+    displayName: u.displayName,
+    initials: initials(u.displayName),
+  };
+  if (u.badgeXp != null) card.level = levelFor(u.badgeXp).level;
+  return card;
 }
 
 /** What the demo account gets instead of anything that needs a real SparkyFitness. */

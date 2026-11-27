@@ -61,6 +61,8 @@ export interface PublicUser {
   id: string;
   displayName: string;
   initials: string;
+  /** Badge level (everyone can see it); absent where the server didn't look it up. */
+  level?: number;
 }
 
 export type Visibility = 'private' | 'public';

@@ -1,8 +1,15 @@
 import type { SoloConfig } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
-import type { NotificationPrefs, Recurrence } from '@gauntlet/shared';
+import type {
+  BadgeDraft,
+  BadgeRule,
+  NotificationPrefs,
+  Recurrence,
+  SuggestionStatus,
+} from '@gauntlet/shared';
 import {
   boolean,
+  customType,
   date,
   doublePrecision,
   index,
@@ -66,6 +73,10 @@ export const users = pgTable('users', {
   displayUnits: text('display_units', { enum: ['metric', 'imperial'] }),
   displayClock: text('display_clock', { enum: ['12h', '24h'] }),
   displayLocale: text('display_locale'),
+  /** Sum of XP from earned badges (kept in step by the badge engine; levels derive from it). */
+  badgeXp: integer('badge_xp').notNull().default(0),
+  /** Up to 3 badge keys pinned to the profile. */
+  badgeShowcase: jsonb('badge_showcase').$type<string[]>().notNull().default([]),
   createdAt: createdAt(),
 });
 
@@ -393,3 +404,137 @@ export const personalRecords = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.key] })],
 );
+
+// ---------- Activities (per-workout summaries, for badges) ----------
+
+/**
+ * One row per workout seen at sync: just enough to answer "a 10 km run", "50 rides", "a workout
+ * before 6 am". Detail still comes live from SparkyFitness. Never shown to anyone directly.
+ */
+export const activities = pgTable(
+  'activities',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The workout id (`YYYY-MM-DD.key`, as in WorkoutSummary). */
+    id: text('id').notNull(),
+    date: date('date', { mode: 'string' }).notNull(),
+    /** Normalised sport (ACTIVITY_SPORTS). */
+    sport: text('sport').notNull(),
+    name: text('name').notNull(),
+    /** Local start hour 0-23 when known. */
+    startHour: integer('start_hour'),
+    minutes: doublePrecision('minutes'),
+    distanceKm: doublePrecision('distance_km'),
+    kcal: doublePrecision('kcal'),
+    source: text('source'),
+    /** Typed in by hand rather than recorded by a device or app. */
+    manual: boolean('manual').notNull().default(false),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.id] }),
+    index('activities_user_date_idx').on(t.userId, t.date),
+  ],
+);
+
+// ---------- Badges ----------
+
+export const badgeDefinitions = pgTable('badge_definitions', {
+  key: text('key').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  family: text('family').notNull(),
+  icon: text('icon').notNull(),
+  imageUrl: text('image_url'),
+  secret: boolean('secret').notNull().default(false),
+  rule: jsonb('rule').$type<BadgeRule>().notNull(),
+  windowStart: date('window_start', { mode: 'string' }),
+  windowEnd: date('window_end', { mode: 'string' }),
+  xp: jsonb('xp').$type<number[] | null>(),
+  countsManual: boolean('counts_manual').notNull().default(true),
+  status: text('status', { enum: ['draft', 'live', 'retired'] })
+    .notNull()
+    .default('draft'),
+  origin: text('origin', { enum: ['builtin', 'admin', 'garmin'] })
+    .notNull()
+    .default('admin'),
+  sourceRef: text('source_ref'),
+  /** Bumped whenever a live badge's rule changes; earned rows remember the version. */
+  version: integer('version').notNull().default(1),
+  /** Display order inside its family. */
+  position: integer('position').notNull().default(0),
+  /** Built-in badge an admin has edited: the startup seed leaves it alone. */
+  customized: boolean('customized').notNull().default(false),
+  createdAt: createdAt(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+});
+
+/** One row per tier reached. Never deleted when rules change: once earned, kept. */
+export const userBadges = pgTable(
+  'user_badges',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    badgeKey: text('badge_key')
+      .notNull()
+      .references(() => badgeDefinitions.key, { onDelete: 'cascade' }),
+    tier: integer('tier').notNull(),
+    earnedAt: timestamp('earned_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Rule version it was earned under. */
+    version: integer('version').notNull().default(1),
+    /** e.g. { challengeId } or { date }. */
+    context: jsonb('context').$type<Record<string, unknown>>().notNull().default({}),
+    /** Earned by the launch/publish backfill rather than live (no celebration, no feed). */
+    backfilled: boolean('backfilled').notNull().default(false),
+    seenAt: timestamp('seen_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.badgeKey, t.tier] }),
+    index('user_badges_key_idx').on(t.badgeKey),
+  ],
+);
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
+
+/** Images uploaded for badges (small PNG/WebP/SVG), stored in the database so backups include them. */
+export const badgeImages = pgTable('badge_images', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mime: text('mime').notNull(),
+  data: bytea('data').notNull(),
+  createdAt: createdAt(),
+});
+
+/** Garmin badge database entries and what the LLM proposed for each. */
+export const badgeSuggestions = pgTable(
+  'badge_suggestions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** garminbadges.com badge id. */
+    sourceRef: text('source_ref').notNull(),
+    sourceName: text('source_name').notNull(),
+    sourceDescription: text('source_description').notNull(),
+    sourceCategory: text('source_category'),
+    sourceStart: date('source_start', { mode: 'string' }),
+    sourceEnd: date('source_end', { mode: 'string' }),
+    status: text('status').$type<SuggestionStatus>().notNull().default('pending'),
+    draft: jsonb('draft').$type<BadgeDraft | null>(),
+    reason: text('reason'),
+    model: text('model'),
+    badgeKey: text('badge_key'),
+    createdAt: createdAt(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('badge_suggestions_source_idx').on(t.sourceRef)],
+);
+
+/** Small server-wide key/value state (e.g. when the badge import last ran). */
+export const serverState = pgTable('server_state', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<unknown>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
