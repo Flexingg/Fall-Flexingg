@@ -3,6 +3,7 @@
  * the Garmin badge database wait to be approved into drafts. Server admins only (see App.tsx).
  */
 import {
+  ruleTiers,
   BADGE_FAMILY_LABELS,
   describeRule,
   type AdminBadge,
@@ -387,7 +388,7 @@ function SuggestionCard({
           <div className="grow">
             <small className="bda-kick">Gauntlet version</small>
             <b>{d.name}</b>
-            <small className="muted">{d.description}</small>
+            <small className="muted">{exampleDescription(d)}</small>
             <small className="bda-rule">{describeRule(d.rule, d.window)}</small>
           </div>
         </div>
@@ -440,4 +441,10 @@ function SuggestionCard({
       </div>
     </div>
   );
+}
+
+/** "Log {n} workouts" → "Log 20 workouts": the first tier stands in for {n} in admin previews. */
+function exampleDescription(d: { description: string; rule: Parameters<typeof ruleTiers>[0] }) {
+  const first = ruleTiers(d.rule)[0];
+  return first == null ? d.description : d.description.replace(/\{n\}/g, fmtInt(first));
 }
