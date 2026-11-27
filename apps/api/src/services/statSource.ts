@@ -14,7 +14,8 @@ import {
 import { sourceKey, sourceLabel } from '@gauntlet/sparky';
 import { and, eq } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
-import { dailyMetrics, healthOrigins } from '../db/schema.js';
+import { dailyMetrics } from '../db/schema.js';
+import { originFor } from './healthOrigins.js';
 
 /** Fold the candidates by source (a source with two values keeps its highest), chosen one first. */
 export function foldCandidates(
@@ -59,16 +60,7 @@ export async function buildStatSource(
         eq(dailyMetrics.metric, metric),
       ),
     );
-  const [origin] = await ctx.db
-    .select()
-    .from(healthOrigins)
-    .where(
-      and(
-        eq(healthOrigins.userId, userId),
-        eq(healthOrigins.date, date),
-        eq(healthOrigins.metric, metric),
-      ),
-    );
+  const origin = await originFor(ctx, userId, date, metric);
 
   const apps: PhoneAppShare[] = (origin?.apps ?? [])
     .map((a) => ({ ...a, name: healthAppName(a.packageName) }))
