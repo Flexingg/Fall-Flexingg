@@ -9,6 +9,7 @@ import { isMetricKey, type MetricAggregate, type MetricGroup, type MetricKey } f
 import { isTrendMetric } from './derive.js';
 import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
+import type { BadgeFeedPayload } from './badges.js';
 import { recurrenceSchema, type Reaction, type Recurrence } from './notify.js';
 import { teamsInputSchema, type ChallengeTeam, type TeamScoring } from './teams.js';
 import type { SeriesInfo } from './recurring.js';
@@ -61,6 +62,8 @@ export interface PublicUser {
   id: string;
   displayName: string;
   initials: string;
+  /** Badge level (everyone can see it); absent where the server didn't look it up. */
+  level?: number;
 }
 
 export type Visibility = 'private' | 'public';
@@ -442,7 +445,8 @@ export type FeedEventKind =
   | 'challenge_won'
   | 'joined'
   | 'challenge_created'
-  | 'personal_record';
+  | 'personal_record'
+  | 'badge_earned';
 
 export interface FeedEvent {
   id: string;
@@ -457,6 +461,8 @@ export interface FeedEvent {
   /** Emoji people left on it (only those used at least once). Absent where reactions don't exist. */
   reactions?: { emoji: Reaction; count: number; mine: boolean }[];
   commentCount?: number;
+  /** Only on kind 'badge_earned': what was earned (for the badge medal on the card). */
+  badgeEarned?: BadgeFeedPayload;
 }
 
 // ---------- Today / trends ----------

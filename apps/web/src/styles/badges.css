@@ -1,0 +1,622 @@
+/* Badges and levels: medals, the badges page, the detail sheet, the profile card, level chips and
+   the celebration. Colours come from the app's tokens; tier colours are set on the medals. */
+
+/* ---------- Medal ---------- */
+.bi {
+  flex: none;
+  overflow: visible;
+}
+.bi.locked {
+  opacity: 0.55;
+}
+.bi-sheen {
+  mix-blend-mode: screen;
+  animation: bi-sheen 4s ease-in-out infinite;
+}
+@keyframes bi-sheen {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Level chip ---------- */
+.lvl {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--volt-wash);
+  border: 1px solid color-mix(in srgb, var(--volt) 35%, transparent);
+  color: var(--volt);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  vertical-align: 1px;
+  white-space: nowrap;
+  font-style: normal;
+}
+.item small .lvl,
+small .lvl {
+  margin-left: 0;
+  margin-right: 6px;
+}
+
+/* ---------- Level header ---------- */
+.bd-level {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bd-level-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bd-level-top b {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.bd-level-top span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.bd-xp {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+.bd-xp i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--volt);
+  transition: width 0.4s ease-out;
+}
+
+/* ---------- Filter chips ---------- */
+.bd-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: 14px -18px 0;
+  padding: 0 18px 4px;
+  scrollbar-width: none;
+}
+.bd-chips::-webkit-scrollbar {
+  display: none;
+}
+.bd-chip {
+  flex: none;
+  min-height: 34px;
+  padding: 0 13px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.bd-chip[aria-pressed='true'] {
+  background: var(--volt);
+  border-color: var(--volt);
+  color: var(--volt-ink);
+}
+
+/* ---------- Grid of tiles ---------- */
+.bd-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.bd-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 6px 10px;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+.bd-tile:active {
+  transform: scale(0.98);
+}
+.bd-tile.dim .bd-name {
+  color: var(--muted);
+}
+.bd-name {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-height: 2.4em;
+}
+.bd-pips {
+  display: flex;
+  gap: 3px;
+  min-height: 6px;
+}
+.bd-pips i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.bd-pips i.on {
+  background: var(--volt);
+}
+.bd-tile .track {
+  width: 100%;
+  margin-top: 0;
+  height: 4px;
+}
+.bd-tile .track i {
+  background: var(--volt);
+}
+.bd-tile small {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.15;
+  min-height: 1.15em;
+}
+.bd-new {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 5px;
+  border-radius: 99px;
+  background: var(--volt);
+  color: var(--volt-ink);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.bd-limited {
+  border-color: color-mix(in srgb, var(--volt) 40%, var(--line));
+  background: linear-gradient(180deg, var(--volt-wash), var(--card));
+}
+.bd-ends {
+  color: var(--volt);
+  font-weight: 800;
+}
+
+/* ---------- Detail sheet ---------- */
+.bd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+}
+.bd-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  padding: 18px 18px calc(var(--safe-bottom) + 20px);
+  animation: bd-up 0.22s ease-out;
+}
+@keyframes bd-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+.bd-sheet-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+.bd-sheet-top h2 {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.bd-sheet-top p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.bd-ladder > * + * {
+  border-top: 1px solid var(--line);
+}
+.bd-rung {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.bd-rung .t {
+  font-size: 14px;
+  font-weight: 700;
+}
+.bd-rung small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 1px;
+}
+.bd-rung.todo .t {
+  color: var(--muted);
+}
+.bd-grab {
+  width: 40px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--line-2);
+  margin: -6px auto 14px;
+}
+.bd-ctx {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bd-ctx a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line-2);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--volt);
+}
+@media (min-width: 600px) {
+  .bd-overlay {
+    align-items: center;
+  }
+  .bd-sheet {
+    border-radius: 24px;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+/* ---------- Profile card ---------- */
+.bd-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.bd-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bd-lvl-big {
+  min-width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--volt-wash);
+  border: 1px solid color-mix(in srgb, var(--volt) 35%, transparent);
+  color: var(--volt);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.bd-lvl-big small {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bd-lvl-big b {
+  font-size: 22px;
+  font-weight: 900;
+}
+.bd-showcase {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.bd-show {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 2px 6px;
+  border-radius: 14px;
+  background: var(--card-2);
+  min-width: 0;
+}
+.bd-show span {
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+.bd-show small {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* ---------- Feed / Today ---------- */
+.bd-feed-icon {
+  flex: none;
+}
+.bd-limited-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--volt) 40%, var(--line));
+  background: linear-gradient(90deg, var(--volt-wash), var(--card));
+}
+.bd-limited-card b {
+  display: block;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.bd-limited-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.bd-limited-card .track {
+  margin-top: 8px;
+}
+.bd-limited-card .track i {
+  background: var(--volt);
+}
+.bd-limited-kick {
+  color: var(--volt) !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px !important;
+  margin: 0 0 2px !important;
+}
+
+/* ---------- Celebration ---------- */
+.cele {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--safe-top) + 24px) 24px calc(var(--safe-bottom) + 24px);
+  background: radial-gradient(circle at 50% 38%, #1a2000 0%, #0c0c0d 62%);
+  text-align: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+.cele-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+  cursor: default;
+}
+.cele-stage {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.cele-medal {
+  animation: cele-drop 0.62s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.cele-ring {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 190px;
+  height: 38px;
+  margin-left: -95px;
+  border: 3px solid var(--volt);
+  border-radius: 50%;
+  opacity: 0;
+  animation: cele-ring 0.7s ease-out 0.42s both;
+}
+.cele-dust i {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  width: 54px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--volt);
+  opacity: 0;
+  animation: cele-dust 0.5s cubic-bezier(0.1, 0.6, 0.3, 1) calc(0.42s) forwards;
+}
+.cele-kicker {
+  color: var(--volt);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.cele-tier {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+  font-stretch: condensed;
+  animation: cele-fade 0.4s ease-out 0.5s both;
+}
+.cele-name {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  animation: cele-fade 0.4s ease-out 0.6s both;
+}
+.cele-desc {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+  animation: cele-fade 0.4s ease-out 0.7s both;
+}
+.cele-xp {
+  margin-top: 4px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  background: var(--volt);
+  color: var(--volt-ink);
+  font-weight: 900;
+  font-size: 15px;
+  animation: cele-fade 0.4s ease-out 0.8s both;
+}
+.cele-level {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--volt);
+  animation: cele-fade 0.4s ease-out 0.9s both;
+}
+.cele-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 14px;
+  animation: cele-fade 0.4s ease-out 1s both;
+}
+.cele-actions .btn {
+  flex: 1;
+}
+.cele-hint {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 12px);
+  left: 0;
+  right: 0;
+  color: var(--dim);
+  font-size: 12px;
+}
+.cele.still * {
+  animation: none !important;
+}
+@keyframes cele-drop {
+  0% {
+    transform: translateY(-120px) scale(1.6) rotate(-14deg);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes cele-ring {
+  0% {
+    transform: scale(0.15);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+@keyframes cele-dust {
+  0% {
+    transform: translateX(-50%) rotate(calc(var(--d) * 7deg)) scaleX(0.2);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(calc(-50% + var(--d) * 46px)) translateY(-22px)
+      rotate(calc(var(--d) * 7deg)) scaleX(0.9);
+    opacity: 0;
+  }
+}
+@keyframes cele-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cele-ring,
+  .cele-dust {
+    display: none;
+  }
+}
+:root {
+  --tier-bronze: #c98a4b;
+  --tier-silver: #c0c6cf;
+  --tier-gold: #f2c94c;
+  --tier-platinum: #b8f3ff;
+}
+
+/* ---------- Year in review card ---------- */
+.story-badges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 8px;
+  width: 100%;
+  margin-top: 18px;
+}
+.story-badges > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.story-badges span {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.story-badges small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}

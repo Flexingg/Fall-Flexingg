@@ -2,6 +2,8 @@ import { COMMENT_MAX } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router';
+import { BadgeIcon } from '../components/BadgeIcon';
+import { LevelChip } from '../components/LevelChip';
 import { ReactionRow } from '../components/Reactions';
 import { Avatar, Empty, ErrorBox, Header, Screen, toast } from '../components/ui';
 import { SkeletonCard, SkeletonLine, SkeletonList } from '../components/Skeleton';
@@ -52,10 +54,20 @@ export function FeedItemPage() {
                   {e.text}
                 </div>
                 <small className="muted">
+                  <LevelChip level={e.actor.level} />
                   {[e.challenge?.name, timeAgo(e.createdAt)].filter(Boolean).join(' · ')}
                 </small>
               </div>
-              {e.badge && <div className="v num">{e.badge}</div>}
+              {e.badgeEarned ? (
+                <BadgeIcon
+                  icon={e.badgeEarned.icon}
+                  imageUrl={e.badgeEarned.imageUrl}
+                  medal={e.badgeEarned.tierName ?? 'single'}
+                  size="lg"
+                />
+              ) : (
+                e.badge && <div className="v num">{e.badge}</div>
+              )}
             </div>
             <ReactionRow event={e} />
           </div>

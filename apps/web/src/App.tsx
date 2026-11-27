@@ -18,6 +18,9 @@ import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
 import { AdminPage } from './pages/Admin';
+import { AdminBadgesPage } from './pages/AdminBadges';
+import { BadgesPage } from './pages/Badges';
+import { BadgeCelebration } from './components/BadgeCelebration';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
 import { FeedItemPage } from './pages/FeedItem';
@@ -85,7 +88,7 @@ function Splash() {
 
 /** Where a tapped notification may take the app (the Android job opens https://<server>/<path>). */
 const NOTIFICATION_PATH =
-  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|review\/[\d-]+|u\/[\w-]+|trends|challenges)$/;
+  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|review\/[\d-]+|u\/[\w-]+(\/badges)?|badges|trends|challenges)$/;
 
 /** Android: open invite links in-app, and push Health Connect data when the app comes to the front. */
 function NativeBridge() {
@@ -290,6 +293,26 @@ export function App() {
             }
           />
           <Route
+            path="/badges"
+            element={
+              <Private>
+                <NeedsServer what="Badges">
+                  <BadgesPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/u/:id/badges"
+            element={
+              <Private>
+                <NeedsServer what="Badges">
+                  <BadgesPage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
             path="/workouts/:id"
             element={
               <Private>
@@ -391,8 +414,19 @@ export function App() {
               </Private>
             }
           />
+          <Route
+            path="/admin/badges"
+            element={
+              <Private>
+                <AdminOnly>
+                  <AdminBadgesPage />
+                </AdminOnly>
+              </Private>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <BadgeCelebration hold={splash} />
         <ToastHost />
       </div>
     </BrowserRouter>

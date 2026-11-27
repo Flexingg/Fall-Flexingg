@@ -9,6 +9,9 @@ import type { AppContext } from './context.js';
 import { HttpError } from './context.js';
 import { downloadRoutes } from './downloads.js';
 import { adminRoutes } from './routes/admin.js';
+import { adminBadgeRoutes } from './routes/adminBadges.js';
+import { badgeRoutes } from './routes/badges.js';
+import { registerBadgeHooks } from './services/badges/hooks.js';
 import { authRoutes } from './routes/auth.js';
 import { challengeRoutes } from './routes/challenges.js';
 import { teamRoutes } from './routes/teams.js';
@@ -25,6 +28,7 @@ import { socialRoutes } from './routes/social.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { pushRoutes } from './routes/push.js';
 import { reviewRoutes } from './routes/review.js';
+import { badgeSuggestionRoutes } from './routes/badgeSuggestions.js';
 import { registerPushDelivery } from './services/push.js';
 import { SparkyError } from '@gauntlet/sparky';
 import { markKeyInvalid } from './services/users.js';
@@ -93,8 +97,12 @@ export async function buildApp(
     return reply.code(500).send({ error: 'Something went wrong', code: 'internal' });
   });
 
+  // First, so the badge hook sees every route registered after it.
+  registerBadgeHooks(app, full);
   authRoutes(app, full);
   adminRoutes(app, full);
+  adminBadgeRoutes(app, full);
+  badgeRoutes(app, full);
   meRoutes(app, full);
   statsRoutes(app, full);
   friendRoutes(app, full);
@@ -110,6 +118,7 @@ export async function buildApp(
   notificationRoutes(app, full);
   pushRoutes(app, full);
   reviewRoutes(app, full);
+  badgeSuggestionRoutes(app, full);
   registerPushDelivery();
   downloadRoutes(app, full.cfg);
   legalRoutes(app, full);

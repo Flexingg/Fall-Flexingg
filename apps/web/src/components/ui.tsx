@@ -187,7 +187,11 @@ export function ToastHost() {
     return () => clearTimeout(timer);
   }, [t]);
   return t ? (
-    <div className={`toast${t.action ? ' with-action' : ''}`} role="status">
+    <div
+      className={`toast${t.action ? ' with-action' : ''}${t.icon ? ' with-icon' : ''}`}
+      role="status"
+    >
+      {t.icon}
       <span>{t.msg}</span>
       {t.action && (
         <button

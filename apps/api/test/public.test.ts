@@ -115,6 +115,7 @@ describe('profiles are private by default', () => {
       id: ids.ana,
       displayName: 'Ana Lima',
       initials: 'AL',
+      level: 1,
       handle: 'ana_l',
       challenges: { played: 0, won: 0 },
       friendship: 'none',

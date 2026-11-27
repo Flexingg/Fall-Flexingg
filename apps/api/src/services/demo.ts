@@ -3,13 +3,16 @@ import type { SoloConfig } from '@gauntlet/shared';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import {
+  badgeDefinitions,
   challengeParticipants,
   challenges,
   dailyMetrics,
   feedEvents,
   friendships,
+  userBadges,
   users,
 } from '../db/schema.js';
+import { recomputeXp } from './badges/engine.js';
 import { finalizeChallenge, refreshChallenge } from './challenges.js';
 import type { UserRow } from './users.js';
 
@@ -89,6 +92,68 @@ function dayRows(userId: string, p: Persona, date: string, partial: boolean) {
   }));
 }
 
+/**
+ * The demo account never earns badges live; it shows this fixed sample instead (key, tier reached),
+ * so the badge screens have something to draw. Keys that don't exist (yet) are skipped.
+ */
+const DEMO_BADGES: Record<string, [string, number][]> = {
+  you: [
+    ['long-haul', 2],
+    ['far-out', 1],
+    ['show-up', 2],
+    ['big-day-out', 1],
+    ['never-miss', 1],
+    ['habit-forming', 2],
+    ['victory-lap', 1],
+    ['biggest-fan', 2],
+    ['iron-tonnage', 1],
+    ['early-bird', 1],
+  ],
+  maya: [
+    ['long-haul', 3],
+    ['far-out', 2],
+    ['show-up', 3],
+    ['never-miss', 2],
+    ['victory-lap', 2],
+    ['pavement-poet', 3],
+  ],
+  dre: [
+    ['iron-tonnage', 3],
+    ['gym-rat', 2],
+    ['show-up', 2],
+    ['record-breaker', 2],
+  ],
+  sam: [
+    ['long-haul', 2],
+    ['biggest-fan', 1],
+  ],
+};
+
+async function seedDemoBadges(ctx: AppContext, people: [string, UserRow][]) {
+  const ids = people.map(([, u]) => u.id);
+  await ctx.db.delete(userBadges).where(inArray(userBadges.userId, ids));
+  const wanted = new Set(Object.values(DEMO_BADGES).flatMap((l) => l.map(([k]) => k)));
+  const known = new Set(
+    (await ctx.db.select({ key: badgeDefinitions.key }).from(badgeDefinitions)).map((d) => d.key),
+  );
+  const rows = people.flatMap(([key, u]) =>
+    (DEMO_BADGES[key] ?? []).flatMap(([badge, tiers], i) =>
+      wanted.has(badge) && known.has(badge)
+        ? Array.from({ length: tiers }, (_, t) => ({
+            userId: u.id,
+            badgeKey: badge,
+            tier: t + 1,
+            earnedAt: new Date(ctx.now().getTime() - (i * 3 + (tiers - t) * 2 + 1) * 86_400_000),
+            backfilled: false,
+            seenAt: ctx.now(),
+          }))
+        : [],
+    ),
+  );
+  if (rows.length) await ctx.db.insert(userBadges).values(rows);
+  for (const id of ids) await recomputeXp(ctx, id);
+}
+
 async function upsertPerson(ctx: AppContext, p: Persona): Promise<UserRow> {
   const sparkyUserId = `demo:${p.key}`;
   const email = `${p.key}@demo.gauntlet.invalid`;
@@ -158,6 +223,11 @@ async function seed(ctx: AppContext): Promise<void> {
   await ctx.db.delete(feedEvents).where(inArray(feedEvents.actorId, ids));
   await ctx.db.delete(dailyMetrics).where(inArray(dailyMetrics.userId, ids));
   await ctx.db.delete(friendships).where(inArray(friendships.userLow, ids));
+
+  await seedDemoBadges(ctx, [
+    ['you', me],
+    ...friends.map((u, i): [string, UserRow] => [CAST[i]!.key, u]),
+  ]);
 
   // 70 days of stats, ending with a part-way-through today.
   const rows = everyone.flatMap((u, i) => {

@@ -37,6 +37,7 @@ import {
   feedEvents,
   rankSnapshots,
 } from '../db/schema.js';
+import { checkBadges } from './badges/engine.js';
 import { notify } from './notify.js';
 import { buildStakeInfo, loadRematchSeries, outcomeOf } from './stakes.js';
 import { createNextRound, loadSeriesInfo, notifyNewRound, type NextRound } from './recurring.js';
@@ -678,6 +679,12 @@ export async function finalizeChallenge(ctx: AppContext, ch: ChallengeRow): Prom
       ctx.log.warn({ err: String(err) }, 'challenge result notification failed'),
     );
   if (result.next) await notifyNewRound(ctx, ch, result.next satisfies NextRound);
+  // Results are in: wins, podiums and the drama badges.
+  if (!ch.solo)
+    for (const p of parts.filter((x) => x.state === 'joined'))
+      await checkBadges(ctx, p.userId, { reason: 'challenge' }).catch((err) =>
+        ctx.log.warn({ err: String(err), userId: p.userId }, 'badge check failed'),
+      );
   return true;
 }
 

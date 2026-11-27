@@ -14,6 +14,7 @@ import { useReviewList } from '../lib/reviewQueries';
 import { monthName, reviewsToOffer, todayIn } from '@gauntlet/shared';
 import '../styles/notify.css';
 import { FastCard } from '../components/FastCard';
+import { LimitedBadges } from '../components/LimitedBadges';
 
 const FASTING = new Set<string>(['fast_hours', 'fasts_completed']);
 
@@ -124,6 +125,8 @@ export function TodayPage() {
       </div>
 
       {!direct && <ReviewCards />}
+
+      {!direct && <LimitedBadges />}
 
       {inFastingChallenge && <FastCard />}
 

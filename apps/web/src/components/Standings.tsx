@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { fmt, shortName } from '../lib/format';
 import '../styles/social.css';
+import { LevelChip } from './LevelChip';
 import { NudgeButton } from './NudgeButton';
 import { CountUp, useFlip, useRankHaptics } from './RankMotion';
 import { Avatar } from './ui';
@@ -94,6 +95,7 @@ export function StandingsList({
                   />
                 )}
                 {s.isMe ? 'You' : shortName(s.user.displayName)}
+                <LevelChip level={s.user.level} />
                 {team && <small style={{ display: 'inline', marginLeft: 6 }}>{team.name}</small>}
               </div>
               <div className="track">

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Icon } from '../components/Icon';
+import { LevelChip } from '../components/LevelChip';
 import { Avatar, Empty, ErrorBox, Header, Screen, Seg, Skeleton, toast } from '../components/ui';
 import { SkeletonList } from '../components/Skeleton';
 import { ApiError, del, post } from '../lib/api';
@@ -200,7 +201,10 @@ export function FriendsPage() {
               <Link key={f.id} to={`/u/${f.id}`} className="item">
                 <Avatar user={f} size={42} />
                 <div className="grow">
-                  <div className="t">{f.displayName}</div>
+                  <div className="t">
+                    {f.displayName}
+                    <LevelChip level={f.level} />
+                  </div>
                   <small className="ellipsis">
                     {f.status ?? `Synced ${timeAgo(f.lastSyncedAt)}`}
                   </small>

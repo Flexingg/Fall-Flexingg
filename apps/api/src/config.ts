@@ -66,6 +66,16 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().default(''),
   /** A mailto: or https: contact for push services, e.g. mailto:you@example.com. */
   VAPID_SUBJECT: z.string().default(''),
+  /**
+   * Badge suggestions: a weekly job reads the community Garmin badge database (garminbadges.com)
+   * and asks Claude which ones Gauntlet can match, drafting original badges for an admin to
+   * approve. Off unless ANTHROPIC_API_KEY is set. Only Garmin's badge text is sent, never user data.
+   */
+  ANTHROPIC_API_KEY: z.string().default(''),
+  BADGE_IMPORT_MODEL: z.string().default('claude-haiku-5-5'),
+  GARMIN_BADGES_URL: z.string().url().default('https://api.garminbadges.com/api/badges'),
+  /** Days between automatic imports (0 = only when an admin presses "Check now"). */
+  BADGE_IMPORT_DAYS: z.coerce.number().min(0).default(7),
 });
 
 export type Config = Omit<z.infer<typeof envSchema>, 'SPARKY_PUBLIC_URL'> & {

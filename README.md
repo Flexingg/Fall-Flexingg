@@ -136,6 +136,34 @@ reads them back (CI does this on every push).
 Keep `ENCRYPTION_KEY`, `BETTER_AUTH_SECRET` and the SparkyFitness encryption key stable: changing
 them makes stored keys unreadable and signs everyone out.
 
+## Badges
+
+Badges and levels are data, not code. Each badge is a row in `badge_definitions` with a small
+declarative rule (`packages/shared/src/badges.ts`) that the server knows how to evaluate: lifetime
+totals, best days/weeks/months, streaks, single activities, challenge results and drama, social
+counts and dated events. The app draws whatever the server sends, so a new badge appears for everyone
+without an app update. Badges are checked after every sync, when a challenge finishes and after
+social actions; once earned they are kept, even if the badge is later changed or retired.
+
+Admins manage them in **Admin → Badges**: build a rule, pick an icon (or upload an image), preview who
+would earn it, then publish. Publishing awards it quietly to everyone who already qualifies.
+
+### Suggestions from the Garmin Badge Database
+
+Many badge ideas come from the community-run [Garmin Badge Database](https://garminbadges.com) by
+[Next Source](https://nextsource.se/). It catalogs every Garmin Connect badge, and its maintainers
+kindly agreed to let Gauntlet read it. Thank you! Garmin's badge names, descriptions and artwork
+belong to Garmin Ltd., so Gauntlet only uses them as inspiration: every badge it suggests gets its own
+name, wording and icon, and nothing from Garmin is shown in the app.
+
+How it works: when `ANTHROPIC_API_KEY` is set in `deploy/.env`, the server reads the database's badge
+list once a week (`BADGE_IMPORT_DAYS`, default 7) and looks only at badges it hasn't seen before.
+Each new one goes to Claude (`BADGE_IMPORT_MODEL`, a small model by default) with the list of rule
+types and metrics Gauntlet has, and it answers with either an original Gauntlet badge draft or a
+reason to skip (for example golf, diving or a specific race). Only Garmin's public badge text is sent,
+never anything about your users. Drafts wait under **Admin → Badges → Suggested** until you approve
+them; nothing goes live on its own. **Check now** runs the import straight away.
+
 ## Backups
 
 On a home server nothing else keeps your data safe, so the compose stack includes a `backup` service.

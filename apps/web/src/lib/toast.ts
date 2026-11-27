@@ -2,7 +2,11 @@
  * The toast channel, kept apart from the React host (components/ui.tsx) so plain modules like the
  * undo queue can show toasts without pulling in screens.
  */
+import type { ReactNode } from 'react';
+
 export interface ToastOptions {
+  /** A small picture before the message (a badge medal). */
+  icon?: ReactNode;
   /** A button on the toast, e.g. Undo. */
   action?: { label: string; onClick: () => void };
   /** How long it stays, in ms (default 2.6 s). */

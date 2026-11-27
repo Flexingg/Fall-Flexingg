@@ -3,11 +3,21 @@
  * the left side (←) to go back, swipe either way, Esc or Close to leave. It never plays by itself
  * and slides only when the phone allows motion. Always your own numbers.
  */
-import { compactNumber, parsePeriod, type RecapTotal, type Review } from '@gauntlet/shared';
+import {
+  compactNumber,
+  parsePeriod,
+  type BadgeView,
+  type RecapTotal,
+  type Review,
+} from '@gauntlet/shared';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router';
+import { BadgeIcon, medalOf } from '../components/BadgeIcon';
 import { Icon } from '../components/Icon';
 import { ErrorBox, Skeleton, toast } from '../components/ui';
+import { useAuth } from '../lib/auth';
+import { useBadgeCatalog } from '../lib/badgeQueries';
+import { tierLabelOf, xpOf } from '../lib/badges';
 import { useReview } from '../lib/reviewQueries';
 import { shareLink } from '../lib/share';
 import '../styles/review.css';
@@ -39,7 +49,12 @@ function versus(t: RecapTotal, noun: string, prev: string): string | null {
   return `${Math.abs(t.changePct)}% ${t.changePct > 0 ? 'more' : 'fewer'} ${noun} than ${prev}`;
 }
 
-function buildCards(r: Review, onShare: () => void, onClose: () => void): StoryCard[] {
+function buildCards(
+  r: Review,
+  badges: BadgeView[],
+  onShare: () => void,
+  onClose: () => void,
+): StoryCard[] {
   const year = r.kind === 'year';
   const total = (k: string) => r.totals.find((t) => t.key === k)!;
   const steps = total('steps');
@@ -224,6 +239,39 @@ function buildCards(r: Review, onShare: () => void, onClose: () => void): StoryC
     });
   }
 
+  // Badges whose newest tier landed inside this period (skipped quietly when there are none).
+  const won = badges
+    .filter(
+      (b) => b.earnedAt && b.earnedAt.slice(0, 10) >= r.start && b.earnedAt.slice(0, 10) <= r.end,
+    )
+    .sort((a, b) => b.tier / b.tiers.length - a.tier / a.tiers.length || xpOf(b) - xpOf(a));
+  if (won.length) {
+    cards.push({
+      key: 'badges',
+      tone: 'dark',
+      body: (
+        <>
+          <div className="story-kicker">
+            Badges you earned {year ? 'this year' : `in ${r.label.split(' ')[0]}`}
+          </div>
+          <div className="story-title">
+            {won.length} badge{won.length === 1 ? '' : 's'}
+          </div>
+          <div className="story-badges">
+            {won.slice(0, 6).map((b) => (
+              <div key={b.key}>
+                <BadgeIcon icon={b.icon} imageUrl={b.imageUrl} medal={medalOf(b)} size="lg" />
+                <span>{b.name}</span>
+                <small>{tierLabelOf(b) ?? 'Earned'}</small>
+              </div>
+            ))}
+          </div>
+          {won.length > 6 && <div className="story-sub">and {won.length - 6} more</div>}
+        </>
+      ),
+    });
+  }
+
   if (r.rival) {
     const v = r.rival;
     const first = v.displayName.split(' ')[0];
@@ -285,6 +333,9 @@ export function ReviewPage() {
   const { period = '' } = useParams();
   const parsed = parsePeriod(period);
   const q = useReview(parsed ? period : '2000-01', !!parsed);
+  const { user } = useAuth();
+  const badgeQ = useBadgeCatalog(user?.id ?? '', !!parsed && !!user);
+  const badges = badgeQ.data?.badges;
   const navigate = useNavigate();
   const location = useLocation();
   const [index, setIndex] = useState(0);
@@ -307,8 +358,10 @@ export function ReviewPage() {
 
   const cards = useMemo(
     () =>
-      r && (r.hasData || r.challenges.played > 0) ? buildCards(r, () => void share(), close) : [],
-    [r, share, close],
+      r && (r.hasData || r.challenges.played > 0)
+        ? buildCards(r, badges ?? [], () => void share(), close)
+        : [],
+    [r, badges, share, close],
   );
   const last = cards.length - 1;
   const next = useCallback(() => setIndex((i) => Math.min(i + 1, last)), [last]);

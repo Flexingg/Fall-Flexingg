@@ -11,12 +11,23 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addDays, previousIsoWeek, todayIn } from '@gauntlet/shared';
-import { sql } from 'drizzle-orm';
+import { addDays, previousIsoWeek, todayIn, xpToReach, type BadgeDraft } from '@gauntlet/shared';
+import { and, eq, sql } from 'drizzle-orm';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, runMigrations } from '../src/db/index.js';
 import { runSyncCycle } from '../src/scheduler.js';
+import {
+  badgeSuggestions,
+  feedEvents,
+  serverState,
+  userBadges,
+  users as usersTable,
+} from '../src/db/schema.js';
+import { createDraftBadge, publishBadge } from '../src/services/badges/admin.js';
+import { seedBadges } from '../src/services/badges/seed.js';
+import { settleBadgeTasks } from '../src/services/badges/tasks.js';
+import { refreshDemo } from '../src/services/demo.js';
 import { notify } from '../src/services/notify.js';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
@@ -274,6 +285,79 @@ const { app, ctx } = await buildApp(
   { logger: { level: 'warn' } },
 );
 
+// Test-only hooks for the browser tests (this server is never deployed): give someone a badge,
+// as new (so the app celebrates it) or already seen; post a badge to the feed; send a notification.
+// Registered now, before the first request makes the app ready.
+app.post<{
+  Body: { email?: string; key: string; tiers: number; seen?: boolean; level?: number };
+}>('/api/_e2e/earn', async (req) => {
+  const b = req.body;
+  const [u] = await ctx.db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, b.email ?? 'you@example.com'));
+  if (!u) throw new Error('no such user');
+  await ctx.db
+    .delete(userBadges)
+    .where(and(eq(userBadges.userId, u.id), eq(userBadges.badgeKey, b.key)));
+  await ctx.db.insert(userBadges).values(
+    Array.from({ length: b.tiers }, (_, i) => ({
+      userId: u.id,
+      badgeKey: b.key,
+      tier: i + 1,
+      earnedAt: new Date(),
+      backfilled: false,
+      seenAt: b.seen ? new Date() : null,
+    })),
+  );
+  // Put the person just past a level, so a level-up shows (XP is set, not recounted).
+  if (b.level)
+    await ctx.db
+      .update(usersTable)
+      .set({ badgeXp: xpToReach(b.level) + 5 })
+      .where(eq(usersTable.id, u.id));
+  return { ok: true };
+});
+app.post<{
+  Body: {
+    email: string;
+    name: string;
+    tier: number;
+    tierName: string | null;
+    icon: string;
+    more?: number;
+  };
+}>('/api/_e2e/feed-badge', async (req) => {
+  const b = req.body;
+  const [u] = await ctx.db.select().from(usersTable).where(eq(usersTable.email, b.email));
+  if (!u) throw new Error('no such user');
+  await ctx.db.insert(feedEvents).values({
+    actorId: u.id,
+    challengeId: null,
+    kind: 'badge_earned',
+    payload: {
+      key: 'e2e-feed',
+      name: b.name,
+      tier: b.tier,
+      tierName: b.tierName,
+      icon: b.icon,
+      imageUrl: null,
+      more: b.more ?? 0,
+    },
+  });
+  return { ok: true };
+});
+app.post('/api/_e2e/notify-badge', async () => {
+  const [u] = await ctx.db.select().from(usersTable).where(eq(usersTable.email, 'you@example.com'));
+  await notify(ctx, u!.id, {
+    kind: 'badge',
+    title: 'Badge earned',
+    body: 'You earned Gold · Show Up',
+    url: '/badges',
+  });
+  return { ok: true };
+});
+
 // Seed through the real API so the data is exactly what the app would create.
 const tokens: Record<string, string> = {};
 const ids: Record<string, string> = {};
@@ -439,6 +523,99 @@ users.maya!.daily.find((r) => r.entry_date === today)!.total_distance_meters! +=
 users.dre!.daily.find((r) => r.entry_date === today)!.total_steps! += 12_000;
 users.sam!.daily.find((r) => r.entry_date === today)!.total_distance_meters! += 4_000;
 await runSyncCycle(ctx);
+
+// The launch badges, awarded quietly from everyone's history (so nobody is surprised by a
+// celebration), and again the demo account's sample set, which needs the definitions to exist.
+await seedBadges(ctx);
+await settleBadgeTasks();
+await refreshDemo(ctx);
+
+// A limited-time badge that is running now (nobody can earn it: 50 million steps), and a few ideas
+// from the Garmin badge database waiting under Admin → Badges → Suggested.
+const sprint: BadgeDraft = {
+  key: 'summer-sprint',
+  name: 'Summer Sprint',
+  description: 'Walk {n} steps before the season ends.',
+  family: 'seasonal',
+  icon: 'sun',
+  imageUrl: null,
+  secret: false,
+  rule: { type: 'lifetime_total', metric: 'steps', tiers: [50_000_000] },
+  window: { start: d(-5), end: d(9) },
+  xp: null,
+  countsManual: true,
+};
+await createDraftBadge(ctx, sprint, 'admin');
+await publishBadge(ctx, 'summer-sprint');
+await settleBadgeTasks();
+const idea = (n: number, name: string, description: string) => ({
+  sourceRef: String(9000 + n),
+  sourceName: name,
+  sourceDescription: description,
+});
+await ctx.db.insert(badgeSuggestions).values([
+  {
+    ...idea(1, 'Sunrise Mile', 'Complete a run of at least 1 mile before 7 AM.'),
+    status: 'matched',
+    draft: {
+      key: 'first-light',
+      name: 'First Light',
+      description: 'Finish a {n} km run before 7 am.',
+      family: 'consistency',
+      icon: 'sunrise',
+      imageUrl: null,
+      secret: false,
+      rule: {
+        type: 'single_activity',
+        sport: 'run',
+        measure: 'distance_km',
+        tiers: [2, 5, 10],
+        hours: { from: 4, to: 7 },
+      },
+      window: null,
+      xp: null,
+      countsManual: true,
+    } satisfies BadgeDraft,
+  },
+  {
+    ...idea(2, 'Mountain Goat', 'Climb 1,000 metres in a single activity.'),
+    status: 'matched',
+    draft: {
+      key: 'big-day-out-2',
+      name: 'Long Weekend',
+      description: 'Log {n} workouts in total.',
+      family: 'movement',
+      icon: 'mountain',
+      imageUrl: null,
+      secret: false,
+      rule: { type: 'lifetime_total', metric: 'workouts', tiers: [20, 60] },
+      window: null,
+      xp: null,
+      countsManual: true,
+    } satisfies BadgeDraft,
+  },
+  {
+    ...idea(3, 'Golf Round', 'Walk a full round of golf.'),
+    status: 'skipped',
+    reason: 'Gauntlet cannot tell golf from other walks.',
+  },
+  {
+    ...idea(4, 'Pool Party', 'Swim in a pool 10 times.'),
+    status: 'failed',
+    reason: 'The AI service did not answer. Try again.',
+  },
+]);
+await ctx.db
+  .insert(serverState)
+  .values({
+    key: 'badge_import',
+    value: {
+      lastRunAt: new Date(Date.now() - 5 * 3600_000).toISOString(),
+      lastResult: { fetched: 120, added: 4, matched: 2, skipped: 1, failed: 1, error: null },
+      running: false,
+    },
+  })
+  .onConflictDoNothing();
 
 // Alex's notifications: the sync cycles above may have produced some (it depends on the day of the
 // week), so start from a known inbox. Three unread, one read; the oldest is what the bell shows last.

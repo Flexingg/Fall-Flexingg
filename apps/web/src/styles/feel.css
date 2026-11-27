@@ -28,3 +28,20 @@
 .rank-up {
   animation: rank-up-flash 1.2s ease-out;
 }
+
+/* A toast with a badge medal in front (components/BadgeCelebration.tsx). Dark, so silver and
+   platinum medals stay readable. */
+.toast.with-icon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 18px 6px 8px;
+  background: var(--card-2);
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+.toast.with-icon.with-action {
+  padding-right: 8px;
+}
