@@ -35,12 +35,18 @@ export function ProgressChart({
   data,
   format,
   scale = 1,
+  caption,
+  axisDate,
 }: {
   data: ChallengeProgress;
   /** Axis labels show value × scale (for example km shown as miles). */
   scale?: number;
   /** Formats a value the way the leaderboard does (decimals, unit). */
   format: (v: number) => string;
+  /** Replaces the line under the legend ("Score at the end of each day."). */
+  caption?: string;
+  /** Wording for the dates along the bottom, for long ranges that cross years. */
+  axisDate?: (iso: string) => string;
 }) {
   const { dates, series, lowerIsBetter } = data;
   const [hover, setHover] = useState<number | null>(null);
@@ -169,7 +175,7 @@ export function ProgressChart({
                     : 'middle'
               }
             >
-              {day(dates[i]!)}
+              {(axisDate ?? day)(dates[i]!)}
             </text>
           ))}
           {target != null && (
@@ -308,9 +314,10 @@ export function ProgressChart({
         ))}
       </div>
       <p className="muted" style={{ fontSize: 12, margin: '8px 0 0' }}>
-        {lowerIsBetter
-          ? 'Lower is better, so the best line is at the top.'
-          : 'Score at the end of each day.'}
+        {caption ??
+          (lowerIsBetter
+            ? 'Lower is better, so the best line is at the top.'
+            : 'Score at the end of each day.')}
         {data.truncated && ` Showing the top ${series.length} of ${data.total}.`}
       </p>
       <details style={{ marginTop: 6 }}>

@@ -1,7 +1,7 @@
 /**
  * The badges page: your level and XP, every badge as a tile (earned first, then closest to done,
  * then locked, secrets as "?"), a Limited time row for badges with a deadline, and the detail sheet
- * on tap. Also opens for someone else (/u/:id/badges) where only what they've earned shows.
+ * on tap, an XP race against friends, and a link to the timeline. Also opens for someone else (/u/:id/badges) where only what they've earned shows.
  */
 import {
   BADGE_FAMILY_LABELS,
@@ -11,9 +11,11 @@ import {
   type BadgeView,
 } from '@gauntlet/shared';
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { BadgeIcon, medalOf } from '../components/BadgeIcon';
 import { BadgeSheet } from '../components/BadgeSheet';
+import { Icon } from '../components/Icon';
+import { XpRaceCard } from '../components/XpRaceCard';
 import { Empty, ErrorBox, Header, Screen } from '../components/ui';
 import { SkeletonCard, SkeletonGroup, SkeletonLine } from '../components/Skeleton';
 import { useAuth } from '../lib/auth';
@@ -192,6 +194,18 @@ export function BadgesPage() {
                 : ''}
             </small>
           </div>
+
+          {own && <XpRaceCard />}
+          <Link
+            className="card tl-link"
+            to={own ? '/badges/timeline' : `/u/${userId}/badges/timeline`}
+          >
+            <span className="grow">
+              <b>Timeline</b>
+              <small className="muted">When each badge was earned and the XP it gave</small>
+            </span>
+            <Icon name="chevron" size={16} />
+          </Link>
 
           {families.length > 1 && (
             <div className="bd-chips" role="group" aria-label="Filter by type">

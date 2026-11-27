@@ -33,6 +33,10 @@ export const progressPct = (b: Pick<BadgeView, 'progress'>): number =>
     ? Math.max(0, Math.min(1, b.progress.value / b.progress.target))
     : 0;
 
+/** Where the best-ever mark sits on the progress bar (0 to 1). */
+export const bestPct = (p: { target: number; best?: number | null }): number =>
+  p.target > 0 && p.best != null ? Math.max(0, Math.min(1, p.best / p.target)) : 0;
+
 export const isEarned = (b: BadgeView) => b.tier > 0;
 export const isLive = (b: BadgeView) => b.status === 'live';
 

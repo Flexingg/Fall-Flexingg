@@ -2004,3 +2004,319 @@ test('cancelling an import keeps what came in', async ({ page }) => {
   await expect(card.getByText(/Import stopped/)).toBeVisible({ timeout: 30_000 });
   await snap(page, '144-history-cancelled');
 });
+
+// ---------- Badge status, XP race and timeline (0.15) ----------
+// The server's pieces for these may or may not be there yet, so the screens are driven by mocked
+// responses shaped like packages/shared/src/badges.ts; the real endpoints have their own API tests.
+
+test.describe('badge status, race and timeline', () => {
+  // Mocked API responses need the service worker out of the way.
+  test.use({ serviceWorkers: 'block' });
+
+  const me = { id: 'u-me', displayName: 'Alex Morgan', initials: 'AM', level: 7 };
+  const raceUser = (id: string, displayName: string, initials: string, level: number) => ({
+    id,
+    displayName,
+    initials,
+    level,
+  });
+
+  /** Opens never-miss (a streak badge) with a standing, a best streak and a real-looking history. */
+  async function mockStreakDetail(page: Page) {
+    await page.route(/\/api\/badges\/never-miss\?/, async (route) => {
+      const res = await route.fetch();
+      const body = await res.json();
+      body.badge.progress = { value: 3, target: 30, label: '3 of 30 days', best: 22 };
+      body.standing = {
+        stats: [
+          {
+            kind: 'current',
+            label: 'Current streak',
+            value: '3 days',
+            detail: 'Since Nov 25',
+            to: null,
+          },
+          {
+            kind: 'best',
+            label: 'Best streak',
+            value: '22 days',
+            detail: 'Mar 2 – Mar 23, 2026',
+            to: null,
+          },
+        ],
+        next: 'Hit 10,000 steps today to keep your 3-day streak going.',
+      };
+      body.history = body.history.map((h: Record<string, unknown>) => ({
+        ...h,
+        date: '2026-03-09',
+        how: 'A 10-day streak, Feb 28 – Mar 9, 2026',
+        to: null,
+      }));
+      await route.fulfill({ response: res, json: body });
+    });
+  }
+
+  test('badge sheet: where you stand, best streak, and how each tier was earned', async ({
+    page,
+  }) => {
+    test.skip(!!process.env.E2E_DIRECT, 'server build only');
+    await earn(page, 'never-miss', 1, { seen: true });
+    await mockStreakDetail(page);
+    await signIn(page);
+    await page.goto('/badges');
+    await page.locator('[data-testid=badge-tile][data-key=never-miss]').click();
+    const sheet = page.getByRole('dialog', { name: /Badge: Never Miss/ });
+    const status = sheet.getByTestId('badge-status');
+    await expect(status).toContainText('Current streak');
+    await expect(status).toContainText('3 days');
+    await expect(status).toContainText('Best streak');
+    await expect(status).toContainText('Hit 10,000 steps today');
+    await expect(sheet.getByTestId('badge-progress')).toContainText('Best: 22');
+    await expect(sheet.getByLabel('Tiers')).toContainText('A 10-day streak, Feb 28 – Mar 9, 2026');
+    await expect(sheet.getByLabel('Tiers')).toContainText('Mar 9, 2026');
+    await snap(page, '140-badge-status');
+  });
+
+  test('a one-tier badge you have not earned says Goal, not Earned', async ({ page }) => {
+    test.skip(!!process.env.E2E_DIRECT, 'server build only');
+    await signIn(page);
+    await page.goto('/badges');
+    await page.locator('[data-testid=badge-tile][data-key=day-without]').click();
+    const ladder = page.getByRole('dialog').getByLabel('Tiers');
+    await expect(ladder).toContainText('Goal');
+    await expect(ladder).not.toContainText('Earned');
+  });
+
+  test('xp race: range chips, standings, and the card hides on a server without it', async ({
+    page,
+  }) => {
+    test.skip(!!process.env.E2E_DIRECT, 'server build only');
+    const dates = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(Date.now() - (29 - i) * 86_400_000);
+      return d.toISOString().slice(0, 10);
+    });
+    const line = (start: number, perDay: number) =>
+      dates.map((_, i) => start + Math.round(i * perDay));
+    const ranges: string[] = [];
+    await page.route(/\/api\/badges\/race/, async (route) => {
+      const range = new URL(route.request().url()).searchParams.get('range') ?? '30d';
+      ranges.push(range);
+      const series = [
+        { user: me, rank: 1, isMe: true, values: line(220, 9) },
+        {
+          user: raceUser('u-maya', 'Maya Rodriguez', 'MR', 9),
+          rank: 2,
+          isMe: false,
+          values: line(300, 5),
+        },
+        {
+          user: raceUser('u-dre', 'Dre Thomas', 'DT', 5),
+          rank: 3,
+          isMe: false,
+          values: line(120, 6),
+        },
+      ];
+      await route.fulfill({
+        json: {
+          range,
+          dates,
+          series,
+          truncated: false,
+          total: 3,
+          gained: series.map((s) => s.values.at(-1)! - s.values[0]!),
+        },
+      });
+    });
+    await signIn(page);
+    await page.goto('/badges');
+    const card = page.getByTestId('xp-race');
+    await expect(card).toBeVisible();
+    const standings = card.getByLabel('XP gained in this range');
+    await expect(standings.getByText('+261 XP')).toBeVisible();
+    await expect(standings.getByText('Maya R.')).toBeVisible();
+    await card.scrollIntoViewIfNeeded();
+    await snap(page, '141-xp-race');
+    await card.getByRole('button', { name: '1 year' }).click();
+    await expect.poll(() => ranges).toContain('1y');
+    await expect(card.getByRole('button', { name: '1 year' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  test('xp race: with no friends it nudges you to add some; with nothing at all it hides', async ({
+    page,
+  }) => {
+    test.skip(!!process.env.E2E_DIRECT, 'server build only');
+    let xp = 40;
+    await page.route(/\/api\/badges\/race/, (route) =>
+      route.fulfill({
+        json: {
+          range: '30d',
+          dates: ['2026-11-26', '2026-11-27'],
+          series: [{ user: me, rank: 1, isMe: true, values: [xp, xp] }],
+          truncated: false,
+          total: 1,
+          gained: [0],
+        },
+      }),
+    );
+    await signIn(page);
+    await page.goto('/badges');
+    await expect(page.getByTestId('xp-race')).toContainText('Add friends');
+    xp = 0;
+    await page.reload();
+    await expect(page.getByTestId('level-card')).toBeVisible();
+    await expect(page.getByTestId('xp-race')).toHaveCount(0);
+  });
+
+  test('badge timeline: newest first by month, history tag, load more, opens the badge', async ({
+    page,
+  }) => {
+    test.skip(!!process.env.E2E_DIRECT, 'server build only');
+    const entry = (over: Record<string, unknown>) => ({
+      key: 'long-haul',
+      name: 'Long Haul',
+      icon: 'route',
+      imageUrl: null,
+      tier: 1,
+      tierCount: 4,
+      tierName: 'bronze',
+      xp: 10,
+      date: '2026-11-20',
+      how: null,
+      to: null,
+      backfilled: false,
+      secret: false,
+      ...over,
+    });
+    await page.route(/\/api\/users\/[^/]+\/badges\/timeline/, async (route) => {
+      const before = new URL(route.request().url()).searchParams.get('before');
+      await route.fulfill({
+        json: before
+          ? {
+              user: me,
+              entries: [
+                entry({
+                  key: 'show-up',
+                  name: 'Show Up',
+                  icon: 'flame',
+                  date: '2026-03-09',
+                  how: 'Logged 10 workouts',
+                  backfilled: true,
+                }),
+              ],
+              nextCursor: null,
+            }
+          : {
+              user: me,
+              entries: [
+                entry({
+                  key: 'never-miss',
+                  name: 'Never Miss',
+                  icon: 'streak',
+                  tier: 2,
+                  tierName: 'silver',
+                  xp: 25,
+                  date: '2026-11-24',
+                  how: 'A 7-day streak, Nov 18 – Nov 24, 2026',
+                }),
+                entry({ date: '2026-11-02', how: 'A 12.4 km run on Nov 2' }),
+                entry({
+                  key: 'far-out',
+                  name: 'Far Out',
+                  icon: 'rocket',
+                  tier: 1,
+                  tierCount: 1,
+                  tierName: null,
+                  xp: 25,
+                  date: '2026-10-30',
+                }),
+              ],
+              nextCursor: 'c1',
+            },
+      });
+    });
+    await signIn(page);
+    await page.goto('/badges');
+    await page.getByRole('link', { name: /Timeline/ }).click();
+    await expect(page).toHaveURL(/\/badges\/timeline$/);
+    await expect(page.getByRole('heading', { name: 'Timeline' })).toBeVisible();
+    const months = page.getByTestId('timeline-month');
+    // The next page may load by itself when the end of the list is in view.
+    await expect(months.first()).toBeVisible();
+    await expect(months.first()).toContainText('November 2026');
+    await expect(months.first()).toContainText('Never Miss');
+    await expect(months.first()).toContainText('Silver');
+    await expect(months.first()).toContainText('+25 XP');
+    await page
+      .getByRole('button', { name: 'Load more' })
+      .click({ timeout: 1500 })
+      .catch(() => undefined);
+    await expect(page.getByTestId('timeline-row')).toHaveCount(4);
+    const old = page.getByTestId('timeline-row').last();
+    await expect(old).toContainText('From your history');
+    await expect(old).toContainText('Mar 9, 2026');
+    await old.scrollIntoViewIfNeeded();
+    await snap(page, '142-badge-timeline');
+    await old.click();
+    await expect(page.getByRole('dialog', { name: /Badge: Show Up/ })).toBeVisible();
+  });
+
+  test('timeline shows an empty state', async ({ page }) => {
+    test.skip(!!process.env.E2E_DIRECT, 'server build only');
+    await page.route(/\/api\/users\/[^/]+\/badges\/timeline/, (route) =>
+      route.fulfill({ json: { user: me, entries: [], nextCursor: null } }),
+    );
+    await signIn(page);
+    await page.goto('/badges/timeline');
+    await expect(page.getByText('Nothing here yet')).toBeVisible();
+  });
+
+  test('swipe a sheet down to close it; a short drag springs back; the handle also closes', async ({
+    page,
+  }) => {
+    test.skip(!!process.env.E2E_DIRECT, 'server build only');
+    await signIn(page);
+    await page.goto('/badges');
+    const open = async () => {
+      await page.locator('[data-testid=badge-tile][data-key=day-without]').click();
+      const sheet = page.getByRole('dialog', { name: /Badge/ });
+      await expect(sheet).toBeVisible();
+      return sheet;
+    };
+    const drag = async (dy: number) => {
+      const box = (await page.getByTestId('sheet-handle').boundingBox())!;
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(x, y + (dy * i) / 8);
+      return { up: () => page.mouse.up() };
+    };
+
+    let sheet = await open();
+    // A short drag moves the sheet along, then it springs back when let go.
+    const short = await drag(40);
+    const moved = await sheet
+      .locator('.bd-sheet')
+      .evaluate((el) => (el as HTMLElement).style.transform);
+    expect(moved).toMatch(/translateY\(\d/);
+    await short.up();
+    await expect(sheet).toBeVisible();
+    await expect
+      .poll(() => sheet.locator('.bd-sheet').evaluate((el) => (el as HTMLElement).style.transform))
+      .toBe('');
+
+    // A long one closes it.
+    const long = await drag(260);
+    await snap(page, '145-sheet-dragging');
+    await long.up();
+    await expect(sheet).toBeHidden();
+
+    // Tapping the grab bar closes it too.
+    sheet = await open();
+    await page.getByTestId('sheet-handle').click();
+    await expect(sheet).toBeHidden();
+  });
+});

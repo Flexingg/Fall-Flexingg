@@ -23,6 +23,7 @@ import { AdminChallengesPage } from './pages/AdminChallenges';
 import { AdminUserPage } from './pages/AdminUser';
 import { AdminUsersPage } from './pages/AdminUsers';
 import { BadgesPage } from './pages/Badges';
+import { BadgeTimelinePage } from './pages/BadgeTimeline';
 import { BadgeCelebration } from './components/BadgeCelebration';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
@@ -91,7 +92,7 @@ function Splash() {
 
 /** Where a tapped notification may take the app (the Android job opens https://<server>/<path>). */
 const NOTIFICATION_PATH =
-  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|review\/[\d-]+|u\/[\w-]+(\/badges)?|badges|trends|challenges)$/;
+  /^\/(c\/[\w-]+(\/result)?|friends|notifications|recap\/[\w-]+|review\/[\d-]+|u\/[\w-]+(\/badges(\/timeline)?)?|badges(\/timeline)?|trends|challenges)$/;
 
 /** Android: open invite links in-app, and push Health Connect data when the app comes to the front. */
 function NativeBridge() {
@@ -291,6 +292,26 @@ export function App() {
               <Private>
                 <NeedsServer what="Profiles">
                   <ProfilePage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/badges/timeline"
+            element={
+              <Private>
+                <NeedsServer what="Badges">
+                  <BadgeTimelinePage />
+                </NeedsServer>
+              </Private>
+            }
+          />
+          <Route
+            path="/u/:id/badges/timeline"
+            element={
+              <Private>
+                <NeedsServer what="Badges">
+                  <BadgeTimelinePage />
                 </NeedsServer>
               </Private>
             }

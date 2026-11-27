@@ -1,0 +1,215 @@
+/* Badge status in the detail sheet, the XP race card and the badge timeline page. */
+
+/* ---------- "Your status" in the sheet ---------- */
+.bd-status {
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+.bd-status .lbl {
+  margin: 0 0 4px;
+}
+.bd-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.bd-stat + .bd-stat {
+  border-top: 1px solid var(--line);
+}
+.bd-stat .grow > span {
+  display: block;
+  color: var(--muted);
+}
+.bd-stat small,
+.bd-stat a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.bd-stat a {
+  color: var(--volt);
+  font-weight: 700;
+}
+.bd-stat b {
+  font-size: 16px;
+  text-align: right;
+}
+.bd-next {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--volt-wash);
+  border: 1px solid color-mix(in srgb, var(--volt) 35%, transparent);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+/* ---------- Progress bar with a "best" mark ---------- */
+.bd-track {
+  position: relative;
+  overflow: visible;
+}
+.bd-track > i {
+  border-radius: 3px;
+}
+.bd-best {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--text);
+  text-decoration: none;
+}
+.bd-best-cap {
+  display: block;
+  margin-top: 4px;
+}
+
+/* ---------- Tier rungs: when and how ---------- */
+.bd-rung small.bd-how {
+  color: var(--text);
+  opacity: 0.85;
+}
+.bd-rung small.bd-how a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--volt);
+  font-weight: 700;
+}
+.bd-rung small.bd-when {
+  flex: none;
+  text-align: right;
+  margin: 0;
+}
+.bd-rung small.bd-when em {
+  display: block;
+  font-style: normal;
+  color: var(--dim);
+}
+
+/* ---------- XP race ---------- */
+.xr-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.xr-chips::-webkit-scrollbar {
+  display: none;
+}
+.xr-standings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.xr-standings li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.xr-standings li + li {
+  border-top: 1px solid var(--line);
+}
+.xr-standings li.me .xr-name {
+  color: var(--volt);
+  font-weight: 800;
+}
+.xr-nudge {
+  margin: 0;
+  font-size: 13px;
+}
+.xr-nudge a {
+  color: var(--volt);
+  font-weight: 700;
+}
+
+/* ---------- Timeline ---------- */
+.tl-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+}
+.tl-link b,
+.tl-link small {
+  display: block;
+}
+.tl-link small {
+  font-size: 12px;
+}
+.tl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px;
+}
+.tl-list li + li {
+  border-top: 1px solid var(--line);
+}
+.tl-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+}
+.tl-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tl-main b {
+  font-size: 14px;
+}
+.tl-main small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tl-tier {
+  color: var(--muted);
+  font-weight: 600;
+}
+.tl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.tl-tag {
+  padding: 0 7px;
+  border-radius: 99px;
+  border: 1px solid var(--line-2);
+  color: var(--dim);
+  font-size: 11px;
+}
+.tl-xp {
+  flex: none;
+  font-size: 13px;
+  color: var(--volt);
+}
+.tl-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
