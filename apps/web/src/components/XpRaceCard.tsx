@@ -17,7 +17,7 @@ const RANGE_LABELS: Record<XpRaceRange, string> = {
   '30d': '30 days',
   '90d': '90 days',
   '1y': '1 year',
-  all: 'All',
+  all: 'All time',
 };
 
 /** Year-long ranges cross years, so the dates along the bottom say month and year. */
