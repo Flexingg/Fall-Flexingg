@@ -26,3 +26,7 @@ export * from './history.js';
 export * from './healthIngest.js';
 export * from './dayStats.js';
 export * from './badgeSummary.js';
+export * from './healthMetrics.js';
+export * from './statSource.js';
+export * from './hcOriginMetrics.js';
+export * from './statSourceMeta.js';

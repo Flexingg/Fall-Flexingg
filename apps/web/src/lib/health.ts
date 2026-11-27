@@ -6,6 +6,7 @@
 import { Health, type HealthDataType } from '@capgo/capacitor-health';
 import {
   addDays,
+  type HcOrigin,
   localDate,
   planChunks,
   todayIn,
@@ -31,7 +32,6 @@ import {
   READ_TYPES,
   respiratoryRateRecords,
   restingHeartRateRecords,
-  SAMPLE_CAP,
   syncDays,
   syncStart,
   totalCaloriesRecords,
@@ -40,10 +40,18 @@ import {
   weightRecords,
   type AggregatedBucket,
   type HcRecord,
-  type Sample,
 } from './healthRecords';
+import {
+  buildOrigins,
+  ORIGIN_ONLY_TYPES,
+  readCapOf,
+  SLEEP_READ_CAP,
+  type OriginSample,
+  type OriginSleepSample,
+  type OriginWorkout,
+} from './hcOriginsRead';
 import { combineSleep } from './sleepSessions';
-import { sendHealthRecords } from './session';
+import { sendHealthOrigins, sendHealthRecords } from './session';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
 
@@ -106,7 +114,7 @@ async function readRange(
   range: { startDate: string; endDate: string },
   /** Local days (inclusive) whose sleep this read sends: each night is sent whole, once. */
   sleepDays: { from: string; to: string },
-): Promise<HcRecord[]> {
+): Promise<{ records: HcRecord[]; origins: HcOrigin[] }> {
   const records: HcRecord[] = [];
   const source = 'Health Connect';
   /** Run one type's read; a type that isn't allowed (or fails) just adds nothing. */
@@ -117,13 +125,27 @@ async function readRange(
       /* permission not granted for this type */
     }
   };
-  const samples = async (dataType: HealthDataType): Promise<Sample[]> =>
-    (await Health.readSamples({ ...range, dataType, limit: SAMPLE_CAP })).samples;
+  // Each type is read once: the record mappers and the origins (which app wrote it) share it.
+  const sampleReads = new Map<string, OriginSample[]>();
+  const samples = async (dataType: HealthDataType): Promise<OriginSample[]> => {
+    const have = sampleReads.get(dataType);
+    if (have) return have;
+    const got = (await Health.readSamples({ ...range, dataType, limit: readCapOf(dataType) }))
+      .samples;
+    sampleReads.set(dataType, got);
+    return got;
+  };
+  /** Health Connect's own day totals, kept so origins can say what it counted. */
+  const bucketReads = new Map<string, AggregatedBucket[]>();
   const buckets = async (
     dataType: HealthDataType,
     aggregation: 'sum' | 'average' | 'min' | 'max' | ('average' | 'min' | 'max')[],
-  ): Promise<AggregatedBucket[]> =>
-    (await Health.queryAggregated({ ...range, dataType, bucket: 'day', aggregation })).samples;
+  ): Promise<AggregatedBucket[]> => {
+    const got = (await Health.queryAggregated({ ...range, dataType, bucket: 'day', aggregation }))
+      .samples;
+    bucketReads.set(dataType, got);
+    return got;
+  };
   const daily = (
     dataType: HealthDataType,
     aggregation: 'sum' | 'average',
@@ -170,17 +192,29 @@ async function readRange(
   );
   await attempt(async () => mindfulnessRecords(await samples('mindfulness'), day));
 
+  // Types that only have day totals above are read again as samples, just to learn who wrote them.
+  // A few reads (one per type, one after another); one that fails only means no origins for it.
+  for (const type of ORIGIN_ONLY_TYPES) {
+    try {
+      await samples(type);
+    } catch {
+      /* not allowed, or Health Connect is rate limiting: no origins for this type */
+    }
+  }
+
   // Sleep: one entry per night (SparkyFitness keeps one per day and source, so separate sessions
   // would overwrite each other). Read from a day early so a night that started the evening before
   // the range is whole, and only send the days this range is responsible for.
+  let sleepRead: OriginSleepSample[] | null = null;
   try {
     const from = new Date(Date.parse(range.startDate) - 86_400_000).toISOString();
     const { samples } = await Health.readSamples({
       startDate: from,
       endDate: range.endDate,
       dataType: 'sleep',
-      limit: 1000,
+      limit: SLEEP_READ_CAP,
     });
+    sleepRead = samples;
     for (const n of combineSleep(samples, day)) {
       if (n.date < sleepDays.from || n.date > sleepDays.to) continue;
       records.push({
@@ -203,11 +237,13 @@ async function readRange(
     /* no sleep permission */
   }
 
+  const workoutsRead: OriginWorkout[] = [];
   try {
     let anchor: string | undefined;
     do {
       const res = await Health.queryWorkouts({ ...range, limit: 100, anchor });
       for (const w of res.workouts) {
+        workoutsRead.push({ startDate: w.startDate, sourceId: w.sourceId });
         const date = day(w.startDate);
         records.push({
           type: 'ExerciseSession',
@@ -231,7 +267,30 @@ async function readRange(
     /* no workout permission */
   }
 
-  return records;
+  let origins: HcOrigin[] = [];
+  try {
+    origins = buildOrigins({
+      samples: sampleReads,
+      buckets: bucketReads,
+      sleep: sleepRead,
+      workouts: workoutsRead,
+      dayOf: day,
+      days: sleepDays,
+    });
+  } catch {
+    /* origins are extra: never let them break the sync */
+  }
+  return { records, origins };
+}
+
+/** Send origins (extra information: a failure here never fails the sync). */
+async function sendOrigins(origins: HcOrigin[]): Promise<void> {
+  if (!origins.length) return;
+  try {
+    await sendHealthOrigins(origins);
+  } catch {
+    /* an older server without the endpoint, or offline: the next sync sends them again */
+  }
 }
 
 /** Send records in batches. Returns how many went. */
@@ -249,11 +308,12 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
   const end = new Date();
   // Re-sends the last week every time (see RESEND_DAYS), so late data and sleep totals overwrite.
   const start = syncStart(end, syncDays(!!last, opts.days));
-  const records = await readRange(
+  const { records, origins } = await readRange(
     { startDate: start.toISOString(), endDate: end.toISOString() },
     { from: day(start.toISOString()), to: day(end.toISOString()) },
   );
   await sendAll(records);
+  await sendOrigins(origins);
   await storage.set(LAST_SYNC_KEY, end.toISOString());
   return records.length;
 }
@@ -360,7 +420,7 @@ export async function importHealthConnectHistory(
       reason = 'cancelled';
       break;
     }
-    const records = await readRange(
+    const { records, origins } = await readRange(
       {
         startDate: localMidnight(w.start).toISOString(),
         endDate: localMidnight(addDays(w.end, 1)).toISOString(),
@@ -368,6 +428,7 @@ export async function importHealthConnectHistory(
       { from: w.start, to: w.end },
     );
     sent += await sendAll(records);
+    await sendOrigins(origins);
     doneDays += windowDays(w);
     if (records.length) {
       oldest = records.map((r) => String(r.date ?? r.entry_date ?? w.start)).sort()[0]!;

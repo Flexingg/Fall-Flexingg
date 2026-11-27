@@ -2429,24 +2429,112 @@ test.describe('rings, day stats and badges on Today', () => {
     await expect(page.getByTestId('display-preview')).toContainText('km');
   });
 
-  test('level and badges are one tap from Today and the profile', async ({ page }) => {
+  test('health readings show on the day screen and Trends, for their owner', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/day');
+    await expect(page.getByText('Sleep, heart and vitals')).toBeVisible();
+    await expect(page.getByText('Heart rate variability')).toBeVisible();
+    await expect(page.getByText('Total calories burned')).toBeVisible();
+    await snap(page, '170-day-health');
+    await page.goto('/trends');
+    await expect(page.getByLabel('Metric')).toBeVisible();
+    await expect(
+      page.getByLabel('Metric').locator('option', { hasText: 'Heart rate variability' }),
+    ).toHaveCount(1);
+  });
+
+  test('level is one tap from Today and the profile, without a badge card', async ({ page }) => {
     await signIn(page);
     const pill = page.getByTestId('level-pill');
     await expect(pill).toBeVisible();
     await expect(pill).toContainText(/Lv \d+/);
-    const card = page.getByTestId('badges-today');
-    await expect(card).toBeVisible();
-    await expect(card).toContainText(/XP/);
+    await expect(page.getByTestId('badges-today')).toHaveCount(0);
     await snap(page, '163-today-badges');
 
-    await card.click();
+    await page.goto('/me');
+    await expect(page.getByTestId('level-pill')).toBeVisible();
+    await expect(page.getByTestId('badges-today')).toHaveCount(0);
+    await page.getByTestId('level-pill').click();
     await expect(page.getByRole('heading', { name: /Badges/ }).first()).toBeVisible();
     await expect(page).toHaveURL(/\/badges$/);
+  });
+});
 
-    await page.goto('/me');
-    await expect(page.getByTestId('badges-today')).toBeVisible();
+test.describe('where did this come from', () => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+
+  test('long-press a stat to see its sources, the phone apps and the overlap', async ({ page }) => {
+    await signIn(page);
+    expect((await page.request.post('/api/_e2e/stat-sources')).ok()).toBe(true);
+    await page.goto('/day');
+    await expect(page.getByTestId('day-stat').first()).toBeVisible();
+    await expect(page.getByTestId('stat-source-tip')).toContainText(
+      'Press and hold a stat to see where it came from',
+    );
+
+    // A quick tap does nothing; holding for half a second opens the sheet.
+    const steps = page.getByTestId('day-stat').filter({ hasText: 'Steps' }).first();
+    await steps.click();
+    await expect(page.getByTestId('stat-source-sheet')).toHaveCount(0);
+    const box = (await steps.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(650);
+    await page.mouse.up();
+    const sheet = page.getByTestId('stat-source-sheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('heading', { name: 'Steps' })).toBeVisible();
+    await expect(sheet.getByTestId('stat-source-why')).toContainText('Highest of 2 sources');
+    // Both sources are listed, the one that counts is marked.
+    const candidates = sheet.getByTestId('stat-source-candidates');
+    await expect(candidates.getByText('Health Connect & phone')).toBeVisible();
+    await expect(candidates.getByText('Garmin')).toBeVisible();
+    await expect(candidates.getByText('Counted')).toBeVisible();
+    // The phone's Health Connect apps, with friendly names, and the duplicate hint.
+    const phone = sheet.getByTestId('stat-source-phone');
+    await expect(phone.getByText('Fitbit', { exact: true })).toBeVisible();
+    await expect(phone.getByText('Samsung Health', { exact: true })).toBeVisible();
+    await expect(phone.getByText('com.fitbit.FitbitMobile')).toBeVisible();
+    await expect(sheet.getByTestId('stat-source-overlap')).toContainText(
+      'Fitbit and Samsung Health both wrote steps for this day',
+    );
+    await snap(page, '5x-stat-source');
+
+    // The grab bar closes it, and the page behind did not navigate.
+    await sheet.getByTestId('sheet-handle').click();
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Day stats' })).toBeVisible();
+
+    // Right-click works too, and a value stored before this version says so.
+    await page.getByTestId('day-stat').filter({ hasText: 'Resting HR' }).first().click({
+      button: 'right',
+    });
+    await expect(sheet.getByTestId('stat-source-why')).toContainText('More detail');
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+
+    // Keyboard: focus a row and press Shift+F10.
+    await page.getByTestId('day-stat').filter({ hasText: 'Sleep' }).first().focus();
+    await page.keyboard.press('Shift+F10');
+    await expect(sheet.getByTestId('stat-source-why')).toContainText(
+      'Your source order for Sleep puts Garmin first.',
+    );
+    await expect(sheet.getByRole('link', { name: /Change which source counts/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // On Today, a ring opens it on a hold, but a tap still opens the day screen.
     await page.goto('/');
-    await page.getByTestId('level-pill').click();
-    await expect(page).toHaveURL(/\/badges$/);
+    const ring = page.getByTestId('ring-row').first();
+    await expect(ring).toBeVisible();
+    const rb = (await ring.boundingBox())!;
+    await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(650);
+    await page.mouse.up();
+    await expect(sheet).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
+    await page.keyboard.press('Escape');
+    await ring.click();
+    await expect(page.getByRole('heading', { name: 'Day stats' })).toBeVisible();
   });
 });

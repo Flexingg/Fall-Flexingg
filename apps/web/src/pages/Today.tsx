@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { ChallengeHero, FeedList } from '../components/Feed';
 import { Icon } from '../components/Icon';
 import { RingCard } from '../components/RingCard';
-import { BadgeProgressCard, LevelPill } from '../components/TodayBadges';
+import { LevelPill } from '../components/TodayBadges';
 import { Avatar, Empty, ErrorBox, Screen } from '../components/ui';
 import { SkeletonCard, SkeletonLine, SkeletonList } from '../components/Skeleton';
 import { useAuth } from '../lib/auth';
@@ -76,8 +76,6 @@ export function TodayPage() {
       ) : (
         today.data && <RingCard rings={ringsOfToday(today.data)} />
       )}
-
-      {!direct && <BadgeProgressCard />}
 
       <div style={{ marginTop: 12 }}>
         {direct ? (

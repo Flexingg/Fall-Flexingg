@@ -10,7 +10,10 @@ import {
   buildRingsFromRows,
   buildToday,
   DAY_HISTORY_DAYS,
+  healthAppName,
   isDateString,
+  statMeta,
+  type StatSourceResponse,
   ringConfigSchema,
   ringsOf,
   type DayResponse,
@@ -55,6 +58,8 @@ import {
   SparkyError,
   type SparkyUser,
 } from '@gauntlet/sparky';
+
+import type { StoredOrigin } from '../hcOrigins';
 
 export interface KeyValue {
   get(key: string): Promise<string | null>;
@@ -291,6 +296,47 @@ export class DirectBackend {
     if (!isDateString(d) || d > today || d < addDays(today, -DAY_HISTORY_DAYS))
       throw new DirectError('That day is out of range', 'bad_date');
     return buildDay({ rows, date: d, today, config: await this.rings() });
+  }
+
+  /**
+   * Where one stat came from, as far as the phone knows: the value it merged (it does not keep which
+   * source won, or the other candidates) and the Health Connect apps it read it from, which the
+   * caller looks up on the phone (lib/hcOrigins.ts originFor) and passes in.
+   */
+  async statSource(
+    date: string,
+    metric: string,
+    origin: StoredOrigin | null = null,
+  ): Promise<StatSourceResponse> {
+    const today = this.today_();
+    const meta = statMeta(metric);
+    if (!isDateString(date) || date > today || date < addDays(today, -DAY_HISTORY_DAYS))
+      throw new DirectError('That day is out of range', 'bad_date');
+    if (!meta) throw new DirectError('That stat is not valid', 'bad_metric');
+    const { rows } = await this.load();
+    const value = rows.find((r) => r.date === date && r.metric === metric)?.value ?? null;
+    const apps = (origin?.apps ?? [])
+      .map((a) => ({ ...a, name: healthAppName(a.packageName) }))
+      .sort((a, b) => b.value - a.value);
+    return {
+      date,
+      metric,
+      ...meta,
+      value,
+      source: value == null ? null : { key: 'sparkyfitness', label: 'Your connected sources' },
+      rule: null,
+      candidates: [],
+      phone: origin
+        ? {
+            apps,
+            counted: origin.counted,
+            capped: origin.capped,
+            reportedAt: origin.reportedAt,
+          }
+        : null,
+      overlap: apps.filter((a) => a.value > 0).length >= 2,
+      updatedAt: null,
+    };
   }
 
   async wallpaper(): Promise<WallpaperResponse> {

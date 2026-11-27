@@ -527,8 +527,8 @@ export interface TrendDefInfo {
   label: string;
   unit: string;
   decimals: number;
-  /** sum: added up. avg: average of days. max: best day. last: latest value (weight). */
-  aggregate: 'sum' | 'avg' | 'max' | 'last';
+  /** sum: added up. avg: average of days. max: best day. min: lowest day. last: latest value (weight). */
+  aggregate: 'sum' | 'avg' | 'max' | 'min' | 'last';
   group: MetricGroup;
 }
 

@@ -9,6 +9,7 @@ import {
   needsWeightGoal,
   type ParticipantParams,
   daysBetween,
+  healthMetricOfCategory,
   isCustomMetric,
   metricDef,
   minDate,
@@ -100,6 +101,9 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
       const cats = await ctx.sparky.customCategories(sparkyToken(ctx, me));
       const cat = cats.find((c) => c.id === body.custom!.categoryId);
       if (!cat) throw badRequest('That custom metric was not found in SparkyFitness');
+      // Health Connect readings (heart rate, blood pressure...) stay private to their owner.
+      if (healthMetricOfCategory(cat.name))
+        throw badRequest('That is private health data, so it can not be used in a challenge');
       metric = `custom:${cat.name.toLowerCase()}`;
       custom = { label: body.custom!.label, unit: body.custom!.unit ?? null };
       aggregate = body.custom!.aggregate;

@@ -1,4 +1,4 @@
-import type { RingConfig, SoloConfig } from '@gauntlet/shared';
+import type { HcOriginApp, MetricDetail, RingConfig, SoloConfig } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
 import type {
   BadgeDraft,
@@ -240,6 +240,28 @@ export const dailyMetrics = pgTable(
     metric: text('metric').notNull(),
     value: doublePrecision('value').notNull(),
     source: text('source'),
+    /** The candidates the merge chose between and why (0.17); null for values stored before. */
+    detail: jsonb('detail').$type<MetricDetail>(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.date, t.metric] })],
+);
+
+/**
+ * Which Health Connect apps wrote each day's stat, as the phone read it (0.17). Re-sent days
+ * replace their rows. Owner only, like the values themselves.
+ */
+export const healthOrigins = pgTable(
+  'health_origins',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    date: date('date', { mode: 'string' }).notNull(),
+    metric: text('metric').notNull(),
+    apps: jsonb('apps').$type<HcOriginApp[]>().notNull(),
+    counted: doublePrecision('counted'),
+    capped: boolean('capped').notNull().default(false),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.date, t.metric] })],

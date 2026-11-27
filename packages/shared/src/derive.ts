@@ -6,6 +6,12 @@
 import { addDays, listDates, weekday } from './dates.js';
 import { DEFAULT_DISPLAY, formatDistanceKm, formatInt, type DisplayPrefs } from './format.js';
 import {
+  HEALTH_METRICS,
+  isHealthMetric,
+  type HealthMetricDef,
+  type HealthSection,
+} from './healthMetrics.js';
+import {
   isBuiltinMetric,
   isCustomMetric,
   isLiftMetric,
@@ -69,6 +75,15 @@ export function trendsNeedFrom(range: TrendRange, today: string): string {
   return addDays(start, -listDates(start, end).length);
 }
 
+/** Where each health section sits among Trends' groups (they have no group of their own). */
+const HEALTH_GROUP: Record<HealthSection, MetricGroup> = {
+  activity: 'activity',
+  heart: 'body',
+  body: 'body',
+  nutrition: 'nutrition',
+  mind: 'body',
+};
+
 const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 
 /**
@@ -86,6 +101,18 @@ export function trendDef(key: string): TrendDefInfo | null {
       aggregate: 'last',
       group: 'body',
     };
+  // Health Connect readings (heart rate, blood pressure...): personal, owner-only, never scored.
+  if (isHealthMetric(key)) {
+    const d = HEALTH_METRICS[key] as HealthMetricDef;
+    return {
+      key,
+      label: d.label,
+      unit: d.unit,
+      decimals: d.decimals,
+      aggregate: d.aggregate,
+      group: HEALTH_GROUP[d.section],
+    };
+  }
   if (isBuiltinMetric(key)) {
     const d = METRICS[key];
     if (d.transform) return null;
@@ -143,6 +170,7 @@ export function buildTrends(opts: {
     const vals = dates.map((d) => byDate.get(d)).filter((v): v is number => v != null);
     if (!vals.length) return 0;
     if (def.aggregate === 'max') return Math.max(...vals);
+    if (def.aggregate === 'min') return Math.min(...vals);
     if (def.aggregate === 'last') return vals[vals.length - 1]!;
     const sum = vals.reduce((a, b) => a + b, 0);
     return def.aggregate === 'avg' ? sum / vals.length : sum;

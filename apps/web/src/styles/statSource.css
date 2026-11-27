@@ -1,0 +1,160 @@
+/* The "where did this come from" sheet (components/StatSourceSheet.tsx); shell styles are in badges.css. */
+.ss-sheet {
+  gap: 4px;
+}
+/* A tall sheet scrolls; its parts (the grab bar above all) must not squash to fit. */
+.ss-sheet > * {
+  flex-shrink: 0;
+}
+.ss-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  padding: 0 0 4px;
+}
+.ss-head small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ss-head h2 {
+  font-size: 18px;
+  font-weight: 800;
+}
+.ss-value {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.ss-sec .lbl {
+  margin: 14px 0 6px;
+}
+.ss-counted {
+  margin-bottom: 6px;
+}
+.ss-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: var(--volt);
+  color: var(--volt-ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+.ss-why,
+.ss-note {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.ss-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.ss-note b {
+  color: var(--text);
+}
+.ss-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  min-height: 32px;
+  color: var(--volt);
+  font-size: 14px;
+  font-weight: 600;
+}
+.ss-list {
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ss-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card-2);
+}
+.ss-list li + li {
+  border-top: 1px solid var(--line);
+}
+.ss-list li.on {
+  background: var(--volt-wash);
+}
+.ss-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ss-name small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.ss-name em {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--volt);
+}
+.ss-list b {
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.ss-warn {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--card));
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ss-foot {
+  display: block;
+  margin: 12px 0 6px;
+  text-align: center;
+}
+
+/* Rows that open the sheet on a long press. */
+.ss-press {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ss-press:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+.ss-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px 0 -8px;
+  color: var(--dim);
+  font-size: 12px;
+  text-align: center;
+}
+.ss-hint button {
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  min-height: 32px;
+  padding: 0 6px;
+}
