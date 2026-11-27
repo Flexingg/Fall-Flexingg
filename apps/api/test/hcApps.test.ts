@@ -61,7 +61,7 @@ describe('GET /api/me/hc-apps', () => {
     expect(r.seen.steps).toEqual([
       { packageName: FIT, name: 'Fitbit', days: 2, devices: ['watch', 'phone'] },
       { packageName: GAR, name: 'Garmin Connect', days: 2, devices: ['watch'] },
-      { packageName: PHONE, name: 'Phone', days: 1, devices: ['phone'] },
+      { packageName: PHONE, name: 'This phone', days: 1, devices: ['phone'] },
     ]);
     // A friendly name is filled in when the phone sent none; a day with no data doesn't count.
     expect(r.seen.sleep).toEqual([
@@ -81,7 +81,7 @@ describe('the where-from sheet', () => {
     expect(apps.map((a) => [a.packageName, a.name])).toEqual([
       [FIT, 'Fitbit'],
       [GAR, 'Garmin Connect'],
-      [PHONE, 'Phone'],
+      [PHONE, 'This phone'],
     ]);
   });
 });
