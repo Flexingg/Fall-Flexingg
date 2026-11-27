@@ -14,7 +14,6 @@ export const HEALTH_INGEST_TYPES: readonly string[] = [
   'body_fat',
   'height',
   'water',
-  'Nutrition',
   'SleepSession',
   'ExerciseSession',
   // Everything else is kept by SparkyFitness as a daily custom measurement under this name.
@@ -34,4 +33,5 @@ export const HEALTH_INGEST_TYPES: readonly string[] = [
   'basal_body_temperature',
   'floors_climbed',
   'mindfulness_minutes',
+  'dietary_energy',
 ];

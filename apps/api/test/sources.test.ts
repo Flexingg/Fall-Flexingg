@@ -111,7 +111,7 @@ describe('choosing which source counts', () => {
       sources: [
         { key: 'garmin', label: 'Garmin' },
         { key: 'health_connect', label: 'Health Connect & phone' },
-        { key: 'sparkyfitness', label: 'SparkyFitness (logged by hand)' },
+        { key: 'sparkyfitness', label: 'SparkyFitness' },
       ],
     });
     expect(p.default.order).toEqual([]);
@@ -182,7 +182,7 @@ describe('ranked source priorities', () => {
       expect.arrayContaining(['garmin', 'health_connect', 'sparkyfitness']),
     );
     expect(p.default.sources.find((s) => s.key === 'sparkyfitness')!.label).toBe(
-      'SparkyFitness (logged by hand)',
+      'SparkyFitness',
     );
   });
 

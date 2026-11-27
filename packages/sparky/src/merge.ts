@@ -123,7 +123,7 @@ const SOURCE_LABELS: Record<string, string> = {
   strava: 'Strava',
   health_connect: 'Health Connect & phone',
   workouts: 'Logged workouts',
-  sparkyfitness: 'SparkyFitness (logged by hand)',
+  sparkyfitness: 'SparkyFitness',
   demo: 'Demo',
 };
 

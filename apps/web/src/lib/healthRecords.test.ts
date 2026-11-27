@@ -206,18 +206,17 @@ describe('aggregated and keyed records', () => {
     });
   });
 
-  it('sends food by its Health Connect id and skips empty records', () => {
+  it("sends food energy as a day's total, not as diary entries", () => {
     const r = nutritionRecords(
-      [s('2026-05-20T12:00:00Z', 640, { platformId: 'abc' }), s('2026-05-20T13:00:00Z', 0)],
+      [
+        s('2026-05-20T12:00:00Z', 640, { platformId: 'abc' }),
+        s('2026-05-20T18:00:00Z', 560),
+        s('2026-05-20T13:00:00Z', 0),
+      ],
       day,
     );
     expect(r).toHaveLength(1);
-    expect(r[0]).toMatchObject({
-      type: 'Nutrition',
-      source_id: 'abc',
-      calories: 640,
-      entry_date: '2026-05-20',
-    });
+    expect(r[0]).toMatchObject({ type: 'dietary_energy', value: 1200, unit: 'kcal', date: '2026-05-20' });
   });
 });
 

@@ -336,7 +336,7 @@ describe('source priorities', () => {
   it('treats numbers typed into SparkyFitness as their own source', () => {
     expect(sourceKey('wearable')).toBe('sparkyfitness');
     expect(sourceKey('manual')).toBe('sparkyfitness');
-    expect(sourceLabel('sparkyfitness')).toBe('SparkyFitness (logged by hand)');
+    expect(sourceLabel('sparkyfitness')).toBe('SparkyFitness');
     const input: MergeInput = {
       ...empty,
       daily: [

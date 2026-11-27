@@ -153,8 +153,6 @@ const good = (n: unknown): n is number => typeof n === 'number' && Number.isFini
 
 /** Most samples one type may send in one read (Health Connect can hold thousands a day). */
 export const SAMPLE_CAP = 2000;
-/** Most food records one read sends. */
-export const FOOD_CAP = 500;
 
 function daily(type: string, unit: string, byDay: Map<string, number>): HcRecord[] {
   return [...byDay]
@@ -286,26 +284,18 @@ export function waterRecords(buckets: AggregatedBucket[], dayOf: DayOf): HcRecor
 }
 
 /**
- * Food: one entry per Health Connect nutrition record, keyed by its id so a re-send updates it.
- * The plugin only gives the energy, so entries carry calories and no macros.
+ * Food energy from Health Connect as a day's total (a daily measurement, not food diary entries):
+ * people who log food in SparkyFitness would otherwise count the same meals twice.
  */
-export function nutritionRecords(samples: Sample[], dayOf: DayOf): HcRecord[] {
-  return samples
-    .filter((s) => good(s.value) && s.value < 20_000)
-    .slice(0, FOOD_CAP)
-    .map((s) => {
-      const date = dayOf(s.startDate);
-      return {
-        type: 'Nutrition',
-        source: SOURCE,
-        source_id: s.platformId ?? `gauntlet-food-${s.startDate}`,
-        date,
-        entry_date: date,
-        timestamp: s.startDate,
-        calories: round2(s.value),
-      };
-    });
-}
+export const nutritionRecords = (samples: Sample[], dayOf: DayOf): HcRecord[] =>
+  daily(
+    'dietary_energy',
+    'kcal',
+    sumByDay(
+      samples.filter((x) => good(x.value) && x.value < 20_000),
+      dayOf,
+    ),
+  );
 
 /** Heart rate as the day's lowest, highest and average (min/max/avg is what SparkyFitness keeps). */
 export function heartRateRecords(buckets: AggregatedBucket[], dayOf: DayOf): HcRecord[] {
