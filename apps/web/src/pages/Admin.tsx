@@ -1,6 +1,8 @@
 import type { BackupInfo, BackupJob, DiskUsage } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { Icon } from '../components/Icon';
 import { ErrorBox, Header, Screen, Skeleton, toast } from '../components/ui';
 import {
   adminKeys,
@@ -34,6 +36,17 @@ export function AdminPage() {
         <Skeleton height={120} />
       ) : (
         <>
+          <Link to="/admin/badges" className="list" style={{ display: 'block' }}>
+            <div className="item">
+              <Icon name="trophy" size={20} />
+              <div className="grow">
+                <div className="t">Badges</div>
+                <small>Make, preview and publish badges; review ideas from Garmin</small>
+              </div>
+              <Icon name="chevron" size={18} />
+            </div>
+          </Link>
+
           <div className="lbl">Health</div>
           <div className="adm-grid">
             <Stat label="Version" value={o.version} />

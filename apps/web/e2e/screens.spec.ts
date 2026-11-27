@@ -1431,3 +1431,365 @@ test.describe('loading placeholders', () => {
     if (shots) await page.screenshot({ path: `${shots}/89-skeleton-reduced-motion.png` });
   });
 });
+
+// ---------- Badges and levels ----------
+
+/** Test-only helpers on the demo server (apps/api/test/demoServer.ts). */
+async function earn(
+  page: Page,
+  key: string,
+  tiers: number,
+  opts: { seen?: boolean; level?: number; email?: string } = {},
+) {
+  const res = await page.request.post('/api/_e2e/earn', { data: { key, tiers, ...opts } });
+  expect(res.ok()).toBe(true);
+}
+
+test('the demo account can look through its sample badges, with no celebration', async ({
+  page,
+}) => {
+  await demoSignIn(page);
+  await page.goto('/badges');
+  await expect(page.getByRole('heading', { name: 'Badges' })).toBeVisible();
+  await expect(page.getByTestId('level-card')).toContainText(/Level \d+/);
+  await expect(page.getByTestId('badge-tile').first()).toBeVisible();
+  await expect(page.getByTestId('celebration')).toHaveCount(0);
+  await expect(page.locator('.error')).toHaveCount(0);
+  await snap(page, '100-badges-demo');
+});
+
+test('badges page: level, filters, detail sheet, pin to profile (three at most)', async ({
+  page,
+}) => {
+  // Four earned badges that are already seen, so nothing pops up.
+  for (const [key, tiers] of [
+    ['long-haul', 2],
+    ['show-up', 3],
+    ['far-out', 1],
+    ['make-a-splash', 1],
+  ] as const)
+    await earn(page, key, tiers, { seen: true });
+  await signIn(page);
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Badges & level/ }).click();
+  await expect(page).toHaveURL(/\/badges$/);
+  await expect(page.getByTestId('level-card')).toContainText('XP');
+  await expect(page.getByText('Limited time', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Earned', { exact: true })).toBeVisible();
+  await expect(page.getByText('Secret', { exact: true })).toBeVisible();
+  await snap(page, '101-badges');
+
+  // A filter chip narrows the grid.
+  const all = await page.getByTestId('badge-tile').count();
+  await page.getByRole('button', { name: 'Strength' }).click();
+  expect(await page.getByTestId('badge-tile').count()).toBeLessThan(all);
+  await page.getByRole('button', { name: 'All', exact: true }).click();
+
+  // The detail sheet: tiers, friends, pin.
+  await page.locator('[data-testid=badge-tile][data-key=long-haul]').click();
+  const sheet = page.getByRole('dialog', { name: /Badge: Long Haul/ });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByLabel('Tiers')).toContainText('Bronze');
+  await expect(sheet.getByTestId('badge-friends')).toContainText('friend');
+  await snap(page, '102-badge-sheet');
+  await sheet.getByRole('button', { name: 'Pin to profile' }).click();
+  await expect(sheet.getByRole('button', { name: 'Unpin from profile' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  for (const key of ['show-up', 'far-out']) {
+    await page.locator(`[data-testid=badge-tile][data-key=${key}]`).click();
+    await page.getByRole('button', { name: 'Pin to profile' }).click();
+    await expect(page.getByRole('button', { name: 'Unpin from profile' })).toBeVisible();
+    await page.keyboard.press('Escape');
+  }
+  // A fourth is refused with a plain message.
+  await page.locator('[data-testid=badge-tile][data-key=make-a-splash]').click();
+  await page.getByRole('button', { name: 'Pin to profile' }).click();
+  await expect(page.getByText('You can pin up to 3 badges')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The profile shows level and the three pinned badges.
+  await page.goto('/me');
+  await page.getByRole('link', { name: /Your profile/ }).click();
+  const card = page.getByTestId('badges-card');
+  await expect(card).toContainText(/badges earned/);
+  await expect(card.getByLabel(/^Level \d+/)).toBeVisible();
+  await expect(card.getByRole('button')).toHaveCount(3);
+  await expect(card.getByRole('button', { name: /Long Haul/ })).toBeVisible();
+  await snap(page, '103-profile-badges');
+  await card.getByRole('link', { name: 'See all', exact: true }).click();
+  await expect(page).toHaveURL(/\/badges$/);
+});
+
+test("someone else's badges: from their profile, only what they earned", async ({ page }) => {
+  // Dre shares his stats (Maya keeps hers private, so her badges 404 and the card stays away).
+  await earn(page, 'long-haul', 2, { seen: true, email: 'dre@example.com' });
+  await signIn(page);
+  await page.goto('/friends');
+  await page.getByText('Dre Thomas').click();
+  await expect(page.getByTestId('badges-card')).toBeVisible();
+  await page.getByTestId('badges-card').getByRole('link', { name: 'See all', exact: true }).click();
+  await expect(page.getByRole('heading', { name: "Dre's badges" })).toBeVisible();
+  await expect(page.getByTestId('badge-tile').first()).toBeVisible();
+  await expect(page.getByText('In progress')).toHaveCount(0);
+  await snap(page, '104-friend-badges');
+
+  // Maya keeps her stats private: the card just isn't there, and nothing shows as an error.
+  await page.goto('/friends');
+  await page.getByText('Maya Rodriguez').click();
+  await expect(page.getByText('Head to head')).toBeVisible();
+  await expect(page.getByTestId('badges-card')).toHaveCount(0);
+  await expect(page.locator('.error')).toHaveCount(0);
+});
+
+test('level chips sit next to names on standings, friends and the profile', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Friends' }).click();
+  await expect(page.getByText('Maya Rodriguez')).toBeVisible();
+  await expect(page.locator('.item .lvl').first()).toBeVisible();
+  await snap(page, '105-friends-levels');
+  await page.goto('/challenges');
+  await page.getByText('Weekend 100K').click();
+  await expect(page.getByLabel('Top three')).toBeVisible();
+  await expect(page.locator('.item .lvl').first()).toBeVisible();
+  // Nothing wider than the phone.
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+  await snap(page, '106-standings-levels');
+});
+
+test('celebration: gold gets the full-screen moment once, bronze gets a toast', async ({
+  page,
+}) => {
+  await earn(page, 'show-up', 3, { level: 6 });
+  await signIn(page);
+  const cele = page.getByTestId('celebration');
+  await expect(cele).toBeVisible();
+  await expect(cele).toContainText('Gold');
+  await expect(cele).toContainText('Show Up');
+  await expect(cele).toContainText('+95 XP');
+  await expect(cele).toContainText("You're now level 6");
+  await page.waitForTimeout(1600);
+  await snap(page, '107-celebration');
+  await cele.getByRole('button', { name: 'Nice' }).click();
+  await expect(cele).toHaveCount(0);
+  // It was marked seen, so it does not come back.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await page.waitForTimeout(800);
+  await expect(page.getByTestId('celebration')).toHaveCount(0);
+
+  // Bronze: a toast, not a screen.
+  await earn(page, 'make-a-splash', 1);
+  await page.reload();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'You earned Bronze · Make a Splash' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('celebration')).toHaveCount(0);
+  await snap(page, '108-badge-toast');
+});
+
+test('celebration with reduced motion is just the card, and a tap anywhere moves on', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({
+    reducedMotion: 'reduce',
+    viewport: { width: 390, height: 844 },
+    baseURL: 'http://localhost:4173',
+  });
+  const page = await ctx.newPage();
+  await earn(page, 'show-up', 4);
+  await signIn(page);
+  const cele = page.getByTestId('celebration');
+  await expect(cele).toBeVisible();
+  await expect(cele).toContainText('Platinum');
+  await page.mouse.click(40, 400);
+  await expect(cele).toHaveCount(0);
+  await ctx.close();
+});
+
+test('a friend earning gold shows in the feed with its medal', async ({ page }) => {
+  const res = await page.request.post('/api/_e2e/feed-badge', {
+    data: {
+      email: 'maya@example.com',
+      name: 'Million Stepper',
+      tier: 3,
+      tierName: 'gold',
+      icon: 'trophy',
+      more: 2,
+    },
+  });
+  expect(res.ok()).toBe(true);
+  await signIn(page);
+  const row = page.locator('.item', { hasText: 'earned Gold · Million Stepper' });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('+2 more');
+  await expect(row.locator('svg.bi')).toBeVisible();
+  await snap(page, '109-feed-badge');
+  await row.getByRole('link').first().click();
+  await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible();
+  await expect(page.locator('svg.bi')).toBeVisible();
+});
+
+test('Today offers a running limited-time badge, and it opens the badge', async ({ page }) => {
+  await signIn(page);
+  const card = page.getByTestId('limited-badge');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Summer Sprint');
+  await expect(card).toContainText(/Ends in \d+ days/);
+  await snap(page, '110-today-limited');
+  await card.click();
+  const sheet = page.getByRole('dialog', { name: /Summer Sprint/ });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Pin to profile' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.goto('/badges');
+  await expect(page.getByText('Limited time', { exact: true }).first()).toBeVisible();
+});
+
+test('year in review lists the badges you earned in it', async ({ page }) => {
+  await earn(page, 'show-up', 3, { seen: true });
+  await signIn(page);
+  const year = String(new Date().getUTCFullYear());
+  await page.goto(`/review/${year}`);
+  const story = page.getByRole('dialog', { name: `${year} in review` });
+  const card = story.getByTestId('story-card');
+  await page.getByRole('button', { name: 'Next card' }).click();
+  for (let i = 0; i < 14 && !(await card.getByText(/Badges you earned/).isVisible()); i++)
+    await page.keyboard.press('ArrowRight');
+  await expect(card).toContainText('Badges you earned this year');
+  await expect(card).toContainText('Show Up');
+  await snap(page, '111-review-badges');
+});
+
+test('a badge notification opens the badges page, and has its own switch', async ({ page }) => {
+  await page.request.post('/api/_e2e/notify-badge');
+  await signIn(page);
+  await page.getByRole('link', { name: /^Notifications/ }).click();
+  await page
+    .getByRole('button', { name: /Badge earned/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/badges$/);
+  await page.goto('/me/notifications');
+  await expect(page.getByText('Badges you earn')).toBeVisible();
+});
+
+test('Admin → Badges: lists, the editor with its checks, preview, publish and retire', async ({
+  page,
+}) => {
+  await signIn(page, 'riley@example.com');
+  await page.goto('/admin');
+  await page.getByRole('link', { name: /Badges/ }).click();
+  await expect(page).toHaveURL(/\/admin\/badges$/);
+  const list = page.getByTestId('admin-badge-list');
+  await expect(list).toContainText('Long Haul');
+  await expect(list).toContainText('Lifetime steps: 100k · 1M · 5M · 10M');
+  await expect(list).toContainText('Built-in');
+  await snap(page, '112-admin-badges');
+  await page.getByRole('tab', { name: /Drafts/ }).click();
+  await expect(page.getByText('No drafts')).toBeVisible();
+
+  // New badge: checks show inline.
+  await page.getByRole('button', { name: 'New badge' }).click();
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('The name needs 2 to 40 characters.')).toBeVisible();
+  await expect(page.getByText('Give 1 to 4 tiers, each a number above zero.')).toBeVisible();
+
+  await page.getByLabel('Name', { exact: true }).fill('E2E Strider');
+  await expect(page.getByLabel('Key')).toHaveValue('e2e-strider');
+  await page.getByLabel('Description').fill('Walk {n} steps in total.');
+  await page.getByLabel('Tier 1', { exact: true }).fill('1000');
+  await page.getByRole('button', { name: 'Add a tier' }).click();
+  await page.getByLabel('Tier 2', { exact: true }).fill('500');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('Each tier must be bigger than the one before.')).toBeVisible();
+  await page.getByLabel('Tier 2', { exact: true }).fill('50000');
+  await page.getByRole('button', { name: 'Icon rocket' }).click();
+
+  await page.getByRole('button', { name: 'Preview who would earn it' }).click();
+  await expect(page.getByTestId('badge-preview')).toContainText(
+    /Would award \d+ (people|person) now/,
+  );
+  await snap(page, '113-admin-editor');
+
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Key')).toBeDisabled();
+  await page.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Publish this badge?' })).toContainText(
+    'awards it quietly to everyone who already qualifies',
+  );
+  await page.getByRole('dialog').getByRole('button', { name: 'Publish' }).click();
+  await expect(page.getByRole('button', { name: 'Retire' })).toBeVisible();
+  await page.getByRole('button', { name: 'Retire' }).click();
+  await expect(page.getByRole('dialog', { name: 'Retire this badge?' })).toContainText(
+    'People who earned it keep it',
+  );
+  await page.getByRole('dialog').getByRole('button', { name: 'Retire' }).click();
+  await expect(page.getByRole('button', { name: 'Publish again' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('tab', { name: /Retired/ }).click();
+  await expect(page.getByTestId('admin-badge-list')).toContainText('E2E Strider');
+});
+
+test('Admin → Badges → Suggested: status, filters, approve into a draft, dismiss', async ({
+  page,
+}) => {
+  await signIn(page, 'riley@example.com');
+  await page.goto('/admin/badges');
+  await page.getByRole('tab', { name: /Suggested/ }).click();
+  const status = page.getByTestId('import-status');
+  await expect(status).toContainText('Add ANTHROPIC_API_KEY to deploy/.env to turn this on');
+  await expect(page.getByRole('button', { name: 'Check now' })).toBeDisabled();
+  await expect(
+    page.getByText(/community Garmin Badge Database \(garminbadges.com\) by Next Source/),
+  ).toBeVisible();
+
+  const cards = page.getByTestId('suggestion');
+  await expect(cards).toHaveCount(2);
+  const first = cards.filter({ hasText: 'Sunrise Mile' });
+  await expect(first).toContainText('Garmin idea');
+  await expect(first).toContainText('First Light');
+  await expect(first).toContainText(
+    'One run, between 4 am and 7 am, biggest distance: 2 km · 5 km · 10 km',
+  );
+  await expect(first.getByRole('link', { name: 'View on garminbadges.com' })).toHaveAttribute(
+    'href',
+    /garminbadges\.com/,
+  );
+  await snap(page, '114-admin-suggested');
+
+  await page.getByRole('button', { name: /^Skipped/ }).click();
+  await expect(page.getByTestId('suggestion')).toContainText('Gauntlet cannot tell golf');
+  await page.getByRole('button', { name: /^Failed/ }).click();
+  await expect(page.getByTestId('suggestion')).toContainText('did not answer');
+  await page.getByRole('button', { name: /^Matched/ }).click();
+
+  // Quick approve makes a draft straight away.
+  await cards
+    .filter({ hasText: 'Mountain Goat' })
+    .getByRole('button', { name: 'Quick approve' })
+    .click();
+  await expect(cards.filter({ hasText: 'Mountain Goat' })).toHaveCount(0);
+  // Approve opens the editor, prefilled; saving makes it a draft you can preview and publish.
+  await first.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('First Light');
+  await expect(page.getByLabel('Key')).toHaveValue('first-light');
+  await snap(page, '115-admin-approve');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('tab', { name: /Drafts/ }).click();
+  await expect(page.getByTestId('admin-badge-list')).toContainText('First Light');
+  await expect(page.getByTestId('admin-badge-list')).toContainText('Long Weekend');
+  await expect(page.getByTestId('admin-badge-list')).toContainText('Garmin idea');
+});
+
+test('badge admin is for admins only', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/admin/badges');
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+});

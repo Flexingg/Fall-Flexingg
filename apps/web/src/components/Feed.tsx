@@ -4,6 +4,8 @@ import { Link } from 'react-router';
 import { daysLeftText, fmt, timeAgo } from '../lib/format';
 import '../styles/social.css';
 import { Icon } from './Icon';
+import { BadgeIcon } from './BadgeIcon';
+import { LevelChip } from './LevelChip';
 import { ReactionRow } from './Reactions';
 import { Avatar } from './ui';
 
@@ -23,17 +25,32 @@ export function FeedList({ events }: { events: FeedEvent[] }) {
             {e.reactions ? (
               <Link to={`/feed/${e.id}`} className="item-link" aria-label={`Open: ${e.text}`}>
                 <div className="t">{e.text}</div>
-                <small>{[e.source, timeAgo(e.createdAt)].filter(Boolean).join(' · ')}</small>
+                <small>
+                  <LevelChip level={e.actor.level} />
+                  {[e.source, timeAgo(e.createdAt)].filter(Boolean).join(' · ')}
+                </small>
               </Link>
             ) : (
               <>
                 <div className="t">{e.text}</div>
-                <small>{[e.source, timeAgo(e.createdAt)].filter(Boolean).join(' · ')}</small>
+                <small>
+                  <LevelChip level={e.actor.level} />
+                  {[e.source, timeAgo(e.createdAt)].filter(Boolean).join(' · ')}
+                </small>
               </>
             )}
             <ReactionRow event={e} />
           </div>
-          {e.badge && <div className="v num">{e.badge}</div>}
+          {e.badgeEarned ? (
+            <BadgeIcon
+              icon={e.badgeEarned.icon}
+              imageUrl={e.badgeEarned.imageUrl}
+              medal={e.badgeEarned.tierName ?? 'single'}
+              size="md"
+            />
+          ) : (
+            e.badge && <div className="v num">{e.badge}</div>
+          )}
         </div>
       ))}
     </div>

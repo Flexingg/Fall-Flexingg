@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { DisplaySettings } from '../components/DisplaySettings';
 import { Icon } from '../components/Icon';
+import { LevelChip } from '../components/LevelChip';
 import { Avatar, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
 import { del, patch } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -160,6 +161,14 @@ export function MePage() {
           <Link to={`/u/${user.id}`} className="item">
             <Icon name="trophy" size={20} />
             <div className="grow t">Your profile, trophies & stats</div>
+            <Icon name="chevron" size={18} />
+          </Link>
+        )}
+        {!direct && (
+          <Link to="/badges" className="item">
+            <Icon name="target" size={20} />
+            <div className="grow t">Badges & level</div>
+            <LevelChip level={user.level} />
             <Icon name="chevron" size={18} />
           </Link>
         )}

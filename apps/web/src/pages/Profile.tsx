@@ -1,8 +1,10 @@
-import type { AllTimeStats, MeUser, Milestone, ProfileResponse, Trophy } from '@gauntlet/shared';
+import type { AllTimeStats, MeUser, ProfileResponse, Trophy } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { BadgesCard } from '../components/BadgesCard';
 import { Icon } from '../components/Icon';
+import { LevelChip } from '../components/LevelChip';
 import { NudgeButton } from '../components/NudgeButton';
 import { Avatar, Empty, ErrorBox, Header, Screen, toast, Toggle } from '../components/ui';
 import { SkeletonCard, SkeletonGroup, SkeletonLine, SkeletonList } from '../components/Skeleton';
@@ -85,7 +87,10 @@ function Identity({ p }: { p: ProfileResponse }) {
     <div className="card profile-head">
       <Avatar user={u} size={64} me={u.friendship === 'me'} />
       <div className="grow" style={{ minWidth: 0 }}>
-        <h2 className="profile-name">{u.displayName}</h2>
+        <h2 className="profile-name">
+          {u.displayName}
+          <LevelChip level={u.level} />
+        </h2>
         <small className="muted">
           {u.handle ? `@${u.handle} · ` : ''}Member since {monthYear(u.memberSince)}
         </small>
@@ -304,49 +309,16 @@ function Stats({ p }: { p: ProfileResponse }) {
   }
   return (
     <>
-      {p.milestones && <Milestones list={p.milestones} isMe={isMe} />}
+      <BadgesCard
+        userId={p.user.id}
+        isMe={isMe}
+        name={p.user.displayName.split(' ')[0] ?? p.user.displayName}
+      />
       <AllTime s={p.stats} />
       {isMe && <ShareToggle shared={p.shared} />}
     </>
   );
 }
-
-function Milestones({ list, isMe }: { list: Milestone[]; isMe: boolean }) {
-  // Others only see what's been reached; you also see what's next.
-  const shown = isMe ? list : list.filter((m) => m.achieved);
-  if (!shown.length) return null;
-  return (
-    <section>
-      <div className="lbl">Milestones</div>
-      <div className="milestones">
-        {shown.map((m) => (
-          <div
-            key={m.key}
-            className={`milestone${m.achieved ? ' done' : ''}`}
-            aria-label={`${m.label}${m.achieved ? ', reached' : `, ${Math.round(m.progress * 100)}% there`}`}
-          >
-            <Icon name={FAMILY_ICON[m.family]} size={18} />
-            <b>{m.label}</b>
-            {!m.achieved && (
-              <div className="milestone-bar" aria-hidden>
-                <i style={{ width: `${Math.round(m.progress * 100)}%` }} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-const FAMILY_ICON: Record<Milestone['family'], Parameters<typeof Icon>[0]['name']> = {
-  steps: 'steps',
-  distance: 'distance',
-  workouts: 'flame',
-  lifting: 'dumbbell',
-  streak: 'target',
-  wins: 'trophy',
-};
 
 function AllTime({ s }: { s: AllTimeStats }) {
   const t = s.totals;

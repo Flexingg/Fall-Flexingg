@@ -19,3 +19,4 @@ export * from './review.js';
 export * from './stakes.js';
 export * from './format.js';
 export * from './badges.js';
+export * from './badgeText.js';

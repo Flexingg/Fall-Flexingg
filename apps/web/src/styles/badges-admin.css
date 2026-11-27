@@ -1,0 +1,229 @@
+/* Admin → Badges: lists, suggestions and the editor. Builds on admin.css (.adm-form, .adm-overlay). */
+.bda-tabs {
+  margin-top: 4px;
+}
+.bda-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.bda-count {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--line-2);
+  color: var(--text);
+}
+.bda-tabs button[aria-pressed='true'] .bda-count {
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--volt-ink);
+}
+.bda-row {
+  align-items: flex-start;
+  min-height: 72px;
+}
+.bda-rule {
+  display: block;
+  color: var(--volt) !important;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.bda-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.bda-earned {
+  text-align: right;
+}
+.bda-earned b {
+  display: block;
+  font-size: 16px;
+}
+.bda-earned small {
+  margin: 0;
+}
+.bda-sugg .bda-garmin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--line-2);
+}
+.bda-garmin b {
+  font-size: 14px;
+  color: var(--muted);
+}
+.bda-draft {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.bda-draft b {
+  display: block;
+  font-size: 16px;
+}
+.bda-draft small {
+  display: block;
+  margin-top: 2px;
+}
+.bda-kick {
+  display: block;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bda-link {
+  color: var(--volt);
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+  text-decoration: underline;
+}
+.bda-credit {
+  line-height: 1.5;
+  font-size: 11px;
+  padding: 4px 2px 0;
+}
+
+/* Editor */
+.adm-form.one {
+  grid-template-columns: 1fr;
+}
+.adm-form .full {
+  grid-column: 1 / -1;
+}
+.adm-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--card-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  resize: vertical;
+}
+.adm-form input:disabled {
+  opacity: 0.6;
+}
+.bde-hint {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.bde-err {
+  display: block;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.bde-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.bde-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.bde-hero small {
+  display: block;
+}
+.bde-rule {
+  color: var(--volt);
+  font-weight: 600;
+  margin-top: 4px;
+}
+.bde-source {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+.bde-icons {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+.bde-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card-2);
+}
+.bde-icon[aria-pressed='true'] {
+  border-color: var(--volt);
+  background: var(--volt-wash);
+}
+.bde-tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.bde-tiers label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.bde-tiers label > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.bde-tiers input {
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--card-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.bde-check {
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 10px !important;
+}
+.bde-check input {
+  width: 20px !important;
+  height: 20px;
+  margin-top: 1px;
+  accent-color: var(--volt);
+  flex: none;
+}
+.bde-check > span {
+  font-size: 14px !important;
+  color: var(--text) !important;
+  font-weight: 600 !important;
+}
+.bde-adv summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.bde-adv[open] summary {
+  margin-bottom: 6px;
+}
+.bde-preview {
+  border-color: color-mix(in srgb, var(--volt) 40%, var(--line));
+}
