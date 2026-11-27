@@ -28,6 +28,7 @@ import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
 import { ringRoutes } from './routes/rings.js';
 import { statsRoutes } from './routes/stats.js';
+import { healthOriginRoutes } from './routes/healthOrigins.js';
 import { miscRoutes } from './routes/misc.js';
 import { socialRoutes } from './routes/social.js';
 import { notificationRoutes } from './routes/notifications.js';
@@ -121,6 +122,7 @@ export async function buildApp(
   teamRoutes(app, full);
   stakeRoutes(app, full);
   miscRoutes(app, full);
+  healthOriginRoutes(app, full);
   socialRoutes(app, full);
   garminRoutes(app, full);
   connectionRoutes(app, full);

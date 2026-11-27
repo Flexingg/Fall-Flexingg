@@ -3,20 +3,24 @@
  * Gauntlet server ("server", the web app and the full Android app). One place decides, so screens
  * just call these helpers.
  */
-import type {
-  SyncResponse,
-  ConnectionInfo,
-  ConnectionsResponse,
-  ConnectResult,
-  GarminLoginResult,
-  GarminStatus,
-  MeUser,
-  ProviderId,
-  UserSettings,
+import {
+  addDays,
+  todayIn,
+  type HcOrigin,
+  type SyncResponse,
+  type ConnectionInfo,
+  type ConnectionsResponse,
+  type ConnectResult,
+  type GarminLoginResult,
+  type GarminStatus,
+  type MeUser,
+  type ProviderId,
+  type UserSettings,
 } from '@gauntlet/shared';
 import { DirectBackend } from './direct/DirectBackend';
 import { secret } from './direct/secret';
 import { get, post, patch } from './api';
+import { saveOrigins } from './hcOrigins';
 import { deviceLocale, timezone } from './platform';
 import { storage } from './storage';
 import { publishWallpaper } from './wallpaper';
@@ -96,6 +100,26 @@ export async function updateSettings(settings: Partial<UserSettings>): Promise<M
 export async function sendHealthRecords(records: Record<string, unknown>[]): Promise<void> {
   if (session.direct) await session.direct.ingest(records);
   else await post('/api/ingest/health-connect', { records });
+}
+
+/** The server refuses origins older than this (a bit under what it allows, for clock skew). */
+const ORIGIN_MAX_AGE_DAYS = 700;
+const ORIGIN_BATCH = 500;
+
+/**
+ * Send which Health Connect apps wrote each day's data: to the Gauntlet server, or kept on the phone
+ * in direct mode. Days too old for the server to take are left out.
+ */
+export async function sendHealthOrigins(origins: HcOrigin[]): Promise<void> {
+  const today = todayIn(timezone);
+  const oldest = addDays(today, -ORIGIN_MAX_AGE_DAYS);
+  const sendable = origins.filter((o) => o.date >= oldest && o.date <= addDays(today, 1));
+  if (!sendable.length) return;
+  if (session.direct) return saveOrigins(sendable, today);
+  for (let i = 0; i < sendable.length; i += ORIGIN_BATCH)
+    await post('/api/ingest/health-connect/origins', {
+      origins: sendable.slice(i, i + ORIGIN_BATCH),
+    });
 }
 
 /** Garmin Connect, linked inside SparkyFitness. Same calls whether or not a Gauntlet server is in between. */
