@@ -1,0 +1,43 @@
+/* Bottom sheets you can swipe away (see lib/useSheetDrag.ts). */
+.bd-sheet,
+.qr-sheet {
+  /* Vertical pans are ours to read; sideways ones stay with the browser. No bounce-through to the page. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+.sheet-handle {
+  display: block;
+  width: 100%;
+  height: 32px;
+  /* Pull the larger hit area up into the sheet's top padding. */
+  margin: -14px 0 -2px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 12px;
+  cursor: grab;
+  /* The browser must not take this gesture for a scroll. */
+  touch-action: none;
+  position: relative;
+}
+.sheet-handle i {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;
+  border-radius: 4px;
+  background: var(--line-2);
+}
+.sheet-handle:active {
+  cursor: grabbing;
+}
+.sheet-handle:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: -2px;
+}
+.sheet-handle:focus-visible i,
+.sheet-handle:hover i {
+  background: var(--muted);
+}

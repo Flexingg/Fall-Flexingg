@@ -74,7 +74,7 @@
   align-items: flex-end;
   justify-content: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, calc(0.75 * var(--sheet-dim, 1)));
 }
 .qr-sheet {
   width: 100%;

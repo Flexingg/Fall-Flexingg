@@ -1,7 +1,8 @@
 /**
- * One badge, big: the medal, what it takes, every tier with the day you got it, where it happened
- * (links to the challenge), how many friends have it, and, on your own earned badges, pin to your
- * profile (three at most) and share a picture.
+ * One badge, big: the medal, what it takes, "Your status" (where you stand right now and what's next,
+ * own badges only), every tier with the day and way you got it (links to the challenge), how many
+ * friends have it, and, on your own earned badges, pin to your profile (three at most) and share a
+ * picture. Swipe the sheet down (or tap the grab bar) to close it.
  */
 import { tierName, todayIn, type BadgeView } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,12 +12,15 @@ import { ApiError, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { badgeKeys, useBadgeDetail } from '../lib/badgeQueries';
 import { shareBadge, toastForShare } from '../lib/badgeShare';
-import { endsText, earnedLine, progressPct } from '../lib/badges';
+import { bestPct, endsText, earnedLine, progressPct } from '../lib/badges';
 import { fmtDate, fmtInt } from '../lib/format';
+import { useSheetDrag } from '../lib/useSheetDrag';
 import { BadgeIcon, medalOf } from './BadgeIcon';
 import { Icon } from './Icon';
+import { SheetHandle } from './SheetHandle';
 import { toast } from './ui';
 import '../styles/badges.css';
+import '../styles/badgeTimeline.css';
 
 const day = (iso: string) => fmtDate(iso, { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -45,6 +49,7 @@ export function BadgeSheet({
   const [busy, setBusy] = useState(false);
   const b = q.data?.badge ?? initial;
   const own = user?.id === userId;
+  const drag = useSheetDrag(onClose);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -55,14 +60,15 @@ export function BadgeSheet({
   if (!b) {
     return (
       <div
+        ref={drag.overlayRef}
         className="bd-overlay"
         role="dialog"
         aria-modal="true"
         aria-label="Badge"
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
-        <div className="bd-sheet stack">
-          <div className="bd-grab" />
+        <div ref={drag.sheetRef} className="bd-sheet stack">
+          <SheetHandle drag={drag} />
           {q.error instanceof ApiError ? (
             <div className="error">{q.error.message}</div>
           ) : (
@@ -111,33 +117,39 @@ export function BadgeSheet({
     if (msg) toast(msg);
   }
 
-  const contexts = (q.data?.history ?? []).flatMap((h) => {
-    const c = h.context as { challengeId?: string; challengeName?: string; date?: string };
-    const out: { key: string; to?: string; label: string }[] = [];
-    if (c.challengeId)
-      out.push({
-        key: `${h.tier}-c`,
-        to: `/c/${c.challengeId}`,
-        label: c.challengeName ?? 'The challenge',
-      });
-    if (c.date)
-      out.push({
-        key: `${h.tier}-d`,
-        label: fmtDate(c.date, { month: 'short', day: 'numeric', year: 'numeric' }),
-      });
-    return out;
-  });
+  const history = q.data?.history ?? [];
+  const byTier = new Map(history.map((h) => [h.tier, h]));
+  // Plain chips only for entries the server had no "how" for.
+  const contexts = history
+    .filter((h) => !h.how)
+    .flatMap((h) => {
+      const c = h.context as { challengeId?: string; challengeName?: string; date?: string };
+      const out: { key: string; to?: string; label: string }[] = [];
+      if (c.challengeId)
+        out.push({
+          key: `${h.tier}-c`,
+          to: `/c/${c.challengeId}`,
+          label: c.challengeName ?? 'The challenge',
+        });
+      if (c.date)
+        out.push({
+          key: `${h.tier}-d`,
+          label: fmtDate(c.date, { month: 'short', day: 'numeric', year: 'numeric' }),
+        });
+      return out;
+    });
 
   return (
     <div
+      ref={drag.overlayRef}
       className="bd-overlay"
       role="dialog"
       aria-modal="true"
       aria-label={b.hidden ? 'Secret badge' : `Badge: ${b.name}`}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bd-sheet stack" style={{ gap: 16 }}>
-        <div className="bd-grab" />
+      <div ref={drag.sheetRef} className="bd-sheet stack" style={{ gap: 16 }}>
+        <SheetHandle drag={drag} />
         <div className="bd-sheet-top">
           <BadgeIcon
             icon={b.icon}
@@ -157,17 +169,52 @@ export function BadgeSheet({
           {b.window && !earned && <small className="bd-ends">{endsText(b.window, today)}</small>}
         </div>
 
+        {own && !b.hidden && q.data?.standing && (
+          <section className="bd-status" aria-label="Your status" data-testid="badge-status">
+            <div className="lbl">
+              <span>Your status</span>
+            </div>
+            {q.data.standing.stats.map((st) => (
+              <div key={`${st.kind}-${st.label}`} className="bd-stat" data-kind={st.kind}>
+                <div className="grow">
+                  <span>{st.label}</span>
+                  {st.detail &&
+                    (st.to ? (
+                      <Link to={st.to} onClick={onClose}>
+                        {st.detail} <Icon name="chevron" size={11} />
+                      </Link>
+                    ) : (
+                      <small>{st.detail}</small>
+                    ))}
+                </div>
+                <b className="num">{st.value}</b>
+              </div>
+            ))}
+            {q.data.standing.next && <p className="bd-next">{q.data.standing.next}</p>}
+          </section>
+        )}
+
         {b.progress && (
-          <div>
+          <div data-testid="badge-progress">
             <div className="row" style={{ justifyContent: 'space-between', fontSize: 13 }}>
-              <span className="muted">Next tier</span>
+              <span className="muted">{b.tiers.length > 1 ? 'Next tier' : 'Progress'}</span>
               <b className="num">{b.progress.label}</b>
             </div>
-            <div className="track">
+            <div className="track bd-track">
               <i
                 style={{ width: `${Math.round(progressPct(b) * 100)}%`, background: 'var(--volt)' }}
               />
+              {b.progress.best != null && b.progress.best > b.progress.value && (
+                <u
+                  className="bd-best"
+                  aria-hidden
+                  style={{ left: `${Math.round(bestPct(b.progress) * 100)}%` }}
+                />
+              )}
             </div>
+            {b.progress.best != null && (
+              <small className="muted bd-best-cap num">Best: {fmtInt(b.progress.best)}</small>
+            )}
           </div>
         )}
 
@@ -176,6 +223,8 @@ export function BadgeSheet({
             {b.tiers.map((t) => {
               const done = t.tier <= b.tier;
               const tn = tierName(t.tier, b.tiers.length);
+              const h = byTier.get(t.tier);
+              const when = done ? (h?.date ?? t.earnedAt) : null;
               return (
                 <div key={t.tier} className={`bd-rung${done ? '' : ' todo'}`}>
                   <BadgeIcon
@@ -186,12 +235,28 @@ export function BadgeSheet({
                   />
                   <div className="grow">
                     <div className="t">
-                      {tn ? `${tn.charAt(0).toUpperCase()}${tn.slice(1)}` : 'Earned'}
+                      {tn
+                        ? `${tn.charAt(0).toUpperCase()}${tn.slice(1)}`
+                        : done
+                          ? 'Earned'
+                          : 'Goal'}
                     </div>
                     <small>{t.label}</small>
+                    {done && h?.how && (
+                      <small className="bd-how">
+                        {h.to ? (
+                          <Link to={h.to} onClick={onClose}>
+                            {h.how} <Icon name="chevron" size={11} />
+                          </Link>
+                        ) : (
+                          h.how
+                        )}
+                      </small>
+                    )}
                   </div>
-                  <small className="num">
-                    {done ? (t.earnedAt ? day(t.earnedAt) : 'Earned') : `+${t.xp} XP`}
+                  <small className="num bd-when">
+                    {done ? (when ? day(when) : 'Earned') : `+${t.xp} XP`}
+                    {done && <em>+{t.xp} XP</em>}
                   </small>
                 </div>
               );
