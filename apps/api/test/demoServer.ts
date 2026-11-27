@@ -28,6 +28,7 @@ import { createDraftBadge, publishBadge } from '../src/services/badges/admin.js'
 import { seedBadges } from '../src/services/badges/seed.js';
 import { settleBadgeTasks } from '../src/services/badges/tasks.js';
 import { refreshDemo } from '../src/services/demo.js';
+import { historyTuning } from '../src/services/historyImport.js';
 import { notify } from '../src/services/notify.js';
 import { SparkyClient } from '@gauntlet/sparky';
 import { FakeSparky, type FakeUser } from '@gauntlet/sparky/testing';
@@ -345,6 +346,24 @@ app.post<{
       more: b.more ?? 0,
     },
   });
+  return { ok: true };
+});
+// History import: years of older readings (and Garmin linked) for a freshly signed-up account, and
+// a pace quick enough for a browser test yet slow enough to watch the progress move.
+historyTuning.paceMs = 100;
+historyTuning.rateBackoffMs = 0;
+app.post<{ Body: { email: string } }>('/api/_e2e/seed-history', async (req) => {
+  const u = [...fake.users.values()].find((x) => x.email === req.body.email.toLowerCase());
+  if (!u) throw new Error('no such user');
+  for (let i = 20; i <= 4 * 365 + 120; i += 6)
+    u.daily.push({
+      entry_date: d(-i),
+      source_provider: 'garmin',
+      total_steps: 6000 + (i % 5) * 900,
+      total_distance_meters: 4500 + (i % 7) * 600,
+    });
+  u.daily.push({ entry_date: d(-900), source_provider: 'garmin', total_steps: 41_000 });
+  u.garmin = { linkedAt: new Date().toISOString(), syncs: 0 };
   return { ok: true };
 });
 app.post('/api/_e2e/notify-badge', async () => {

@@ -1,6 +1,7 @@
 import type { MeUser } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
 import { Connections } from '../components/Connections';
+import { HistoryImport } from '../components/HistoryImport';
 import { Icon } from '../components/Icon';
 import { ErrorBox, Header, Screen, Skeleton, toast, Toggle } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -71,6 +72,8 @@ export function SourcesPage() {
       {!user?.demo && <Connections />}
 
       {!user?.demo && mode !== 'direct' && <SourcePriority />}
+
+      {!user?.demo && <HistoryImport />}
 
       <div className="lbl">Synced into SparkyFitness</div>
       {q.isPending ? (

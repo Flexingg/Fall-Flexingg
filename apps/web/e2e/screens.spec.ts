@@ -1793,3 +1793,69 @@ test('badge admin is for admins only', async ({ page }) => {
   await page.goto('/admin/badges');
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 });
+
+test('imports history from the data sources screen', async ({ page }) => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+  // A new account (so the shared cast keeps its numbers) with years of readings and Garmin linked.
+  const email = `history-${Date.now()}@example.com`;
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await page.getByLabel('Name').fill('Harper History');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('history-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  const seeded = await page.request.post('/api/_e2e/seed-history', { data: { email } });
+  expect(seeded.ok()).toBe(true);
+
+  await page.goto('/sources');
+  const card = page.locator('#history-import');
+  await expect(
+    card.getByText('Imports your older data so Trends, records and badges'),
+  ).toBeVisible();
+  await card.scrollIntoViewIfNeeded();
+  await snap(page, '140-history-import');
+
+  await card.getByRole('button', { name: '5 years' }).click();
+  await expect(card.getByRole('button', { name: '5 years' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await card.getByRole('button', { name: 'Import history' }).click();
+  await expect(card.getByRole('button', { name: 'Cancel import' })).toBeVisible();
+  await expect(card.getByRole('progressbar', { name: /Garmin/ })).toBeVisible();
+  await card.scrollIntoViewIfNeeded();
+  await snap(page, '141-history-progress');
+
+  await expect(card.getByText('Import finished')).toBeVisible({ timeout: 60_000 });
+  await expect(card.getByText(/Added .* of data/)).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Import history' })).toBeEnabled();
+  await card.scrollIntoViewIfNeeded();
+  await snap(page, '142-history-done');
+
+  // The older data now counts: the 41,000-step day is a record on the profile.
+  await page.goto('/trends');
+  await expect(page.getByRole('heading', { name: 'Trends' })).toBeVisible();
+  await snap(page, '143-trends-after-history');
+});
+
+test('cancelling an import keeps what came in', async ({ page }) => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+  const email = `history-cancel-${Date.now()}@example.com`;
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await page.getByLabel('Name').fill('Cam Cancel');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('history-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await page.request.post('/api/_e2e/seed-history', { data: { email } });
+
+  await page.goto('/sources');
+  const card = page.locator('#history-import');
+  await card.getByRole('button', { name: '5 years' }).click();
+  await card.getByRole('button', { name: 'Import history' }).click();
+  await card.getByRole('button', { name: 'Cancel import' }).click();
+  await expect(card.getByText(/Import stopped/)).toBeVisible({ timeout: 30_000 });
+  await snap(page, '144-history-cancelled');
+});

@@ -40,6 +40,7 @@ export const keys = {
   sources: ['sources'] as const,
   garmin: ['garmin'] as const,
   connections: ['connections'] as const,
+  history: ['history-import'] as const,
   customMetrics: ['custom-metrics'] as const,
   lifts: ['lifts'] as const,
   fast: ['fast'] as const,

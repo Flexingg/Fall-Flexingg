@@ -410,9 +410,24 @@ export async function syncProvider(
   days: number,
   now: Date = new Date(),
 ): Promise<void> {
-  const spec = SPECS[id];
   const end = todayIn('UTC', now);
-  const start = addDays(end, -days);
+  await syncProviderRange(client, token, id, addDays(end, -days), end);
+}
+
+/**
+ * Pull one date range from the provider into SparkyFitness (history import calls this chunk by
+ * chunk). Apps with no date filter (Hevy) fetch everything with `full`; apps that only hand over
+ * recent days (Polar) ignore the range, as SparkyFitness does.
+ */
+export async function syncProviderRange(
+  client: SparkyClient,
+  token: string,
+  id: ProviderId,
+  start: string,
+  end: string,
+  opts: { full?: boolean } = {},
+): Promise<void> {
+  const spec = SPECS[id];
   if (id === 'garmin') {
     await guard(id, () => client.garminSync(token, start, end));
     return;
@@ -420,7 +435,7 @@ export async function syncProvider(
   if (!spec.route) return;
   await guard(id, () =>
     client.integration('POST', token, spec.route!, 'sync', {
-      body: { startDate: start, endDate: end },
+      body: { startDate: start, endDate: end, ...(opts.full ? { fullSync: true } : {}) },
       timeoutMs: 240_000,
     }),
   );
