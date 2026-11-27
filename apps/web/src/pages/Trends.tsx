@@ -327,7 +327,7 @@ function scaleTrends(t: TrendsResponse, k: number): TrendsResponse {
 
 /** "km", "bpm avg", "kg best" … how the headline number is combined over the range. */
 function suffix(d: Pick<TrendDefInfo, 'unit' | 'aggregate'>): string {
-  const word = { sum: '', avg: 'avg', max: 'best', last: 'latest' }[d.aggregate];
+  const word = { sum: '', avg: 'avg', max: 'best', min: 'lowest', last: 'latest' }[d.aggregate];
   return [d.unit, word].filter(Boolean).join(' ');
 }
 

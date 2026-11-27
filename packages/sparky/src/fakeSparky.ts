@@ -553,6 +553,33 @@ export class FakeSparky {
             updated_at: new Date().toISOString(),
           });
         }
+        // Like SparkyFitness: body fat, height (to cm) and resting energy join the day's check-in,
+        // and total calories burned goes in the daily summary.
+        const column = (
+          {
+            body_fat: 'body_fat_percentage',
+            BodyFat: 'body_fat_percentage',
+            Height: 'height',
+          } as const
+        )[r.type as string];
+        if ((column || r.type === 'bmr' || r.type === 'BasalMetabolicRate') && r.date) {
+          const row: CheckInRow = user.checkIns.find((c) => c.entry_date === r.date) ?? {
+            entry_date: r.date,
+            updated_at: new Date().toISOString(),
+          };
+          if (!user.checkIns.includes(row)) user.checkIns.push(row);
+          const v = Number(r.value);
+          if (column === 'height') row.height = r.unit === 'm' ? v * 100 : v;
+          else if (column) row.body_fat_percentage = v;
+          else row.bmr = v;
+        }
+        if ((r.type === 'TotalCaloriesBurned' || r.type === 'total_calories') && r.date) {
+          const src = String(r.source ?? 'Health Connect');
+          user.daily = user.daily.filter(
+            (d) => !(d.entry_date === r.date && d.source_provider === src),
+          );
+          user.daily.push({ entry_date: r.date, source_provider: src, total_calories: r.value });
+        }
       }
       return json(200, {
         message: 'ok',

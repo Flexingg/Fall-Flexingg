@@ -210,6 +210,24 @@ users.you!.custom['cat-mood'] = Array.from({ length: 14 }, (_, i) => ({
   value: String(5 + ((i * 3) % 5)),
   timestamp: `${d(i - 13)}T20:00:00Z`,
 }));
+// Health Connect readings (private to Alex), for the day screen and Trends.
+users.you!.categories.push({
+  id: 'cat-hrv',
+  name: 'hrv',
+  frequency: 'Daily',
+  data_type: 'numeric',
+});
+users.you!.custom['cat-hrv'] = Array.from({ length: 14 }, (_, i) => ({
+  date: d(i - 13),
+  value: String(44 + ((i * 7) % 13)),
+  timestamp: `${d(i - 13)}T06:00:00Z`,
+}));
+for (let i = 0; i < 14; i++)
+  users.you!.daily.push({
+    entry_date: d(i - 13),
+    source_provider: 'health_connect',
+    total_calories: 2400 + i * 20,
+  });
 for (let i = 0; i < 14; i += 3)
   users.you!.checkIns.push({
     entry_date: d(i - 13),

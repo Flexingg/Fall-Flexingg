@@ -224,17 +224,45 @@ const SECTION_METRICS: { key: string; label: string; metrics: string[] }[] = [
   {
     key: 'activity',
     label: 'Activity',
-    metrics: ['steps', 'distance', 'active_minutes', 'active_calories', 'workouts'],
+    metrics: [
+      'steps',
+      'distance',
+      'active_minutes',
+      'active_calories',
+      'total_calories',
+      'floors',
+      'workouts',
+    ],
   },
-  { key: 'sleep', label: 'Sleep and heart', metrics: ['sleep', 'resting_hr'] },
+  {
+    key: 'sleep',
+    label: 'Sleep, heart and vitals',
+    metrics: [
+      'sleep',
+      'resting_hr',
+      'hr_avg',
+      'hr_min',
+      'hr_max',
+      'hrv',
+      'respiratory_rate',
+      'spo2',
+      'vo2_max',
+      'bp_systolic',
+      'bp_diastolic',
+      'blood_glucose',
+      'body_temp',
+      'basal_body_temp',
+    ],
+  },
   {
     key: 'nutrition',
     label: 'Food and water',
-    metrics: ['calories_in', 'protein', 'carbs', 'fat', 'water'],
+    metrics: ['calories_in', 'protein', 'carbs', 'fat', 'water', 'food_energy'],
   },
   { key: 'strength', label: 'Strength', metrics: ['lift_sets', 'lift_volume'] },
   { key: 'fasting', label: 'Fasting', metrics: ['fast_hours', 'fasts_completed'] },
-  { key: 'body', label: 'Body', metrics: ['weight'] },
+  { key: 'body', label: 'Body', metrics: ['weight', 'body_fat', 'height', 'bmr'] },
+  { key: 'mind', label: 'Mind', metrics: ['mindful_minutes'] },
 ];
 
 /** Where a person's own food goals live (stored per day next to the stats). */
@@ -247,8 +275,8 @@ const GOAL_METRIC: Record<string, string> = {
 };
 
 /**
- * Every stat the person has for one day, in sections (activity, sleep and heart, food and water,
- * strength, fasting, body, then custom measurements), each against their own goal where one exists.
+ * Every stat the person has for one day, in sections (activity, sleep heart and vitals, food and
+ * water, strength, fasting, body, mind, then custom measurements), each against their own goal where one exists.
  * `rows` must be the person's own: weight and the rest are only ever shown to their owner.
  */
 export function buildDay(opts: {

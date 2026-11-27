@@ -5,6 +5,7 @@
 import {
   addDays,
   BUILTIN_METRICS,
+  HEALTH_METRIC_KEYS,
   HIDDEN_METRICS,
   isCustomMetric,
   isLiftMetric,
@@ -12,6 +13,7 @@ import {
   minDate,
   todayIn,
   type MetricAggregate,
+  type MetricDetail,
   type WorkoutSummary,
 } from '@gauntlet/shared';
 import { and, eq, gte, inArray, lte } from 'drizzle-orm';
@@ -223,6 +225,8 @@ export async function storeWindow(
   const managed = new Set<string>([
     ...BUILTIN_METRICS,
     ...HIDDEN_METRICS,
+    // Health Connect readings: a value SparkyFitness no longer has is dropped like any other.
+    ...HEALTH_METRIC_KEYS,
     ...Object.keys(scope.customMetrics).map((n) => `custom:${n}`),
     ...scope.lifts.flatMap((l) => [`lift_max:${l}`, `lift_e1rm:${l}`]),
   ]);
@@ -287,6 +291,19 @@ export interface Change {
   source: string | null;
 }
 
+/** Same explanation (jsonb doesn't keep key order, so compare field by field). */
+function sameDetail(a: MetricDetail | null | undefined, b: MetricDetail | null | undefined) {
+  if (!a || !b) return !a && !b;
+  return (
+    a.rule === b.rule &&
+    (a.order ?? null) === (b.order ?? null) &&
+    a.candidates.length === b.candidates.length &&
+    a.candidates.every(
+      (c, i) => c.source === b.candidates[i]!.source && c.value === b.candidates[i]!.value,
+    )
+  );
+}
+
 /** Upsert merged values and drop values SparkyFitness no longer has. Returns what changed. */
 async function store(
   ctx: AppContext,
@@ -308,19 +325,25 @@ async function store(
         lte(dailyMetrics.date, end),
       ),
     );
-  const before = new Map(existing.map((r) => [`${r.date}|${r.metric}`, r.value]));
+  const before = new Map(existing.map((r) => [`${r.date}|${r.metric}`, r]));
 
   const changes: Change[] = [];
+  const explained: MergedValue[] = [];
   const seen = new Set<string>();
   for (const m of merged) {
     const k = `${m.date}|${m.metric}`;
     seen.add(k);
     const prev = before.get(k);
-    if (prev === m.value) continue;
+    if (prev && prev.value === m.value) {
+      // Same number, but the winning source or the explanation may have moved. That is not a
+      // change (no feed post, no notification): just keep what we show for it up to date.
+      if (prev.source !== m.source || !sameDetail(prev.detail, m.detail)) explained.push(m);
+      continue;
+    }
     changes.push({
       date: m.date,
       metric: m.metric,
-      before: prev ?? 0,
+      before: prev?.value ?? 0,
       after: m.value,
       source: m.source,
     });
@@ -340,12 +363,30 @@ async function store(
           metric: m.metric,
           value: m.value,
           source: m.source,
+          detail: m.detail ?? null,
           updatedAt: ctx.now(),
         })
         .onConflictDoUpdate({
           target: [dailyMetrics.userId, dailyMetrics.date, dailyMetrics.metric],
-          set: { value: m.value, source: m.source, updatedAt: ctx.now() },
+          set: {
+            value: m.value,
+            source: m.source,
+            detail: m.detail ?? null,
+            updatedAt: ctx.now(),
+          },
         });
+    }
+    for (const m of explained) {
+      await tx
+        .update(dailyMetrics)
+        .set({ source: m.source, detail: m.detail ?? null })
+        .where(
+          and(
+            eq(dailyMetrics.userId, userId),
+            eq(dailyMetrics.date, m.date),
+            eq(dailyMetrics.metric, m.metric),
+          ),
+        );
     }
     for (const r of removed) {
       await tx

@@ -210,8 +210,12 @@ export function formatQuantity(
   if (!usable(value)) return '–';
   const q = toDisplayUnit(value, unit, decimals, prefs.units);
   const text = formatNumber(q.value, prefs, q.decimals);
-  return withUnit && q.unit ? `${text} ${q.unit}` : text;
+  return withUnit && q.unit ? joinUnit(text, q.unit) : text;
 }
+
+/** "97%" and "36.6°C" sit tight against the number; every other unit has a space ("62 bpm"). */
+const joinUnit = (text: string, unit: string): string =>
+  /^[%°]/.test(unit) ? `${text}${unit}` : `${text} ${unit}`;
 
 /** Like formatQuantity, but whole values drop their decimals ("5 km", "5.2 km"): for running text. */
 export function formatQuantityFlexible(
@@ -223,7 +227,7 @@ export function formatQuantityFlexible(
   if (!usable(value)) return '–';
   const q = toDisplayUnit(value, unit, maxDecimals, prefs.units);
   const text = formatFlexible(q.value, prefs, q.decimals);
-  return q.unit ? `${text} ${q.unit}` : text;
+  return q.unit ? joinUnit(text, q.unit) : text;
 }
 
 type Fmt = Pick<DisplayPrefs, 'units' | 'locale'>;

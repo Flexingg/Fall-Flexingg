@@ -6,6 +6,7 @@ import {
   buildTrends,
   buildWallpaper,
   DEFAULT_PRIORITY_KEY,
+  HEALTH_CATEGORY_NAMES,
   isMetricKey,
   metricDef,
   PRIORITY_METRIC_KEYS,
@@ -316,7 +317,12 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
     const user = await getUser(ctx, req.userId);
     if (user.isDemo) return [];
     const cats = await ctx.sparky.customCategories(sparkyToken(ctx, user));
-    const builtin = new Set([...DISTANCE_CATEGORIES, ...RESTING_HR_CATEGORIES]);
+    // Health Connect readings are private to their owner: never offered as a challenge metric.
+    const builtin = new Set([
+      ...DISTANCE_CATEGORIES,
+      ...RESTING_HR_CATEGORIES,
+      ...HEALTH_CATEGORY_NAMES,
+    ]);
     return cats
       .filter((c) => (c.data_type ?? 'numeric') === 'numeric' && !builtin.has(c.name.toLowerCase()))
       .filter((c) => isMetricKey(`custom:${c.name.toLowerCase()}`))

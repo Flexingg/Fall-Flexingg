@@ -56,12 +56,23 @@ export interface DailyHealthRow {
   moderate_intensity_minutes?: number | null;
   vigorous_intensity_minutes?: number | null;
   resting_heart_rate?: number | null;
+  /** Health Connect readings kept in the daily summary (0.17). */
+  total_calories?: number | string | null;
+  floors_ascended?: number | string | null;
+  vo2_max?: number | string | null;
+  bmr_calories?: number | string | null;
 }
 
 export interface CheckInRow {
   entry_date: string;
   steps?: number | string | null;
   weight?: number | string | null;
+  /** Percent, as SparkyFitness stores a Health Connect BodyFat record. */
+  body_fat_percentage?: number | string | null;
+  /** Centimetres. */
+  height?: number | string | null;
+  /** Resting energy, kcal per day. */
+  bmr?: number | string | null;
   updated_at?: string;
 }
 

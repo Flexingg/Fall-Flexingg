@@ -2429,24 +2429,33 @@ test.describe('rings, day stats and badges on Today', () => {
     await expect(page.getByTestId('display-preview')).toContainText('km');
   });
 
-  test('level and badges are one tap from Today and the profile', async ({ page }) => {
+  test('health readings show on the day screen and Trends, for their owner', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/day');
+    await expect(page.getByText('Sleep, heart and vitals')).toBeVisible();
+    await expect(page.getByText('Heart rate variability')).toBeVisible();
+    await expect(page.getByText('Total calories burned')).toBeVisible();
+    await snap(page, '170-day-health');
+    await page.goto('/trends');
+    await expect(page.getByLabel('Metric')).toBeVisible();
+    await expect(
+      page.getByLabel('Metric').locator('option', { hasText: 'Heart rate variability' }),
+    ).toHaveCount(1);
+  });
+
+  test('level is one tap from Today and the profile, without a badge card', async ({ page }) => {
     await signIn(page);
     const pill = page.getByTestId('level-pill');
     await expect(pill).toBeVisible();
     await expect(pill).toContainText(/Lv \d+/);
-    const card = page.getByTestId('badges-today');
-    await expect(card).toBeVisible();
-    await expect(card).toContainText(/XP/);
+    await expect(page.getByTestId('badges-today')).toHaveCount(0);
     await snap(page, '163-today-badges');
 
-    await card.click();
-    await expect(page.getByRole('heading', { name: /Badges/ }).first()).toBeVisible();
-    await expect(page).toHaveURL(/\/badges$/);
-
     await page.goto('/me');
-    await expect(page.getByTestId('badges-today')).toBeVisible();
-    await page.goto('/');
+    await expect(page.getByTestId('level-pill')).toBeVisible();
+    await expect(page.getByTestId('badges-today')).toHaveCount(0);
     await page.getByTestId('level-pill').click();
+    await expect(page.getByRole('heading', { name: /Badges/ }).first()).toBeVisible();
     await expect(page).toHaveURL(/\/badges$/);
   });
 });

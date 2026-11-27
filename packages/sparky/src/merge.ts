@@ -19,10 +19,17 @@ import {
   epley1rm,
   formatFlexible,
   formatQuantityFlexible,
+  HEALTH_CATEGORY_NAMES,
+  healthMetricOfCategory,
+  HEALTH_METRICS,
+  isHealthMetric,
   todayIn,
   type DisplayPrefs,
   type ChallengeEvent,
+  type HealthMetricDef,
+  type MergeRule,
   type MetricAggregate,
+  type MetricDetail,
 } from '@gauntlet/shared';
 import type {
   CheckInRow,
@@ -44,6 +51,8 @@ export interface MergedValue {
   metric: string;
   value: number;
   source: string | null;
+  /** Every source's value for the day and why the stored one won (see MetricDetail). */
+  detail?: MetricDetail;
 }
 
 export interface MergeInput {
@@ -147,11 +156,29 @@ export const RESTING_HR_CATEGORIES = [
 export const ACTIVE_CALORIES_ENTRY = 'active calories';
 
 export function wantedCategoryNames(customMetrics: Record<string, MetricAggregate>): string[] {
-  return [...DISTANCE_CATEGORIES, ...RESTING_HR_CATEGORIES, ...Object.keys(customMetrics)];
+  return [
+    ...DISTANCE_CATEGORIES,
+    ...RESTING_HR_CATEGORIES,
+    ...HEALTH_CATEGORY_NAMES,
+    ...Object.keys(customMetrics),
+  ];
 }
 
 /** Lower rank wins first; within a rank the highest value wins. */
-type Candidate = { value: number; source: string | null; rank: number };
+type Candidate = {
+  value: number;
+  source: string | null;
+  rank: number;
+  /** Worked out from many entries (food totals, workouts, sets...) rather than read as-is. */
+  combined: boolean;
+};
+
+/** A winner and why it won. */
+interface Decision {
+  winner: Candidate;
+  rule: MergeRule;
+  order?: 'metric' | 'default';
+}
 
 class DayTable {
   private readonly map = new Map<string, Map<string, Candidate[]>>();
@@ -167,6 +194,7 @@ class DayTable {
     value: unknown,
     source: string | null,
     rank = 0,
+    combined = false,
   ) {
     const d = normDate(date);
     const v = num(value);
@@ -174,7 +202,7 @@ class DayTable {
     let byMetric = this.map.get(d);
     if (!byMetric) this.map.set(d, (byMetric = new Map()));
     const list = byMetric.get(metric) ?? [];
-    list.push({ value: v, source, rank });
+    list.push({ value: v, source, rank, combined });
     byMetric.set(metric, list);
   }
 
@@ -187,12 +215,12 @@ class DayTable {
     return Object.fromEntries(Object.entries(seen).map(([m, set]) => [m, [...set].sort()]));
   }
 
-  collect(pick: (metric: string, candidates: Candidate[]) => Candidate | null): MergedValue[] {
+  collect(pick: (metric: string, candidates: Candidate[]) => Decision | null): MergedValue[] {
     const out: MergedValue[] = [];
     for (const [date, byMetric] of this.map) {
       for (const [metric, candidates] of byMetric) {
-        const chosen = pick(metric, candidates);
-        if (chosen) out.push({ date, metric, value: round(chosen.value), source: chosen.source });
+        const d = pick(metric, candidates);
+        if (d) out.push(toMerged(date, metric, candidates, d));
       }
     }
     return out.sort((a, b) =>
@@ -203,6 +231,32 @@ class DayTable {
 
 export function mergeDaily(input: MergeInput): MergedValue[] {
   return mergeDailyDetailed(input).values;
+}
+
+/**
+ * The stored value with its explanation: one candidate per source (the winner's own value for its
+ * source, otherwise that source's highest), and the rule. Several readings from one source (every
+ * set of a lift, every row of a category) are one candidate, so a single source is just `only`.
+ */
+function toMerged(date: string, metric: string, all: Candidate[], d: Decision): MergedValue {
+  const bySource = new Map<string | null, number>();
+  for (const c of all)
+    bySource.set(c.source, Math.max(bySource.get(c.source) ?? -Infinity, c.value));
+  bySource.set(d.winner.source, d.winner.value);
+  const candidates = [...bySource].map(([source, value]) => ({ source, value: round(value) }));
+  let rule = d.rule;
+  let order = d.order;
+  if (candidates.length === 1) {
+    rule = d.winner.combined ? 'combined' : 'only';
+    order = undefined;
+  }
+  return {
+    date,
+    metric,
+    value: round(d.winner.value),
+    source: d.winner.source,
+    detail: { rule, candidates, ...(order ? { order } : {}) },
+  };
 }
 
 /** The usual winner among candidates: lowest rank, then the highest value. */
@@ -230,6 +284,13 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     if (pos(minutes)) t.add(row.entry_date, 'active_minutes', minutes, src);
     if (pos(row.resting_heart_rate))
       t.add(row.entry_date, 'resting_hr', row.resting_heart_rate, src, 0);
+    // Health Connect readings SparkyFitness keeps in the daily summary (0.17). Total calories is a
+    // dedicated field there; floors, VO2 max and resting energy are backups for the custom
+    // measurement / check-in the phone also writes (rank 1, so those win when present).
+    if (pos(row.total_calories)) t.add(row.entry_date, 'total_calories', row.total_calories, src);
+    if (pos(row.floors_ascended)) t.add(row.entry_date, 'floors', row.floors_ascended, src);
+    if (pos(row.vo2_max)) t.add(row.entry_date, 'vo2_max', row.vo2_max, src, 1);
+    if (pos(row.bmr_calories)) t.add(row.entry_date, 'bmr', row.bmr_calories, src, 1);
   }
 
   // Check-ins (phone sync, Fitbit, Withings). Newest row per day wins.
@@ -242,6 +303,10 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
   }
   for (const [d, row] of latestCheckIn) {
     if (pos(row.steps)) t.add(d, 'steps', row.steps, 'check-in');
+    // Body fat, height and resting energy: SparkyFitness files them as check-in measurements.
+    if (pos(row.body_fat_percentage)) t.add(d, 'body_fat', row.body_fat_percentage, 'check-in');
+    if (pos(row.height)) t.add(d, 'height', row.height, 'check-in');
+    if (pos(row.bmr)) t.add(d, 'bmr', row.bmr, 'check-in');
   }
 
   // Custom measurement categories.
@@ -254,6 +319,11 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     } else if (RESTING_HR_CATEGORIES.includes(key)) {
       for (const [d, v] of dailyCustom(rows, category, 'avg')) t.add(d, 'resting_hr', v, label, 1);
     }
+    const health = healthMetricOfCategory(key);
+    if (health) {
+      const def = HEALTH_METRICS[health] as HealthMetricDef;
+      for (const [d, v] of dailyCustom(rows, category, def.aggregate)) t.add(d, health, v, label);
+    }
     const agg = input.customMetrics[key];
     if (agg) {
       for (const [d, v] of dailyCustom(rows, category, agg)) t.add(d, `custom:${key}`, v, label);
@@ -262,11 +332,11 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
 
   // Workouts: counted from individual entries, with duplicates and stuck sessions removed.
   for (const [d, list] of cleanWorkouts(input.exerciseEntries)) {
-    t.add(d, 'workouts', list.length, 'workouts');
+    t.add(d, 'workouts', list.length, 'workouts', 0, true);
     const minutes = list.reduce((a, w) => a + w.minutes, 0);
-    if (minutes > 0) t.add(d, 'active_minutes', Math.min(minutes, 1440), 'workouts', 2);
+    if (minutes > 0) t.add(d, 'active_minutes', Math.min(minutes, 1440), 'workouts', 2, true);
     const kcal = list.reduce((a, w) => a + w.kcal, 0);
-    if (kcal > 0) t.add(d, 'active_calories', kcal, 'workouts', 2);
+    if (kcal > 0) t.add(d, 'active_calories', kcal, 'workouts', 2, true);
   }
   // Workout distance comes from SparkyFitness' per-day exercise stats.
   for (const b of input.exerciseDays) {
@@ -281,7 +351,8 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     const v = num(e.calories_burned);
     if (d && v != null) activeCal.set(d, (activeCal.get(d) ?? 0) + v);
   }
-  for (const [d, v] of activeCal) if (v > 0) t.add(d, 'active_calories', v, 'Health Connect', 1);
+  for (const [d, v] of activeCal)
+    if (v > 0) t.add(d, 'active_calories', v, 'Health Connect', 1, true);
 
   // Sleep: total per source per night, then the biggest source.
   const sleepBySource = new Map<string, number>();
@@ -310,6 +381,8 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
 
   const prio = input.priorities ?? {};
   const values = t.collect((metric, cands) => {
+    const only = cands.length === 1 ? cands[0]! : null;
+    if (only) return { winner: only, rule: only.combined ? 'combined' : 'only' };
     const own = prio[metric];
     const fallback = (PRIORITY_METRICS as readonly string[]).includes(metric)
       ? prio[DEFAULT_PRIORITY_KEY]
@@ -318,16 +391,29 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     if (order?.length) {
       for (const key of order) {
         const mine = cands.filter((c) => sourceKey(c.source) === key);
-        if (mine.length) return metric === 'resting_hr' ? mine[0]! : highest(mine);
+        if (mine.length)
+          return {
+            winner: metric === 'resting_hr' ? mine[0]! : highest(mine),
+            rule: 'priority',
+            order: own?.length ? 'metric' : 'default',
+          };
       }
     }
     // Resting HR: the wearable's daily summary first, otherwise a measurement; first one listed.
     if (metric === 'resting_hr') {
       const top = Math.min(...cands.map((c) => c.rank));
-      return cands.find((c) => c.rank === top) ?? null;
+      const winner = cands.find((c) => c.rank === top) ?? null;
+      return winner ? { winner, rule: 'preferred' } : null;
     }
-    if (metric.startsWith('custom:')) return cands[0] ?? null;
-    return highest(cands);
+    if (metric.startsWith('custom:')) return { winner: cands[0]!, rule: 'first' };
+    // Health Connect readings: running totals overlap (highest), the rest prefer the first source.
+    if (isHealthMetric(metric) && (HEALTH_METRICS[metric] as HealthMetricDef).aggregate !== 'sum') {
+      const top = Math.min(...cands.map((c) => c.rank));
+      return { winner: cands.find((c) => c.rank === top)!, rule: 'preferred' };
+    }
+    const winner = highest(cands);
+    // A lower rank beat a bigger number: a built-in preference, not the highest.
+    return { winner, rule: cands.some((c) => c.rank > winner.rank) ? 'preferred' : 'highest' };
   });
   return { values, sources: t.sourcesSeen(PRIORITY_METRICS) };
 }
@@ -345,10 +431,10 @@ function addNutrition(t: DayTable, input: MergeInput) {
     };
     if (!(day.calories > 0 || day.protein > 0 || day.carbs > 0 || day.fat > 0)) continue;
     food.set(d, day);
-    t.add(d, 'calories_in', day.calories, 'food');
-    t.add(d, 'protein', day.protein, 'food');
-    t.add(d, 'carbs', day.carbs, 'food');
-    t.add(d, 'fat', day.fat, 'food');
+    t.add(d, 'calories_in', day.calories, 'food', 0, true);
+    t.add(d, 'protein', day.protein, 'food', 0, true);
+    t.add(d, 'carbs', day.carbs, 'food', 0, true);
+    t.add(d, 'fat', day.fat, 'food', 0, true);
   }
   const water = new Map<string, number>();
   for (const row of input.water ?? []) {
@@ -356,7 +442,7 @@ function addNutrition(t: DayTable, input: MergeInput) {
     const ml = num(row.water_ml);
     if (d && ml && ml > 0) water.set(d, (water.get(d) ?? 0) + ml);
   }
-  for (const [d, ml] of water) t.add(d, 'water', ml / 1000, 'water');
+  for (const [d, ml] of water) t.add(d, 'water', ml / 1000, 'water', 0, true);
 
   for (const [d, g] of Object.entries(input.goals ?? {})) {
     const goal = {
@@ -376,18 +462,25 @@ function addNutrition(t: DayTable, input: MergeInput) {
     const eaten = food.get(d);
     if (eaten && eaten.calories > 0) {
       const cal = adherenceScore(eaten.calories, goal.calories);
-      if (cal != null) t.add(d, 'calorie_adherence', cal, 'food');
+      if (cal != null) t.add(d, 'calorie_adherence', cal, 'food', 0, true);
     }
     if (eaten) {
       const macros = (['protein', 'carbs', 'fat'] as const)
         .map((k) => adherenceScore(eaten[k], goal[k]))
         .filter((v): v is number => v != null);
       if (macros.length)
-        t.add(d, 'macro_adherence', macros.reduce((a, b) => a + b, 0) / macros.length, 'food');
+        t.add(
+          d,
+          'macro_adherence',
+          macros.reduce((a, b) => a + b, 0) / macros.length,
+          'food',
+          0,
+          true,
+        );
     }
     const drank = water.get(d);
     if (drank && goal.water && goal.water > 0)
-      t.add(d, 'water_goal', Math.min(100, (drank / goal.water) * 100), 'water');
+      t.add(d, 'water_goal', Math.min(100, (drank / goal.water) * 100), 'water', 0, true);
   }
 }
 
@@ -416,8 +509,8 @@ function addStrength(t: DayTable, input: MergeInput) {
       }
     }
   }
-  for (const [d, v] of volume) t.add(d, 'lift_volume', v, 'workouts');
-  for (const [d, n] of sets) t.add(d, 'lift_sets', n, 'workouts');
+  for (const [d, v] of volume) t.add(d, 'lift_volume', v, 'workouts', 0, true);
+  for (const [d, n] of sets) t.add(d, 'lift_sets', n, 'workouts', 0, true);
 }
 
 function addFasting(t: DayTable, input: MergeInput) {
@@ -437,8 +530,8 @@ function addFasting(t: DayTable, input: MergeInput) {
     if (!target || Number.isNaN(target.getTime()) || end.getTime() >= target.getTime() - 60_000)
       done.set(d, (done.get(d) ?? 0) + 1);
   }
-  for (const [d, h] of hours) t.add(d, 'fast_hours', h, 'fasting');
-  for (const [d, n] of done) t.add(d, 'fasts_completed', n, 'fasting');
+  for (const [d, h] of hours) t.add(d, 'fast_hours', h, 'fasting', 0, true);
+  for (const [d, n] of done) t.add(d, 'fasts_completed', n, 'fasting', 0, true);
 }
 
 /** A workout longer than this is a session someone forgot to stop. */
@@ -507,7 +600,7 @@ export function cleanWorkouts(entries: ExerciseEntryRow[]): Map<string, CleanWor
 function dailyCustom(
   rows: CustomMeasurementRow[],
   category: CustomCategory,
-  aggregate: MetricAggregate,
+  aggregate: MetricAggregate | HealthMetricDef['aggregate'],
 ): Map<string, number> {
   const groups = new Map<string, { value: number; ts: string }[]>();
   for (const r of rows) {
@@ -526,7 +619,19 @@ function dailyCustom(
       out.set(d, list.reduce((a, b) => (b.ts > a.ts ? b : a)).value);
     } else {
       const sum = list.reduce((a, b) => a + b.value, 0);
-      out.set(d, aggregate === 'sum' ? sum : sum / list.length);
+      const values = list.map((x) => x.value);
+      out.set(
+        d,
+        aggregate === 'sum'
+          ? sum
+          : aggregate === 'max'
+            ? Math.max(...values)
+            : aggregate === 'min'
+              ? Math.min(...values)
+              : aggregate === 'last'
+                ? list.reduce((a, b) => (b.ts > a.ts ? b : a)).value
+                : sum / list.length,
+      );
     }
   }
   return out;

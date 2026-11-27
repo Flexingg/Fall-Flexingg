@@ -1,15 +1,11 @@
 /**
- * Badges and levels, where people look first: a level chip with an XP sliver in the Today header,
- * a compact card on Today (level, XP to the next level, newest badge) and the same card at the top
- * of the profile page. Each opens the badges screen. All of it reads the cheap /api/badges/summary,
- * and shows nothing in direct mode (no badges there).
+ * Level, where people look first: a chip with an XP sliver in the Today header and on the profile
+ * page. It opens the badges screen. Reads the cheap /api/badges/summary, and shows nothing in
+ * direct mode (no badges there).
  */
 import type { BadgeSummary } from '@gauntlet/shared';
 import { Link } from 'react-router';
-import { cap } from '../lib/badges';
 import { useBadgeSummary } from '../lib/ringQueries';
-import { BadgeIcon } from './BadgeIcon';
-import { Icon } from './Icon';
 import '../styles/badges.css';
 import '../styles/rings.css';
 
@@ -34,47 +30,6 @@ export function LevelPill() {
       <span className="sliver" aria-hidden>
         <i style={{ width: `${pct(s)}%` }} />
       </span>
-    </Link>
-  );
-}
-
-/** "Level 7" with progress and the newest badge; the whole card opens the badges screen. */
-export function BadgeProgressCard() {
-  const q = useBadgeSummary();
-  const s = q.data;
-  if (!s) return null;
-  const toGo = Math.max(0, s.level.nextLevelXp - s.level.xp);
-  const latest = s.latest;
-  const medal = latest && latest.tierName ? latest.tierName : latest ? ('single' as const) : null;
-  return (
-    <Link to="/badges" className="card bd-today" data-testid="badges-today">
-      <div className="lv" aria-hidden>
-        <small>Level</small>
-        <b className="num">{s.level.level}</b>
-      </div>
-      <div className="main">
-        <div className="xp">
-          {toGo.toLocaleString('en-US')} XP <small>to level {s.level.level + 1}</small>
-        </div>
-        <div className="bd-xp" aria-hidden>
-          <i style={{ width: `${pct(s)}%` }} />
-        </div>
-        <div className="newest">
-          {latest
-            ? `Newest: ${latest.tierName ? `${cap(latest.tierName)} ` : ''}${latest.name}`
-            : 'No badges yet. Keep moving for your first.'}
-        </div>
-      </div>
-      {latest && (
-        <BadgeIcon icon={latest.icon} imageUrl={latest.imageUrl} medal={medal} size={40} />
-      )}
-      {s.unseenCount > 0 ? (
-        <span className="newdot" aria-label={`${s.unseenCount} new`}>
-          {s.unseenCount}
-        </span>
-      ) : (
-        <Icon name="chevron" size={18} className="ring-chev" />
-      )}
     </Link>
   );
 }
