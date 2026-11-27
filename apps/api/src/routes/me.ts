@@ -1,6 +1,7 @@
 import {
   addDays,
   buildOverview,
+  buildRingsFromRows,
   buildToday,
   buildTrends,
   buildWallpaper,
@@ -14,6 +15,7 @@ import {
   type SourcePriorityResponse,
   type SyncResponse,
   personalBests,
+  ringsOf,
   todayIn,
   trendsNeedFrom,
   trendsQuerySchema,
@@ -219,6 +221,7 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
       ) ?? null;
     return {
       ...buildToday(rows, date),
+      rings: buildRingsFromRows(ringsOf(user.ringConfig), rows, date),
       lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
       featured,
       hasSources: await hasSources(ctx, user, date),

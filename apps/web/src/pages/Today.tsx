@@ -1,7 +1,8 @@
 import { Link } from 'react-router';
 import { ChallengeHero, FeedList } from '../components/Feed';
 import { Icon } from '../components/Icon';
-import { Rings } from '../components/Rings';
+import { RingCard } from '../components/RingCard';
+import { BadgeProgressCard, LevelPill } from '../components/TodayBadges';
 import { Avatar, Empty, ErrorBox, Screen } from '../components/ui';
 import { SkeletonCard, SkeletonLine, SkeletonList } from '../components/Skeleton';
 import { useAuth } from '../lib/auth';
@@ -11,7 +12,7 @@ import { fmtInt, fmtQty, timeAgo, unitLabel } from '../lib/format';
 import { useChallenges, useFeed, useToday } from '../lib/queries';
 import { useUnreadCount } from '../lib/notifyQueries';
 import { useReviewList } from '../lib/reviewQueries';
-import { monthName, reviewsToOffer, todayIn } from '@gauntlet/shared';
+import { monthName, reviewsToOffer, ringsOfToday, todayIn } from '@gauntlet/shared';
 import '../styles/notify.css';
 import { FastCard } from '../components/FastCard';
 import { LimitedBadges } from '../components/LimitedBadges';
@@ -34,16 +35,6 @@ export function TodayPage() {
   const { busy: syncing, sync } = useSyncNow();
 
   const m = today.data?.metrics ?? [];
-  const ring = (k: string) => {
-    const x = m.find((v) => v.key === k);
-    return x?.value && x.goal ? x.value / x.goal : 0;
-  };
-  const legend = [
-    { k: 'steps', label: 'Steps', color: 'var(--volt)' },
-    { k: 'active_calories', label: 'Active kcal', color: 'var(--text)' },
-    { k: 'active_minutes', label: 'Active min', color: 'var(--muted)' },
-  ];
-
   return (
     <Screen>
       <div className="hd">
@@ -63,6 +54,7 @@ export function TodayPage() {
               )}
             </Link>
           )}
+          {!direct && <LevelPill />}
           <Link to="/me" aria-label="Profile">
             {user && <Avatar user={user} size={36} me />}
           </Link>
@@ -82,21 +74,10 @@ export function TodayPage() {
           </div>
         </SkeletonCard>
       ) : (
-        <div className="card row" style={{ gap: 16 }}>
-          <Rings values={[ring('steps'), ring('active_calories'), ring('active_minutes')]} />
-          <div className="grow stack" style={{ gap: 8 }}>
-            {legend.map((l) => (
-              <div key={l.k} className="row" style={{ gap: 8, fontSize: 13 }}>
-                <i style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }} />
-                <span className="muted grow">{l.label}</span>
-                <b className="num" style={{ fontSize: 15 }}>
-                  {fmtInt(m.find((v) => v.key === l.k)?.value)}
-                </b>
-              </div>
-            ))}
-          </div>
-        </div>
+        today.data && <RingCard rings={ringsOfToday(today.data)} />
       )}
+
+      {!direct && <BadgeProgressCard />}
 
       <div style={{ marginTop: 12 }}>
         {direct ? (

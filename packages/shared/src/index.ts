@@ -24,3 +24,5 @@ export * from './badgeText.js';
 export * from './adminUsers.js';
 export * from './history.js';
 export * from './healthIngest.js';
+export * from './dayStats.js';
+export * from './badgeSummary.js';

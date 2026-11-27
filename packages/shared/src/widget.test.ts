@@ -62,6 +62,36 @@ describe('buildWidgetSnapshot', () => {
     });
   });
 
+  it('falls back to the default rings (with ready-to-print text) when the server sent none', () => {
+    const s = buildWidgetSnapshot(today(), now);
+    expect(s.rings.map((r) => [r.metric, r.label, r.valueText, r.goalText])).toEqual([
+      ['steps', 'Steps', '6,200', '10,000'],
+      ['active_calories', 'Active kcal', '310', '500'],
+      ['active_minutes', 'Active min', '25', '30'],
+    ]);
+  });
+
+  it("carries the person's own rings, in their units", () => {
+    const rings = [
+      { metric: 'distance', label: 'Distance', unit: 'km', value: 8.04672, goal: 10 },
+      { metric: 'sleep', label: 'Sleep', unit: 'h', value: 7.5, goal: 8 },
+      { metric: 'water', label: 'Water', unit: 'L', value: null, goal: 2.5 },
+    ];
+    const s = buildWidgetSnapshot(today({ rings: rings as never }), now, {
+      units: 'imperial',
+      locale: 'en-US',
+    });
+    expect(s.rings[0]).toMatchObject({
+      metric: 'distance',
+      valueText: '5.0 mi',
+      goalText: '6.2 mi',
+    });
+    expect(s.rings[1]).toMatchObject({ valueText: '7.5 h', goalText: '8 h' });
+    expect(s.rings[2]).toMatchObject({ value: null, valueText: '–', goalText: '85 fl oz' });
+    // Old fields stay for native builds that still read them.
+    expect(s.steps).toEqual({ value: 6200, goal: 10_000 });
+  });
+
   it('copes with missing metrics and goals', () => {
     const s = buildWidgetSnapshot(
       today({ metrics: [m('steps', null, null), m('active_minutes', 12, 0)] as never }),

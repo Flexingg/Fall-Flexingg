@@ -25,6 +25,8 @@ import { AdminUsersPage } from './pages/AdminUsers';
 import { BadgesPage } from './pages/Badges';
 import { BadgeTimelinePage } from './pages/BadgeTimeline';
 import { BadgeCelebration } from './components/BadgeCelebration';
+import { DayPage } from './pages/Day';
+import { EditRingsPage } from './pages/EditRings';
 import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
 import { FeedItemPage } from './pages/FeedItem';
@@ -223,6 +225,22 @@ export function App() {
             element={
               <Private>
                 <TodayPage />
+              </Private>
+            }
+          />
+          <Route
+            path="/day"
+            element={
+              <Private>
+                <DayPage />
+              </Private>
+            }
+          />
+          <Route
+            path="/day/rings"
+            element={
+              <Private>
+                <EditRingsPage />
               </Private>
             }
           />

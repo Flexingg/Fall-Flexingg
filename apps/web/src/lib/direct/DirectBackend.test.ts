@@ -282,3 +282,53 @@ describe('DirectBackend', () => {
     await expect(backend.syncApp('hevy')).rejects.toMatchObject({ code: 'not_connected' });
   });
 });
+
+describe('DirectBackend rings', () => {
+  it('keeps the ring setup on the phone and builds Today and the day screen from it', async () => {
+    const { backend, kv } = setup();
+    expect((await backend.today()).rings!.map((r) => r.metric)).toEqual([
+      'steps',
+      'active_calories',
+      'active_minutes',
+    ]);
+
+    const saved = await backend.saveRings([
+      { metric: 'distance', goal: 5 },
+      { metric: 'steps', goal: 8000 },
+      { metric: 'workouts', goal: 1 },
+    ]);
+    expect(saved[0]!.metric).toBe('distance');
+    expect(kv.map.get('gauntlet.direct.rings')).toContain('distance');
+    const today = await backend.today();
+    expect(today.rings!.map((r) => [r.metric, r.value, r.goal])).toEqual([
+      ['distance', null, 5],
+      ['steps', 9412, 8000],
+      ['workouts', 2, 1],
+    ]);
+    // `metrics` still has the old four for the widget fields.
+    expect(today.metrics.map((m) => m.key)).toContain('steps');
+
+    const day = await backend.day();
+    expect(day.isToday).toBe(true);
+    expect(day.sections.find((s) => s.key === 'activity')!.stats.map((s) => s.key)).toEqual([
+      'steps',
+      'active_minutes',
+      'active_calories',
+      'workouts',
+    ]);
+    const yesterday = await backend.day('2026-10-01');
+    expect(yesterday.rings[0]).toMatchObject({ metric: 'distance', value: 8.5 });
+    await expect(backend.day('2026-10-09')).rejects.toMatchObject({ code: 'bad_date' });
+  });
+
+  it('refuses a setup that repeats a stat', async () => {
+    const { backend } = setup();
+    await expect(
+      backend.saveRings([
+        { metric: 'steps', goal: 1 },
+        { metric: 'steps', goal: 2 },
+        { metric: 'sleep', goal: 8 },
+      ]),
+    ).rejects.toThrow();
+  });
+});

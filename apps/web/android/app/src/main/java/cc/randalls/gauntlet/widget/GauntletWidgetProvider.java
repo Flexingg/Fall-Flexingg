@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.widget.RemoteViews;
 import cc.randalls.gauntlet.MainActivity;
 import cc.randalls.gauntlet.R;
-import java.text.NumberFormat;
 import java.time.LocalDate;
 
 /**
@@ -59,16 +58,12 @@ public class GauntletWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static String number(double v) {
-        return NumberFormat.getIntegerInstance().format(Math.round(v));
+    private static String amount(WidgetData.Ring r, boolean usable) {
+        return usable && r.channel.hasValue() ? r.valueText : "–";
     }
 
-    private static String amount(WidgetData.Channel c, boolean usable) {
-        return usable && c.hasValue() ? number(c.value) : "–";
-    }
-
-    private static String ofGoal(WidgetData.Channel c, boolean usable) {
-        return usable && c.hasGoal() ? "of " + number(c.goal) : "";
+    private static String ofGoal(WidgetData.Ring r, boolean usable) {
+        return usable && !r.goalText.isEmpty() ? "of " + r.goalText : "";
     }
 
     private static String statusText(WidgetData data, boolean stale, long now) {
@@ -118,7 +113,11 @@ public class GauntletWidgetProvider extends AppWidgetProvider {
         int textColor = stale ? TEXT_STALE : TEXT;
 
         float[] fractions = usable
-                ? new float[] {data.steps.fraction(), data.activeCalories.fraction(), data.activeMinutes.fraction()}
+                ? new float[] {
+                    data.rings[0].channel.fraction(),
+                    data.rings[1].channel.fraction(),
+                    data.rings[2].channel.fraction()
+                }
                 : new float[] {0f, 0f, 0f};
         float density = ctx.getResources().getDisplayMetrics().density;
         Bitmap rings = RingsRenderer.draw(Math.round((wide ? 76 : 96) * density), fractions);
@@ -128,18 +127,21 @@ public class GauntletWidgetProvider extends AppWidgetProvider {
         rv.setOnClickPendingIntent(R.id.w_root, openApp(ctx));
         String status = statusText(data, stale, now);
         if (!wide) {
-            WidgetData.Channel steps = usable ? data.steps : null;
-            rv.setTextViewText(R.id.w_steps, steps != null && steps.hasValue() ? number(steps.value) : "–");
+            // The small widget shows the outer ring: its value, then "of goal" and its label.
+            WidgetData.Ring first = data == null ? null : data.rings[0];
+            rv.setTextViewText(R.id.w_steps, first != null ? amount(first, usable) : "–");
             rv.setTextColor(R.id.w_steps, textColor);
-            String goal = usable ? ofGoal(data.steps, true) : "";
-            rv.setTextViewText(R.id.w_steps_goal, status.isEmpty() ? (goal.isEmpty() ? "steps" : goal + " steps") : status);
+            String label = first == null ? "steps" : first.label.toLowerCase();
+            String goal = first == null ? "" : ofGoal(first, usable);
+            rv.setTextViewText(
+                    R.id.w_steps_goal, status.isEmpty() ? (goal.isEmpty() ? label : goal + " " + label) : status);
             return rv;
         }
         rv.setTextViewText(R.id.w_status, status);
 
-        rv.setTextViewText(R.id.w_row_steps, row("Steps", data == null ? null : data.steps, usable));
-        rv.setTextViewText(R.id.w_row_cal, row("Active kcal", data == null ? null : data.activeCalories, usable));
-        rv.setTextViewText(R.id.w_row_min, row("Active min", data == null ? null : data.activeMinutes, usable));
+        rv.setTextViewText(R.id.w_row_steps, row(data == null ? "Steps" : data.rings[0].label, data == null ? null : data.rings[0], usable));
+        rv.setTextViewText(R.id.w_row_cal, row(data == null ? "Active kcal" : data.rings[1].label, data == null ? null : data.rings[1], usable));
+        rv.setTextViewText(R.id.w_row_min, row(data == null ? "Active min" : data.rings[2].label, data == null ? null : data.rings[2], usable));
         rv.setTextColor(R.id.w_row_steps, textColor);
         rv.setTextColor(R.id.w_row_cal, textColor);
         rv.setTextColor(R.id.w_row_min, textColor);
@@ -158,7 +160,7 @@ public class GauntletWidgetProvider extends AppWidgetProvider {
         return rv;
     }
 
-    private static String row(String label, WidgetData.Channel c, boolean usable) {
+    private static String row(String label, WidgetData.Ring c, boolean usable) {
         if (c == null) return label + "  –";
         String value = amount(c, usable);
         String goal = ofGoal(c, usable);
