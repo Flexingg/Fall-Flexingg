@@ -286,7 +286,15 @@ export async function buildDetail(
         context = rest;
       }
     }
-    history.push({ tier: r.tier, earnedAt: r.earnedAt.toISOString(), context });
+    // Filled in by the 0.15 status work (real earn day, how it was earned, a link).
+    history.push({
+      tier: r.tier,
+      earnedAt: r.earnedAt.toISOString(),
+      date: todayIn(target.timezone, r.earnedAt),
+      context,
+      how: null,
+      to: null,
+    });
   }
   const friends = await friendIds(ctx, viewerId);
   const [withIt] = friends.length
@@ -303,6 +311,7 @@ export async function buildDetail(
   return {
     badge: viewOf(d, rows, prefs, { progressValue: progress, own }),
     history,
+    standing: null,
     friendsWithIt: withIt?.n ?? 0,
     earnedByCount: all?.n ?? 0,
   };
