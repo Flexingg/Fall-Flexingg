@@ -27,6 +27,7 @@ import { userRoutes } from './routes/users.js';
 import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
 import { ringRoutes } from './routes/rings.js';
+import { statSourceRoutes } from './routes/statSource.js';
 import { statsRoutes } from './routes/stats.js';
 import { healthOriginRoutes } from './routes/healthOrigins.js';
 import { miscRoutes } from './routes/misc.js';
@@ -114,6 +115,7 @@ export async function buildApp(
   badgeTimelineRoutes(app, full);
   meRoutes(app, full);
   ringRoutes(app, full);
+  statSourceRoutes(app, full);
   statsRoutes(app, full);
   friendRoutes(app, full);
   userRoutes(app, full);

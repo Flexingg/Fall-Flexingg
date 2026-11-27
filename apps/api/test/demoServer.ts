@@ -20,7 +20,9 @@ import { runSyncCycle } from '../src/scheduler.js';
 import {
   badgeDefinitions,
   badgeSuggestions,
+  dailyMetrics,
   feedEvents,
+  healthOrigins,
   serverState,
   userBadges,
   users as usersTable,
@@ -447,6 +449,12 @@ app.post('/api/_e2e/notify-badge', async () => {
   return { ok: true };
 });
 
+// Re-seed the "where did this come from" detail (see seedStatSources below).
+app.post('/api/_e2e/stat-sources', async () => {
+  await seedStatSources();
+  return { ok: true };
+});
+
 // Seed through the real API so the data is exactly what the app would create.
 const tokens: Record<string, string> = {};
 const ids: Record<string, string> = {};
@@ -813,6 +821,93 @@ await inbox(
   `/c/${live.id}`,
 );
 await inbox('friend_request', 'New friend request', 'Riley P. wants to be friends.', '/friends');
+
+// "Where did this come from": Alex's steps today were counted from Health Connect (highest of two
+// sources), with Fitbit and Samsung Health both writing steps on the phone; sleep follows Alex's
+// source order for it. Resting heart rate is left without detail, like a value stored before 0.17.
+// Runs now and again from the e2e hook, because a sync rewrites the values (not this detail).
+async function seedStatSources() {
+  const uid = ids.you!;
+  const at = (metric: string, date: string) =>
+    and(eq(dailyMetrics.userId, uid), eq(dailyMetrics.date, date), eq(dailyMetrics.metric, metric));
+  const steps = (await ctx.db.select().from(dailyMetrics).where(at('steps', today)))[0]?.value;
+  if (steps != null) {
+    await ctx.db
+      .update(dailyMetrics)
+      .set({
+        source: 'Health Connect',
+        detail: {
+          rule: 'highest',
+          candidates: [
+            { source: 'Health Connect', value: steps },
+            { source: 'garmin', value: Math.round(steps * 0.86) },
+          ],
+        },
+      })
+      .where(at('steps', today));
+  }
+  const sleep = (await ctx.db.select().from(dailyMetrics).where(at('sleep', today)))[0]?.value;
+  if (sleep != null) {
+    await ctx.db
+      .update(dailyMetrics)
+      .set({
+        source: 'garmin',
+        detail: {
+          rule: 'priority',
+          order: 'metric',
+          candidates: [
+            { source: 'garmin', value: sleep },
+            { source: 'Health Connect', value: Math.round((sleep - 0.4) * 10) / 10 },
+          ],
+        },
+      })
+      .where(at('sleep', today));
+  }
+  const origins = [];
+  if (steps != null)
+    origins.push({
+      userId: uid,
+      date: today,
+      metric: 'steps',
+      apps: [
+        {
+          packageName: 'com.fitbit.FitbitMobile',
+          value: steps,
+          records: 148,
+          devices: ['watch'],
+        },
+        {
+          packageName: 'com.sec.android.app.shealth',
+          value: Math.round(steps * 0.62),
+          records: 64,
+          devices: ['phone'],
+        },
+      ],
+      counted: steps,
+      capped: false,
+    });
+  if (sleep != null)
+    origins.push({
+      userId: uid,
+      date: today,
+      metric: 'sleep',
+      apps: [
+        {
+          packageName: 'com.garmin.android.apps.connectmobile',
+          value: sleep,
+          records: 3,
+          devices: ['watch'],
+        },
+      ],
+      counted: sleep,
+      capped: false,
+    });
+  await ctx.db
+    .delete(healthOrigins)
+    .where(and(eq(healthOrigins.userId, uid), eq(healthOrigins.date, today)));
+  if (origins.length) await ctx.db.insert(healthOrigins).values(origins);
+}
+await seedStatSources();
 
 const port = Number(process.env.PORT ?? 8080);
 await app.listen({ port, host: '0.0.0.0' });

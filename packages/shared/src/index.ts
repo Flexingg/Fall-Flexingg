@@ -29,3 +29,4 @@ export * from './badgeSummary.js';
 export * from './healthMetrics.js';
 export * from './statSource.js';
 export * from './hcOriginMetrics.js';
+export * from './statSourceMeta.js';
