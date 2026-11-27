@@ -13,6 +13,7 @@ import {
   type HealthConnectProgress,
 } from '@gauntlet/shared';
 import { historyAccessOf, resumePoint, type HistoryAccess } from './historyPlan';
+import { combineSleep } from './sleepSessions';
 import { sendHealthRecords } from './session';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
@@ -56,7 +57,11 @@ type HcRecord = Record<string, unknown> & { type: string };
 const day = (iso: string) => localDate(new Date(iso), timezone);
 
 /** Read one time range from Health Connect as SparkyFitness-shaped records. */
-async function readRange(range: { startDate: string; endDate: string }): Promise<HcRecord[]> {
+async function readRange(
+  range: { startDate: string; endDate: string },
+  /** Local days (inclusive) whose sleep this read sends: each night is sent whole, once. */
+  sleepDays: { from: string; to: string },
+): Promise<HcRecord[]> {
   const records: HcRecord[] = [];
   const source = 'Health Connect';
   const daily = async (
@@ -91,29 +96,32 @@ async function readRange(range: { startDate: string; endDate: string }): Promise
   await daily('calories', 'sum', 'Active Calories', 'kcal');
   await daily('restingHeartRate', 'average', 'resting_heart_rate', 'bpm');
 
+  // Sleep: one entry per night (SparkyFitness keeps one per day and source, so separate sessions
+  // would overwrite each other). Read from a day early so a night that started the evening before
+  // the range is whole, and only send the days this range is responsible for.
   try {
-    const { samples } = await Health.readSamples({ ...range, dataType: 'sleep', limit: 500 });
-    for (const s of samples) {
-      const secs = (Date.parse(s.endDate) - Date.parse(s.startDate)) / 1000;
-      if (!(secs > 0)) continue;
-      const stage = (name: string) =>
-        (s.stages ?? [])
-          .filter((x) => x.stage === name)
-          .reduce((a, x) => a + x.durationMinutes * 60, 0);
-      const awake = stage('awake') + stage('inBed');
+    const from = new Date(Date.parse(range.startDate) - 86_400_000).toISOString();
+    const { samples } = await Health.readSamples({
+      startDate: from,
+      endDate: range.endDate,
+      dataType: 'sleep',
+      limit: 1000,
+    });
+    for (const n of combineSleep(samples, day)) {
+      if (n.date < sleepDays.from || n.date > sleepDays.to) continue;
       records.push({
         type: 'SleepSession',
         source,
-        timestamp: s.startDate,
-        entry_date: day(s.endDate),
-        bedtime: s.startDate,
-        wake_time: s.endDate,
-        duration_in_seconds: secs,
-        time_asleep_in_seconds: s.hasStageData ? Math.max(secs - awake, 0) : secs,
-        deep_sleep_seconds: stage('deep'),
-        light_sleep_seconds: stage('light'),
-        rem_sleep_seconds: stage('rem'),
-        awake_sleep_seconds: stage('awake'),
+        timestamp: n.bedtime,
+        entry_date: n.date,
+        bedtime: n.bedtime,
+        wake_time: n.wakeTime,
+        duration_in_seconds: n.inBedSeconds,
+        time_asleep_in_seconds: n.asleepSeconds,
+        deep_sleep_seconds: n.deepSeconds,
+        light_sleep_seconds: n.lightSeconds,
+        rem_sleep_seconds: n.remSeconds,
+        awake_sleep_seconds: n.awakeSeconds,
         sleep_score: 0,
       });
     }
@@ -169,7 +177,10 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
   const start = new Date(end);
   start.setDate(start.getDate() - days);
   start.setHours(0, 0, 0, 0);
-  const records = await readRange({ startDate: start.toISOString(), endDate: end.toISOString() });
+  const records = await readRange(
+    { startDate: start.toISOString(), endDate: end.toISOString() },
+    { from: day(start.toISOString()), to: day(end.toISOString()) },
+  );
   await sendAll(records);
   await storage.set(LAST_SYNC_KEY, end.toISOString());
   return records.length;
@@ -277,10 +288,13 @@ export async function importHealthConnectHistory(
       reason = 'cancelled';
       break;
     }
-    const records = await readRange({
-      startDate: localMidnight(w.start).toISOString(),
-      endDate: localMidnight(addDays(w.end, 1)).toISOString(),
-    });
+    const records = await readRange(
+      {
+        startDate: localMidnight(w.start).toISOString(),
+        endDate: localMidnight(addDays(w.end, 1)).toISOString(),
+      },
+      { from: w.start, to: w.end },
+    );
     sent += await sendAll(records);
     doneDays += windowDays(w);
     if (records.length) {
