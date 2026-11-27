@@ -1,5 +1,6 @@
 import type { MeUser } from '@gauntlet/shared';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Connections } from '../components/Connections';
 import { HealthAccess } from '../components/HealthAccess';
 import { HistoryImport } from '../components/HistoryImport';
@@ -68,6 +69,18 @@ export function SourcesPage() {
       {!user?.demo && <Connections />}
 
       {!user?.demo && mode !== 'direct' && <SourcePriority />}
+
+      {!user?.demo && (
+        <div className="list" style={{ marginTop: 10 }}>
+          <Link to="/sources/phone-apps" className="item" data-testid="phone-apps-link">
+            <div className="grow">
+              <div className="t">Choose which phone apps count</div>
+              <small>When Fitbit, Garmin and others all write steps to Health Connect</small>
+            </div>
+            <Icon name="chevron" size={18} />
+          </Link>
+        </div>
+      )}
 
       {!user?.demo && <HistoryImport />}
 

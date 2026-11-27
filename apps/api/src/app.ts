@@ -28,6 +28,7 @@ import { inviteRoutes } from './routes/invites.js';
 import { meRoutes } from './routes/me.js';
 import { ringRoutes } from './routes/rings.js';
 import { statSourceRoutes } from './routes/statSource.js';
+import { hcAppRoutes } from './routes/hcApps.js';
 import { statsRoutes } from './routes/stats.js';
 import { healthOriginRoutes } from './routes/healthOrigins.js';
 import { miscRoutes } from './routes/misc.js';
@@ -116,6 +117,7 @@ export async function buildApp(
   meRoutes(app, full);
   ringRoutes(app, full);
   statSourceRoutes(app, full);
+  hcAppRoutes(app, full);
   statsRoutes(app, full);
   friendRoutes(app, full);
   userRoutes(app, full);

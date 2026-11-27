@@ -53,7 +53,7 @@ afterAll(async () => {
 });
 
 async function call<T = unknown>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   url: string,
   payload?: unknown,
 ) {
@@ -111,6 +111,11 @@ describe('demo account', () => {
     expect((await call('GET', '/api/connections')).status).toBe(403);
     expect((await call('POST', '/api/me/fast/start', { hours: 16 })).status).toBe(403);
     expect((await call('GET', '/api/sources')).status).toBe(200);
+    // Choosing which Health Connect apps count only stores a preference, like the source order.
+    expect(
+      (await call('PUT', '/api/me/hc-apps', { order: { steps: ['com.strava'] } })).status,
+    ).toBe(200);
+    expect((await call('PUT', '/api/me/hc-apps', { order: {} })).status).toBe(200);
     expect((await call<unknown[]>('GET', '/api/me/lifts')).body).toEqual([]);
     expect((await call('GET', '/api/me')).status).toBe(200);
   });

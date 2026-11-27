@@ -1,0 +1,47 @@
+/* Choosing which Health Connect apps count (pages/PhoneApps.tsx). Rows reuse sourceorder.css. */
+.pa-intro {
+  font-size: 14px;
+  line-height: 1.45;
+  margin: -4px 0 14px;
+}
+.pa-note {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pa-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pa-name {
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.pa-main small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+/* A long package name stays on one line and ends in an ellipsis. */
+.pa-main .pa-pkg {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pa-list li {
+  min-width: 0;
+}
+.pa-list li.pa-off .pa-name {
+  color: var(--muted);
+}
+.pa-count {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pa-saved {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
