@@ -169,6 +169,18 @@ export interface SleepRow {
   /** When the sleep started and ended (ISO), used to spot two rows that are copies of one night. */
   bedtime?: string | null;
   wake_time?: string | null;
+  /**
+   * The stored sleep stages (SparkyFitness returns them with each entry). Its own totals only count
+   * the main block of sleep, leaving naps out; adding up the stages counts every sleep the day had.
+   */
+  stage_events?: SleepStageRow[] | null;
+}
+
+export interface SleepStageRow {
+  stage_type?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  duration_in_seconds?: number | null;
 }
 
 export interface SyncedSource {

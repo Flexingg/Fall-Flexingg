@@ -124,7 +124,7 @@ describe('combineSleep', () => {
               startDate: '2026-11-26T03:00:00Z',
               endDate: '2026-11-26T03:10:00Z',
             },
-            // 03:10 to 05:00 is not covered by any stage: counts as light sleep.
+            // 03:10 to 05:00 is not covered by any stage: not counted (as Google Health does).
             {
               stage: 'rem',
               durationMinutes: 60,
@@ -159,7 +159,6 @@ describe('combineSleep', () => {
       ['light', '00:30', '01:30'],
       ['deep', '01:30', '03:00'],
       ['awake', '03:00', '03:10'],
-      ['light', '03:10', '05:00'],
       ['rem', '05:00', '06:00'],
       ['light', '06:00', '08:00'],
     ]);
@@ -167,9 +166,9 @@ describe('combineSleep', () => {
     expect(n).toMatchObject({
       deepSeconds: 90 * 60,
       remSeconds: 60 * 60,
-      lightSeconds: (60 + 110 + 120) * 60,
+      lightSeconds: (60 + 120) * 60,
       awakeSeconds: 10 * 60,
-      asleepSeconds: (90 + 60 + 290) * 60,
+      asleepSeconds: (90 + 60 + 180) * 60,
     });
     const asleep = n!.stageEvents
       .filter((e) => ['deep', 'light', 'rem'].includes(e.stage_type))
