@@ -12,11 +12,14 @@ import {
   minDate,
   todayIn,
   type MetricAggregate,
+  type WorkoutSummary,
 } from '@gauntlet/shared';
 import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics, feedEvents, users } from '../db/schema.js';
 import { fetchMerged, SparkyError, type GoalsRow, type MergedValue } from '@gauntlet/sparky';
+import { storeActivities } from './badges/activities.js';
+import { checkBadges } from './badges/engine.js';
 import { checkPersonalRecords } from './records.js';
 import { openChallengesForUser, refreshChallenge, type ChallengeRow } from './challenges.js';
 import { getUser, markKeyInvalid, sparkyToken } from './users.js';
@@ -129,10 +132,11 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   );
 
   let merged: MergedValue[];
+  let workouts: WorkoutSummary[];
   let partial: boolean;
   let sources: Record<string, string[]>;
   try {
-    ({ merged, partial, sources } = await fetchMerged(ctx.sparky, token, start, end, {
+    ({ merged, partial, sources, workouts } = await fetchMerged(ctx.sparky, token, start, end, {
       customMetrics,
       lifts: [...lifts],
       timezone: user.timezone,
@@ -162,6 +166,9 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   ]);
   const isManaged = (m: string) => managed.has(m) || m.startsWith('custom:') || isLiftMetric(m);
   const changes = await store(ctx, userId, start, end, merged, isManaged, partial);
+  await storeActivities(ctx, userId, user.timezone, start, end, workouts, partial).catch((err) =>
+    ctx.log.warn({ err: String(err), userId }, 'storing workouts failed'),
+  );
   await ctx.db
     .update(users)
     .set({
@@ -176,6 +183,9 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   if (user.lastSyncedAt) await postProgress(ctx, userId, open, changes);
   await checkPersonalRecords(ctx, userId).catch((err) =>
     ctx.log.warn({ err: String(err), userId }, 'personal record check failed'),
+  );
+  await checkBadges(ctx, userId, { reason: 'sync' }).catch((err) =>
+    ctx.log.warn({ err: String(err), userId }, 'badge check failed'),
   );
   if (opts.settle !== false) for (const ch of open) await refreshChallenge(ctx, ch.id);
   return { userId, ok: true, changed: changes.length };

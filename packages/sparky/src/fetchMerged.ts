@@ -1,4 +1,10 @@
-import { addDays, isMetricKey, type ChallengeEvent, type MetricAggregate } from '@gauntlet/shared';
+import {
+  addDays,
+  isMetricKey,
+  type ChallengeEvent,
+  type MetricAggregate,
+  type WorkoutSummary,
+} from '@gauntlet/shared';
 import type { CustomMeasurementRow, GoalsRow, SparkyClient } from './client.js';
 import { SparkyError } from './client.js';
 import {
@@ -11,6 +17,7 @@ import {
   type MergedValue,
   type MergeInput,
 } from './merge.js';
+import { buildWorkouts, toSummary } from './workouts.js';
 
 /**
  * Read everything Gauntlet scores from SparkyFitness for a date range and merge it into one value
@@ -55,7 +62,13 @@ export async function fetchMerged(
   start: string,
   end: string,
   opts: FetchOptions = {},
-): Promise<{ merged: MergedValue[]; sources: Record<string, string[]>; partial: boolean }> {
+): Promise<{
+  merged: MergedValue[];
+  sources: Record<string, string[]>;
+  partial: boolean;
+  /** Per-workout summaries in the window (the same cleaned list the workouts screen shows). */
+  workouts: WorkoutSummary[];
+}> {
   const customMetrics = opts.customMetrics ?? {};
   const onSkip = opts.onSkip ?? (() => {});
   let partial = false;
@@ -172,7 +185,12 @@ export async function fetchMerged(
     timezone: opts.timezone,
     priorities: opts.priorities,
   });
-  return { merged: result.values, sources: result.sources, partial };
+  return {
+    merged: result.values,
+    sources: result.sources,
+    partial,
+    workouts: buildWorkouts(report.exerciseEntries, { start, end }).map(toSummary),
+  };
 }
 
 /**

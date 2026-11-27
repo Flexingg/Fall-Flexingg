@@ -3,6 +3,7 @@ import {
   formatQuantity,
   metricDef,
   REACTIONS,
+  type BadgeFeedPayload,
   type FeedEvent,
   type MetricKey,
 } from '@gauntlet/shared';
@@ -166,6 +167,16 @@ export async function feedFor(
         text = `${name} set a new ${typeof p.label === 'string' ? p.label : 'personal record'}`;
         badge = recordBadge(p, prefs);
         break;
+      case 'badge_earned': {
+        const tn =
+          typeof p.tierName === 'string'
+            ? `${p.tierName.charAt(0).toUpperCase()}${p.tierName.slice(1)} · `
+            : '';
+        const more = typeof p.more === 'number' && p.more > 0 ? ` (+${p.more} more)` : '';
+        text = `${name} earned ${tn}${typeof p.name === 'string' ? p.name : 'a badge'}${more}`;
+        badge = tn ? tn.slice(0, -3) : null;
+        break;
+      }
       default:
         text = `${name} was active`;
     }
@@ -185,6 +196,7 @@ export async function feedFor(
           return r ? [{ emoji, count: r.count, mine: r.mine }] : [];
         }),
         commentCount: commentCounts.get(e.id) ?? 0,
+        ...(e.kind === 'badge_earned' ? { badgeEarned: p as unknown as BadgeFeedPayload } : {}),
       },
     ];
   });

@@ -9,6 +9,9 @@ import type { AppContext } from './context.js';
 import { HttpError } from './context.js';
 import { downloadRoutes } from './downloads.js';
 import { adminRoutes } from './routes/admin.js';
+import { adminBadgeRoutes } from './routes/adminBadges.js';
+import { badgeRoutes } from './routes/badges.js';
+import { registerBadgeHooks } from './services/badges/hooks.js';
 import { authRoutes } from './routes/auth.js';
 import { challengeRoutes } from './routes/challenges.js';
 import { teamRoutes } from './routes/teams.js';
@@ -93,8 +96,12 @@ export async function buildApp(
     return reply.code(500).send({ error: 'Something went wrong', code: 'internal' });
   });
 
+  // First, so the badge hook sees every route registered after it.
+  registerBadgeHooks(app, full);
   authRoutes(app, full);
   adminRoutes(app, full);
+  adminBadgeRoutes(app, full);
+  badgeRoutes(app, full);
   meRoutes(app, full);
   statsRoutes(app, full);
   friendRoutes(app, full);

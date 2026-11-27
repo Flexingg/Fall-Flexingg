@@ -499,3 +499,34 @@ export const importRunSchema = z.object({
   /** At most this many LLM calls this run. */
   limit: z.number().int().min(1).max(1000).default(1000),
 });
+
+// ---------- Helpers the engine and its tests share ----------
+
+/**
+ * Which ACTIVITY_SPORTS bucket a workout belongs to, from its name and kind. Best effort: names come
+ * from many apps ("Morning Run", "Treadmill", "Indoor Cycling"). Order matters (a "trail run" is a
+ * run, a "hiking" a hike).
+ */
+export function sportOf(name: string, kind?: 'cardio' | 'strength' | string | null): ActivitySport {
+  const n = name.toLowerCase();
+  if (kind === 'strength') return 'strength';
+  if (/\b(run|running|jog|jogging|treadmill)\b/.test(n)) return 'run';
+  if (/hik(e|ing)|trek|ruck/.test(n)) return 'hike';
+  if (/walk/.test(n)) return 'walk';
+  if (/cycl|\bbike\b|biking|\bride\b|riding|\bspin\b|spinning|peloton/.test(n)) return 'ride';
+  if (/swim|pool|\blaps?\b/.test(n)) return 'swim';
+  if (/yoga|pilates|stretch/.test(n)) return 'yoga';
+  if (/strength|weight|lift|gym|crossfit|powerlifting|bodybuilding|resistance/.test(n))
+    return 'strength';
+  if (
+    /elliptical|\brow(ing)?\b|stair|cardio|hiit|cross.?trainer|aerobic|dance|zumba|boxing/.test(n)
+  )
+    return 'cardio';
+  return 'other';
+}
+
+/** True when a local hour (0-23) is inside the range [from, to), wrapping past midnight when from > to. */
+export function hourInRange(hour: number, range: { from: number; to: number }): boolean {
+  const { from, to } = range;
+  return from <= to ? hour >= from && hour < to : hour >= from || hour < to;
+}

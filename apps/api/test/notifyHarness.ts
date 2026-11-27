@@ -31,7 +31,12 @@ export interface Harness {
     url: string,
     payload?: unknown,
     headers?: Record<string, string>,
-  ) => Promise<{ statusCode: number; body: string; json: () => unknown }>;
+  ) => Promise<{
+    statusCode: number;
+    body: string;
+    headers: Record<string, unknown>;
+    json: () => unknown;
+  }>;
   close: () => Promise<void>;
 }
 

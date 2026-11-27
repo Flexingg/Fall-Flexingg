@@ -4,12 +4,12 @@
  * with. Public users are visible to everyone signed in. Nobody else's email or
  * health data is ever shown, only name, handle and challenge totals.
  */
-import { initials, type UserCard } from '@gauntlet/shared';
+import type { UserCard } from '@gauntlet/shared';
 import { aliasedTable, and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { challengeParticipants, friendships, users } from '../db/schema.js';
 import { pair } from './friends.js';
-import type { UserRow } from './users.js';
+import { toPublicUser, type UserRow } from './users.js';
 
 type Friendship = UserCard['friendship'];
 
@@ -116,9 +116,7 @@ export async function toCards(
               ? 'outgoing'
               : 'incoming';
     return {
-      id: u.id,
-      displayName: u.displayName,
-      initials: initials(u.displayName),
+      ...toPublicUser(u),
       handle: u.handle,
       challenges: totals.get(u.id) ?? { played: 0, won: 0 },
       friendship,

@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb, runMigrations } from './db/index.js';
+import { seedBadges } from './services/badges/seed.js';
 import { refreshDemo } from './services/demo.js';
 import { startScheduler } from './scheduler.js';
 import { startReleaseMirror } from './githubRelease.js';
@@ -14,6 +15,8 @@ const { app, ctx } = await buildApp(
   { db, cfg, sparky: new SparkyClient({ baseUrl: cfg.SPARKY_URL }), now: () => new Date() },
   { logger: { level: cfg.LOG_LEVEL } },
 );
+// The launch badges (before the demo account, whose sample badges point at them).
+await seedBadges(ctx).catch((err) => ctx.log.warn({ err }, 'badge seed failed'));
 void refreshDemo(ctx).catch((err) => ctx.log.warn({ err }, 'demo setup failed'));
 const stopSync = startScheduler(ctx, cfg.SYNC_INTERVAL_MINUTES);
 // The Android app's downloads and update checks come from the newest GitHub release.
