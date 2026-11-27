@@ -37,6 +37,8 @@ export interface MetricDetail {
 export interface HcOriginApp {
   /** Android package name of the app that wrote the records (Health Connect's data origin). */
   packageName: string;
+  /** The app's name as Android shows it, when the phone could look it up (0.18). */
+  name?: string;
   /** The day's value from this app alone, in the stat's stored unit. */
   value: number;
   /** How many Health Connect records it wrote that day. */
@@ -65,6 +67,7 @@ export const hcOriginSchema = z.object({
     .array(
       z.object({
         packageName: z.string().min(1).max(200),
+        name: z.string().max(100).optional(),
         value: z.number().finite(),
         records: z.number().int().min(0),
         devices: z.array(z.string().max(40)).max(10),
