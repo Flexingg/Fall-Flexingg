@@ -824,7 +824,7 @@ await inbox('friend_request', 'New friend request', 'Riley P. wants to be friend
 
 // "Where did this come from": Alex's steps today were counted from Health Connect (highest of two
 // sources), with Fitbit and Samsung Health both writing steps on the phone; sleep follows Alex's
-// source order for it. Resting heart rate is left without detail, like a value stored before 0.17.
+// source order for it. Resting heart rate has its detail cleared, like a value stored before 0.17.
 // Runs now and again from the e2e hook, because a sync rewrites the values (not this detail).
 async function seedStatSources() {
   const uid = ids.you!;
@@ -863,6 +863,8 @@ async function seedStatSources() {
       })
       .where(at('sleep', today));
   }
+  // Since 0.17 every sync explains its values, so clear resting heart rate's to show an old row.
+  await ctx.db.update(dailyMetrics).set({ detail: null }).where(at('resting_hr', today));
   const origins = [];
   if (steps != null)
     origins.push({
