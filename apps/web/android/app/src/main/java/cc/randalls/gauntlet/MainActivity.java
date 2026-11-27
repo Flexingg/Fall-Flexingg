@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
         // App-local plugins register before the bridge starts.
         registerPlugin(GalaxyWallpaperPlugin.class);
         registerPlugin(AppUpdaterPlugin.class);
+        registerPlugin(AppLabelsPlugin.class);
         registerPlugin(GauntletWidgetPlugin.class);
         registerPlugin(GauntletPushPlugin.class);
         super.onCreate(savedInstanceState);

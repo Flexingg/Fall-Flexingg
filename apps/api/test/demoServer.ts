@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { addDays, previousIsoWeek, todayIn, xpToReach, type BadgeDraft } from '@gauntlet/shared';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, runMigrations } from '../src/db/index.js';
@@ -904,9 +904,68 @@ async function seedStatSources() {
       counted: sleep,
       capped: false,
     });
+  // The week before: several apps writing the same stats, so the "which apps count" chooser has
+  // something to choose from. Yesterday's steps are the four of a real phone, one of them with
+  // Android's long built-in package name and no label.
+  const PHONE = 'com.android.healthconnect.phone.4f9c2e81a7d34b6c9e0f5a1b2c3d4e5f';
+  const app = (
+    packageName: string,
+    value: number,
+    records: number,
+    devices: string[],
+    name?: string,
+  ) => ({ packageName, ...(name ? { name } : {}), value, records, devices });
+  for (let i = 1; i <= 6; i++) {
+    const date = d(-i);
+    const row = (metric: string, apps: ReturnType<typeof app>[], counted: number) => ({
+      userId: uid,
+      date,
+      metric,
+      apps,
+      counted,
+      capped: false,
+    });
+    origins.push(
+      row(
+        'steps',
+        [
+          app('com.garmin.android.apps.connectmobile', 2310, 90, ['watch'], 'Garmin Connect'),
+          app('com.fitbit.FitbitMobile', 1900 + i * 40, 70, ['watch'], 'Fitbit'),
+          app(PHONE, 1650, 30, ['phone']),
+          app('com.sec.android.app.shealth', 840, 20, ['phone'], 'Samsung Health'),
+        ],
+        5667,
+      ),
+      row(
+        'distance',
+        [
+          app('com.garmin.android.apps.connectmobile', 3.1, 40, ['watch'], 'Garmin Connect'),
+          app('com.fitbit.FitbitMobile', 2.7, 30, ['watch'], 'Fitbit'),
+        ],
+        3.4,
+      ),
+      row(
+        'active_calories',
+        [
+          app('com.fitbit.FitbitMobile', 410, 30, ['watch'], 'Fitbit'),
+          app('com.sec.android.app.shealth', 380, 12, ['phone'], 'Samsung Health'),
+          app('com.garmin.android.apps.connectmobile', 455, 25, ['watch'], 'Garmin Connect'),
+        ],
+        450,
+      ),
+      row(
+        'sleep',
+        [
+          app('com.garmin.android.apps.connectmobile', 7.2, 3, ['watch'], 'Garmin Connect'),
+          app('com.ouraring.oura', 7.4, 2, ['ring'], 'Oura'),
+        ],
+        7.4,
+      ),
+    );
+  }
   await ctx.db
     .delete(healthOrigins)
-    .where(and(eq(healthOrigins.userId, uid), eq(healthOrigins.date, today)));
+    .where(and(eq(healthOrigins.userId, uid), gte(healthOrigins.date, d(-6))));
   if (origins.length) await ctx.db.insert(healthOrigins).values(origins);
 }
 await seedStatSources();

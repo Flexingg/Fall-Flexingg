@@ -1,4 +1,10 @@
-import type { HcOriginApp, MetricDetail, RingConfig, SoloConfig } from '@gauntlet/shared';
+import type {
+  HcAppOrder,
+  HcOriginApp,
+  MetricDetail,
+  RingConfig,
+  SoloConfig,
+} from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
 import type {
   BadgeDraft,
@@ -77,6 +83,8 @@ export const users = pgTable('users', {
   badgeXp: integer('badge_xp').notNull().default(0),
   /** The three Today rings: which stat each shows and its daily goal (null = the defaults). */
   ringConfig: jsonb('ring_config').$type<RingConfig>(),
+  /** Which Health Connect apps count per stat (0.18); null = Health Connect's own totals. */
+  hcAppOrder: jsonb('hc_app_order').$type<HcAppOrder>(),
   /** Up to 3 badge keys pinned to the profile. */
   badgeShowcase: jsonb('badge_showcase').$type<string[]>().notNull().default([]),
   /** Last time the person used Gauntlet (signed in, refreshed a session, opened the app). */

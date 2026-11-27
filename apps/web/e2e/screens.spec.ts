@@ -2538,3 +2538,88 @@ test.describe('where did this come from', () => {
     await expect(page.getByRole('heading', { name: 'Day stats' })).toBeVisible();
   });
 });
+
+test.describe('which phone apps count', () => {
+  test.skip(!!process.env.E2E_DIRECT, 'server build only');
+
+  test('choose and reorder the apps for steps, see it on the sheet, and the index', async ({
+    page,
+  }) => {
+    await signIn(page);
+    expect((await page.request.post('/api/_e2e/stat-sources')).ok()).toBe(true);
+
+    // Yesterday's steps have four apps, one with Android's long built-in package name.
+    await page.goto('/day');
+    await page.getByRole('button', { name: 'Previous day' }).click();
+    await expect(page.getByTestId('day-when')).toContainText('Yesterday');
+    const steps = page.getByTestId('day-stat').filter({ hasText: 'Steps' }).first();
+    await expect(steps).toBeVisible();
+    await steps.click({ button: 'right' });
+    const sheet = page.getByTestId('stat-source-sheet');
+    const phone = sheet.getByTestId('stat-source-phone');
+    await expect(phone.getByText('Garmin Connect', { exact: true })).toBeVisible();
+    await expect(phone.getByText('This phone', { exact: true })).toBeVisible();
+    await expect(sheet.getByTestId('stat-source-sum')).toContainText('Health Connect counted');
+    // Nothing spills past the sheet: no long package name or warning is wider than its card.
+    const overflow = await sheet.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      return [...el.querySelectorAll('li, .ss-warn, .ss-pkg, b')].filter((n) => {
+        const r = n.getBoundingClientRect();
+        return r.right > box.right + 1 || r.left < box.left - 1;
+      }).length;
+    });
+    expect(overflow).toBe(0);
+    await expect(sheet.getByTestId('stat-source-overlap')).not.toContainText('com.');
+    await snap(page, '5x-hc-apps-sheet');
+
+    // Choose which apps count.
+    await sheet.getByTestId('stat-source-choose').click();
+    await expect(page).toHaveURL(/\/sources\/phone-apps\/steps$/);
+    await expect(page.getByRole('heading', { name: 'Steps: phone apps' })).toBeVisible();
+    await page.getByRole('button', { name: 'Only these apps, in order' }).click();
+    await page.getByRole('switch', { name: 'Count Fitbit' }).click();
+    await page.getByRole('switch', { name: 'Count Garmin Connect' }).click();
+    // Garmin was added second; move it above Fitbit.
+    await page.getByRole('button', { name: 'Move Garmin Connect up' }).click();
+    const rows = page.getByTestId('phone-apps-list').getByRole('listitem');
+    await expect(rows.nth(0)).toContainText('Garmin Connect');
+    await expect(rows.nth(1)).toContainText('Fitbit');
+    await snap(page, '5x-hc-apps');
+    await page.getByRole('button', { name: 'Save' }).click();
+    const saved = page.getByTestId('phone-apps-saved');
+    await expect(saved).toContainText('Takes effect on your next sync');
+    await expect(saved.getByRole('button', { name: 'Sync now' })).toBeVisible();
+
+    // The sheet says which apps count and which are ignored.
+    await page.goto('/day');
+    await page.getByRole('button', { name: 'Previous day' }).click();
+    await expect(page.getByTestId('day-when')).toContainText('Yesterday');
+    await page.getByTestId('day-stat').filter({ hasText: 'Steps' }).first().click({
+      button: 'right',
+    });
+    await expect(sheet.getByTestId('stat-source-filter')).toHaveText(
+      'Counting Garmin Connect, then Fitbit',
+    );
+    await expect(phone.getByText('Ignored').first()).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // The index lists the stats with more than one app, and says what each is set to.
+    await page.goto('/sources');
+    await page.getByTestId('phone-apps-link').click();
+    await expect(page).toHaveURL(/\/sources\/phone-apps$/);
+    const index = page.getByTestId('phone-apps-index');
+    await expect(index.getByTestId('phone-apps-row').filter({ hasText: 'Steps' })).toContainText(
+      'Only Garmin Connect, then Fitbit',
+    );
+    await expect(index.getByTestId('phone-apps-row').filter({ hasText: 'Distance' })).toContainText(
+      'Health Connect decides',
+    );
+    await snap(page, '5x-hc-apps-index');
+
+    // Back to the default.
+    await index.getByTestId('phone-apps-row').filter({ hasText: 'Steps' }).click();
+    await page.getByRole('button', { name: /Health Connect decides/ }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByTestId('phone-apps-saved')).toBeVisible();
+  });
+});

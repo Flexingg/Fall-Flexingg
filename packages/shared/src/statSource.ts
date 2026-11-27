@@ -37,6 +37,8 @@ export interface MetricDetail {
 export interface HcOriginApp {
   /** Android package name of the app that wrote the records (Health Connect's data origin). */
   packageName: string;
+  /** The app's name as Android shows it, when the phone could look it up (0.18). */
+  name?: string;
   /** The day's value from this app alone, in the stat's stored unit. */
   value: number;
   /** How many Health Connect records it wrote that day. */
@@ -65,6 +67,7 @@ export const hcOriginSchema = z.object({
     .array(
       z.object({
         packageName: z.string().min(1).max(200),
+        name: z.string().max(100).optional(),
         value: z.number().finite(),
         records: z.number().int().min(0),
         devices: z.array(z.string().max(40)).max(10),
@@ -152,8 +155,17 @@ export const KNOWN_HEALTH_APPS: Record<string, string> = {
   'com.samsung.android.wear.shealth': 'Samsung Health (watch)',
   'com.sparkyfitness.mobile': 'SparkyFitness',
   'cc.randalls.gauntlet': 'Gauntlet',
+  'com.urbandroid.sleep': 'Sleep as Android',
 };
 
-export function healthAppName(packageName: string): string {
-  return KNOWN_HEALTH_APPS[packageName] ?? packageName;
+/** The phone's own sensors (its step counter) write under a package like this plus a hash. */
+const PHONE_PACKAGE_PREFIX = 'com.android.healthconnect.phone';
+
+/**
+ * A friendly name for a Health Connect app: our own wording for the ones we know, else the name
+ * Android gave the phone (`phoneName`, from HcOriginApp.name), else the package name.
+ */
+export function healthAppName(packageName: string, phoneName?: string): string {
+  if (packageName.startsWith(PHONE_PACKAGE_PREFIX)) return 'This phone';
+  return KNOWN_HEALTH_APPS[packageName] ?? (phoneName?.trim() || packageName);
 }

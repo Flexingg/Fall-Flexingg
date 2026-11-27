@@ -225,6 +225,73 @@ describe('mergeDaily', () => {
     expect(pick(rows, '2026-10-02', 'sleep')).toMatchObject({ value: 7, source: 'garmin' });
   });
 
+  it('counts a night stored twice by one source once', () => {
+    const night = {
+      entry_date: '2026-10-02',
+      bedtime: '2026-10-01T23:00:00Z',
+      wake_time: '2026-10-02T07:00:00Z',
+      duration_in_seconds: 8 * 3600,
+      time_asleep_in_seconds: 8 * 3600,
+      source: 'Health Connect',
+    };
+    const rows = mergeDaily({ ...empty, sleep: [night, { ...night }] });
+    expect(pick(rows, '2026-10-02', 'sleep')).toMatchObject({ value: 8, source: 'Health Connect' });
+    // Candidates show the night once too.
+    expect(pick(rows, '2026-10-02', 'sleep')!.detail!.candidates).toEqual([
+      { source: 'Health Connect', value: 8 },
+    ]);
+  });
+
+  it('keeps the longer of two mostly overlapping rows, and adds a nap that does not overlap', () => {
+    const rows = mergeDaily({
+      ...empty,
+      sleep: [
+        {
+          entry_date: '2026-10-02',
+          bedtime: '2026-10-01T23:10:00Z',
+          wake_time: '2026-10-02T06:50:00Z',
+          time_asleep_in_seconds: 7.5 * 3600,
+          duration_in_seconds: 7.67 * 3600,
+          source: 'Health Connect',
+        },
+        {
+          entry_date: '2026-10-02',
+          bedtime: '2026-10-01T23:00:00Z',
+          wake_time: '2026-10-02T07:00:00Z',
+          time_asleep_in_seconds: 8 * 3600,
+          duration_in_seconds: 8 * 3600,
+          source: 'Health Connect',
+        },
+        {
+          entry_date: '2026-10-02',
+          bedtime: '2026-10-02T14:00:00Z',
+          wake_time: '2026-10-02T14:30:00Z',
+          time_asleep_in_seconds: 0.5 * 3600,
+          duration_in_seconds: 0.5 * 3600,
+          source: 'Health Connect',
+        },
+      ],
+    });
+    expect(pick(rows, '2026-10-02', 'sleep')!.value).toBeCloseTo(8.5, 5);
+  });
+
+  it('does not treat two sources as copies of each other', () => {
+    const base = {
+      entry_date: '2026-10-02',
+      bedtime: '2026-10-01T23:00:00Z',
+      wake_time: '2026-10-02T07:00:00Z',
+    };
+    const rows = mergeDaily({
+      ...empty,
+      sleep: [
+        { ...base, time_asleep_in_seconds: 7 * 3600, source: 'garmin' },
+        { ...base, time_asleep_in_seconds: 8 * 3600, source: 'Health Connect' },
+      ],
+    });
+    expect(pick(rows, '2026-10-02', 'sleep')).toMatchObject({ value: 8, source: 'Health Connect' });
+    expect(pick(rows, '2026-10-02', 'sleep')!.detail!.candidates).toHaveLength(2);
+  });
+
   it('produces custom metrics with the challenge aggregate and drops out-of-range dates', () => {
     const rows = mergeDaily({
       ...empty,
