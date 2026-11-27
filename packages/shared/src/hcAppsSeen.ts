@@ -28,7 +28,7 @@ export function summariseSeen(
       };
       seen.days += 1;
       for (const d of a.devices) if (!seen.devices.includes(d)) seen.devices.push(d);
-      if (a.name?.trim()) seen.name = a.name.trim();
+      if (a.name?.trim()) seen.name = healthAppName(a.packageName, a.name.trim());
       apps.set(a.packageName, seen);
     }
   }

@@ -3,8 +3,7 @@
  * each stat. A server answers GET/PUT /api/me/hc-apps; direct mode (Android without a Gauntlet
  * server) keeps the order on the phone and works out the apps from the origins it stored.
  *
- * The direct-mode storage below is a stand-in for lib/hcAppOrder.ts (loadHcAppOrder/saveHcAppOrder),
- * which reads the same key; swap these two helpers for those when merging.
+ * Direct mode stores the order with lib/hcAppOrder.ts, the same place the phone's sync reads it.
  */
 import {
   addDays,
@@ -15,23 +14,13 @@ import {
 } from '@gauntlet/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, put } from './api';
+import { loadHcAppOrder, saveHcAppOrder } from './hcAppOrder';
 import { loadOrigins } from './hcOrigins';
 import { timezone } from './platform';
 import { session } from './session';
-import { storage } from './storage';
 
-export const HC_APP_ORDER_KEY = 'gauntlet.direct.hcAppOrder';
 export const hcAppsKey = ['hc-apps'] as const;
 const SEEN_DAYS = 30;
-
-async function loadOrder(): Promise<HcAppOrder> {
-  try {
-    const raw = await storage.get(HC_APP_ORDER_KEY);
-    return raw ? (JSON.parse(raw) as HcAppOrder) : {};
-  } catch {
-    return {};
-  }
-}
 
 /** One list per stat, no repeats, nothing for an empty list (what the server stores too). */
 export function cleanOrder(order: HcAppOrder): HcAppOrder {
@@ -50,14 +39,14 @@ async function directResponse(order: HcAppOrder): Promise<HcAppsResponse> {
 }
 
 async function fetchHcApps(): Promise<HcAppsResponse> {
-  if (session.direct) return directResponse(await loadOrder());
+  if (session.direct) return directResponse(await loadHcAppOrder());
   return get<HcAppsResponse>('/api/me/hc-apps');
 }
 
 export async function saveHcApps(order: HcAppOrder): Promise<HcAppsResponse> {
   if (!session.direct) return put<HcAppsResponse>('/api/me/hc-apps', { order });
   const clean = cleanOrder(order);
-  await storage.set(HC_APP_ORDER_KEY, JSON.stringify(clean));
+  await saveHcAppOrder(clean);
   return directResponse(clean);
 }
 
