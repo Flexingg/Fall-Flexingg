@@ -148,19 +148,20 @@ async function doCheck(
     const ed = evalDefOf(d);
     if (!windowOpenFor(ctx, user.timezone, ed)) return;
     const ev = await evaluateRule(ctx, { id: userId, timezone: user.timezone }, ed);
-    ruleTiers(d.rule).forEach((threshold, i) => {
-      if (ev.value < threshold || owned.has(`${d.key}:${i + 1}`)) return;
+    const tiers = ruleTiers(d.rule);
+    for (const [i, threshold] of tiers.entries()) {
+      if (ev.value < threshold || owned.has(`${d.key}:${i + 1}`)) continue;
       rows.push({
         userId,
         badgeKey: d.key,
         tier: i + 1,
         earnedAt: now,
         version: d.version,
-        context: ev.contextFor(threshold),
+        context: await ev.contextFor(threshold),
         backfilled: backfill,
         seenAt: backfill ? now : null,
       });
-    });
+    }
   });
 
   let inserted: (typeof userBadges.$inferSelect)[] = [];
@@ -323,22 +324,20 @@ export async function backfillBadge(ctx: AppContext, key: string): Promise<numbe
     await inBatches(batch, BATCH, async (u) => {
       if (!windowOpenFor(ctx, u.timezone, ed)) return;
       const ev = await evaluateRule(ctx, u, ed);
-      const rows = tiers.flatMap((threshold, i) =>
-        ev.value >= threshold && !owned.has(`${u.id}:${i + 1}`)
-          ? [
-              {
-                userId: u.id,
-                badgeKey: key,
-                tier: i + 1,
-                earnedAt: ctx.now(),
-                version: d.version,
-                context: ev.contextFor(threshold),
-                backfilled: true,
-                seenAt: ctx.now(),
-              },
-            ]
-          : [],
-      );
+      const rows: (typeof userBadges.$inferInsert)[] = [];
+      for (const [i, threshold] of tiers.entries()) {
+        if (ev.value < threshold || owned.has(`${u.id}:${i + 1}`)) continue;
+        rows.push({
+          userId: u.id,
+          badgeKey: key,
+          tier: i + 1,
+          earnedAt: ctx.now(),
+          version: d.version,
+          context: await ev.contextFor(threshold),
+          backfilled: true,
+          seenAt: ctx.now(),
+        });
+      }
       if (!rows.length) return;
       const got = await ctx.db.insert(userBadges).values(rows).onConflictDoNothing().returning();
       added += got.length;
