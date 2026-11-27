@@ -18,6 +18,7 @@ import { challengeRoutes } from './routes/challenges.js';
 import { teamRoutes } from './routes/teams.js';
 import { stakeRoutes } from './routes/stakes.js';
 import { connectionRoutes } from './routes/connections.js';
+import { historyRoutes } from './routes/history.js';
 import { garminRoutes } from './routes/garmin.js';
 import { friendRoutes } from './routes/friends.js';
 import { userRoutes } from './routes/users.js';
@@ -117,6 +118,7 @@ export async function buildApp(
   socialRoutes(app, full);
   garminRoutes(app, full);
   connectionRoutes(app, full);
+  historyRoutes(app, full);
   notificationRoutes(app, full);
   pushRoutes(app, full);
   reviewRoutes(app, full);

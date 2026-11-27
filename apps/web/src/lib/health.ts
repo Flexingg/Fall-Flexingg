@@ -4,7 +4,15 @@
  * sends, so the two can coexist without duplicating data.
  */
 import { Health, type HealthDataType } from '@capgo/capacitor-health';
-import { localDate } from '@gauntlet/shared';
+import {
+  addDays,
+  localDate,
+  planChunks,
+  todayIn,
+  windowDays,
+  type HealthConnectProgress,
+} from '@gauntlet/shared';
+import { historyAccessOf, resumePoint, type HistoryAccess } from './historyPlan';
 import { sendHealthRecords } from './session';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
@@ -47,19 +55,10 @@ type HcRecord = Record<string, unknown> & { type: string };
 
 const day = (iso: string) => localDate(new Date(iso), timezone);
 
-/** Pull the last few days from Health Connect and forward them. Returns records sent. */
-export async function syncHealthConnect(opts: { days?: number } = {}): Promise<number> {
-  if (!isNative) return 0;
-  const last = await storage.get(LAST_SYNC_KEY);
-  const days = opts.days ?? (last ? 7 : 30);
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - days);
-  start.setHours(0, 0, 0, 0);
-  const range = { startDate: start.toISOString(), endDate: end.toISOString() };
+/** Read one time range from Health Connect as SparkyFitness-shaped records. */
+async function readRange(range: { startDate: string; endDate: string }): Promise<HcRecord[]> {
   const records: HcRecord[] = [];
   const source = 'Health Connect';
-
   const daily = async (
     dataType: HealthDataType,
     aggregation: 'sum' | 'average',
@@ -150,9 +149,164 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
     /* no workout permission */
   }
 
+  return records;
+}
+
+/** Send records in batches. Returns how many went. */
+async function sendAll(records: HcRecord[]): Promise<number> {
   for (let i = 0; i < records.length; i += CHUNK) {
     await sendHealthRecords(records.slice(i, i + CHUNK));
   }
+  return records.length;
+}
+
+/** Pull the last few days from Health Connect and forward them. Returns records sent. */
+export async function syncHealthConnect(opts: { days?: number } = {}): Promise<number> {
+  if (!isNative) return 0;
+  const last = await storage.get(LAST_SYNC_KEY);
+  const days = opts.days ?? (last ? 7 : 30);
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - days);
+  start.setHours(0, 0, 0, 0);
+  const records = await readRange({ startDate: start.toISOString(), endDate: end.toISOString() });
+  await sendAll(records);
   await storage.set(LAST_SYNC_KEY, end.toISOString());
   return records.length;
 }
+
+// ---------------------------------------------------------------- history
+
+const HISTORY_KEY = 'gauntlet.hc.history';
+/** Days per Health Connect read: a few types each, so small windows stay quick and reliable. */
+export const HC_HISTORY_CHUNK_DAYS = 14;
+/** Health Connect keeps 30 days readable until the person allows past data. */
+const HC_DEFAULT_WINDOW_DAYS = 30;
+/** Stop after this many empty windows in a row (about three months with nothing). */
+const RAN_DRY_AFTER = 6;
+
+export async function healthHistoryAccess(): Promise<HistoryAccess> {
+  if (!isNative) return 'unsupported';
+  try {
+    const s = await Health.checkAuthorization({
+      read: READ,
+      write: [],
+      requestHistoryAccess: true,
+    });
+    return historyAccessOf(s);
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Ask again, this time showing Health Connect's permission sheet. */
+export async function requestHealthHistoryAccess(): Promise<HistoryAccess> {
+  try {
+    return historyAccessOf(
+      await Health.requestAuthorization({ read: READ, write: [], requestHistoryAccess: true }),
+    );
+  } catch {
+    return 'unknown';
+  }
+}
+
+export interface HealthHistoryProgress {
+  doneDays: number;
+  totalDays: number;
+  records: number;
+  /** Oldest day sent so far. */
+  oldest: string;
+}
+
+export interface HealthHistoryResult {
+  records: number;
+  /** Oldest day with data that was sent, or null when nothing was found. */
+  oldestWithData: string | null;
+  /**
+   * `done`: reached the date asked for. `cancelled`. `ran_dry`: months of nothing in a row, so
+   * there is probably nothing older (or Health Connect isn't allowed to show it).
+   */
+  reason: 'done' | 'cancelled' | 'ran_dry';
+  access: HistoryAccess;
+}
+
+async function savedProgress(): Promise<HealthConnectProgress | null> {
+  try {
+    const raw = await storage.get(HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as HealthConnectProgress) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Is there an import that stopped part way (so "Continue" makes sense)? */
+export async function pendingHealthHistory(): Promise<HealthConnectProgress | null> {
+  return savedProgress();
+}
+
+const localMidnight = (date: string) => new Date(`${date}T00:00:00`);
+
+/**
+ * Read Health Connect back `days` days in small windows, newest first, forwarding each window's
+ * records in batches. It remembers the oldest day done, so an import that was interrupted (app
+ * closed, phone locked) carries on from there next time, and `signal` cancels between windows.
+ * Without "past data" access Health Connect returns nothing older than 30 days, which shows up here
+ * as empty windows: the import stops instead of grinding through years of nothing, and says why.
+ */
+export async function importHealthConnectHistory(
+  days: number,
+  onProgress: (p: HealthHistoryProgress) => void = () => {},
+  signal?: AbortSignal,
+): Promise<HealthHistoryResult> {
+  const access = await healthHistoryAccess();
+  if (!isNative) return { records: 0, oldestWithData: null, reason: 'done', access };
+  const today = todayIn(timezone);
+  const target = addDays(today, -days);
+  const total = days + 1;
+  const saved = await savedProgress();
+  const resumeFrom = resumePoint(saved, target, today);
+  const first = resumeFrom ?? today;
+  let sent = 0;
+  let oldest: string | null = null;
+  let emptyRun = 0;
+  let reason: HealthHistoryResult['reason'] = 'done';
+  let doneDays = resumeFrom ? daysSpan(resumeFrom, today) : 0;
+
+  for (const w of planChunks(target, first, HC_HISTORY_CHUNK_DAYS)) {
+    if (signal?.aborted) {
+      reason = 'cancelled';
+      break;
+    }
+    const records = await readRange({
+      startDate: localMidnight(w.start).toISOString(),
+      endDate: localMidnight(addDays(w.end, 1)).toISOString(),
+    });
+    sent += await sendAll(records);
+    doneDays += windowDays(w);
+    if (records.length) {
+      oldest = records.map((r) => String(r.date ?? r.entry_date ?? w.start)).sort()[0]!;
+      emptyRun = 0;
+    } else emptyRun++;
+    // Save where we got to, so a closed app resumes here.
+    await storage.set(
+      HISTORY_KEY,
+      JSON.stringify({ oldestDone: w.start, target } satisfies HealthConnectProgress),
+    );
+    onProgress({
+      doneDays: Math.min(doneDays, total),
+      totalDays: total,
+      records: sent,
+      oldest: w.start,
+    });
+    // Past the first 30 days: months of nothing in a row means there is nothing older to find.
+    if (w.start < addDays(today, -HC_DEFAULT_WINDOW_DAYS) && emptyRun >= RAN_DRY_AFTER) {
+      reason = 'ran_dry';
+      break;
+    }
+  }
+  if (reason !== 'cancelled') await storage.set(HISTORY_KEY, null);
+  return { records: sent, oldestWithData: oldest, reason, access };
+}
+
+const daysSpan = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;

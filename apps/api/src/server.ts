@@ -4,6 +4,7 @@ import { createDb, runMigrations } from './db/index.js';
 import { seedBadges } from './services/badges/seed.js';
 import { refreshDemo } from './services/demo.js';
 import { startScheduler } from './scheduler.js';
+import { resumeHistoryImports } from './services/historyImport.js';
 import { startReleaseMirror } from './githubRelease.js';
 import { SparkyClient } from '@gauntlet/sparky';
 
@@ -18,6 +19,10 @@ const { app, ctx } = await buildApp(
 // The launch badges (before the demo account, whose sample badges point at them).
 await seedBadges(ctx).catch((err) => ctx.log.warn({ err }, 'badge seed failed'));
 void refreshDemo(ctx).catch((err) => ctx.log.warn({ err }, 'demo setup failed'));
+// An import a restart cut short carries on from where it was.
+void resumeHistoryImports(ctx).catch((err) =>
+  ctx.log.warn({ err }, 'resuming history imports failed'),
+);
 const stopSync = startScheduler(ctx, cfg.SYNC_INTERVAL_MINUTES);
 // The Android app's downloads and update checks come from the newest GitHub release.
 const stopMirror =

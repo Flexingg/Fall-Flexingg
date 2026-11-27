@@ -182,8 +182,25 @@ export function describe(
 
 /** Compare this person's bests with what we remember. Call after a sync has stored new data. */
 export async function checkPersonalRecords(ctx: AppContext, userId: string): Promise<number> {
+  return (await refreshPersonalRecords(ctx, userId)).alerts;
+}
+
+export interface RecordRefreshOptions {
+  /**
+   * Records set on a day before this one are stored without an alert or feed post. A history import
+   * uses it so a record from 2022 is remembered but isn't announced as news.
+   */
+  quietBefore?: string;
+}
+
+/** Like checkPersonalRecords, also saying how many records were created or beaten. */
+export async function refreshPersonalRecords(
+  ctx: AppContext,
+  userId: string,
+  opts: RecordRefreshOptions = {},
+): Promise<{ alerts: number; updated: number }> {
   const user = await getUser(ctx, userId);
-  if (user.isDemo) return 0;
+  if (user.isDemo) return { alerts: 0, updated: 0 };
   const today = todayIn(user.timezone, ctx.now());
   const prefs = displayOf(user);
 
@@ -205,7 +222,7 @@ export async function checkPersonalRecords(ctx: AppContext, userId: string): Pro
       ),
     );
   const bests = bestsFrom(rows, today);
-  if (!bests.size) return 0;
+  if (!bests.size) return { alerts: 0, updated: 0 };
 
   const known = new Map(
     (await ctx.db.select().from(personalRecords).where(eq(personalRecords.userId, userId))).map(
@@ -213,6 +230,7 @@ export async function checkPersonalRecords(ctx: AppContext, userId: string): Pro
     ),
   );
   const alerts: Alert[] = [];
+  let updated = 0;
   for (const c of bests.values()) {
     const old = known.get(c.key);
     if (old && c.value <= old.value) continue;
@@ -223,8 +241,10 @@ export async function checkPersonalRecords(ctx: AppContext, userId: string): Pro
         target: [personalRecords.userId, personalRecords.key],
         set: { value: c.value, date: c.date, updatedAt: ctx.now() },
       });
+    updated++;
     // First sighting is history, not news. A record that just moved is still moving.
     if (!old || ctx.now().getTime() - old.updatedAt.getTime() < QUIET_MS) continue;
+    if (opts.quietBefore && c.date < opts.quietBefore) continue;
     const alert = describe(c, old.value, prefs);
     if (alert) alerts.push(alert);
   }
@@ -252,5 +272,5 @@ export async function checkPersonalRecords(ctx: AppContext, userId: string): Pro
       },
     });
   }
-  return alerts.length;
+  return { alerts: alerts.length, updated };
 }

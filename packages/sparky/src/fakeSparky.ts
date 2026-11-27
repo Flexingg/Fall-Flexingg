@@ -84,6 +84,14 @@ export class FakeSparky {
   goodAppKeys = new Set<string>(['good-hevy-key', 'good-liftosaur-key']);
   /** The OAuth code every pretend provider accepts. */
   goodOAuthCode = 'good-code';
+  /** Every provider sync asked for, in order, with the range (history import runs many). */
+  syncLog: { userId: string; route: string; startDate: string; endDate: string; full: boolean }[] =
+    [];
+  /** Make a provider sync fail: return the answer to give, or null to let it through. */
+  failSync?: (
+    route: string,
+    range: { startDate: string; endDate: string },
+  ) => { status: number; error: string } | null;
   /** Artificial response delay per user id (ms), to force sync interleavings in tests. */
   latencyMs: Record<string, number> = {};
   private seq = 0;
@@ -385,6 +393,21 @@ export class FakeSparky {
       }
       if (g === 'sync') {
         if (!user.garmin) return json(400, { error: 'Garmin Connect is not linked.' });
+        // Like SparkyFitness 1.7: at most 365 days per call, and never past tomorrow.
+        const spanDays =
+          (Date.parse(String(body.endDate)) - Date.parse(String(body.startDate))) / 86_400_000;
+        if (spanDays > 365) return json(400, { error: 'Date range cannot exceed 365 days.' });
+        if (String(body.endDate) > new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10))
+          return json(400, { error: 'endDate cannot be in the future.' });
+        this.syncLog.push({
+          userId: user.id,
+          route: 'garmin',
+          startDate: String(body.startDate),
+          endDate: String(body.endDate),
+          full: false,
+        });
+        const refused = this.failSync?.('garmin', body);
+        if (refused) return json(refused.status, { error: refused.error });
         user.garmin.syncs++;
         const day = String(body.endDate);
         user.daily = user.daily.filter(
@@ -490,6 +513,15 @@ export class FakeSparky {
                 : 'Invalid Liftosaur API key.',
             error: 'Request failed with status code 401',
           });
+        this.syncLog.push({
+          userId: user.id,
+          route,
+          startDate: String(body.startDate),
+          endDate: String(body.endDate),
+          full: body.fullSync === true,
+        });
+        const refused = this.failSync?.(route, body);
+        if (refused) return json(refused.status, { message: refused.error, error: refused.error });
         rec.syncs++;
         rec.last_sync_at = new Date().toISOString();
         const day = String(body.endDate);

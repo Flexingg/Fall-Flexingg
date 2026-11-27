@@ -22,7 +22,7 @@ import { storeActivities } from './badges/activities.js';
 import { checkBadges } from './badges/engine.js';
 import { checkPersonalRecords } from './records.js';
 import { openChallengesForUser, refreshChallenge, type ChallengeRow } from './challenges.js';
-import { getUser, markKeyInvalid, sparkyToken } from './users.js';
+import { getUser, markKeyInvalid, sparkyToken, type UserRow } from './users.js';
 
 /** How far back the Today and Trends screens look. */
 const HISTORY_DAYS = 62;
@@ -114,40 +114,10 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   }
   start = start < addDays(end, -MAX_WINDOW_DAYS) ? addDays(end, -MAX_WINDOW_DAYS) : start;
 
-  const customMetrics: Record<string, MetricAggregate> = {};
-  const lifts = new Set<string>();
-  for (const ch of open) {
-    if (isCustomMetric(ch.metric))
-      customMetrics[ch.metric.slice('custom:'.length).toLowerCase()] = ch.aggregate;
-    const lift = liftExercise(ch.metric);
-    if (lift) lifts.add(lift.exercise);
-  }
-  // Goals are read for every day with food or water logged (it is one call each, only for days that
-  // have something, and settled days are remembered), so adherence is on Trends as well as in challenges.
-  const knownGoals = await storedGoals(
-    ctx,
-    userId,
-    start,
-    addDays(todayIn(user.timezone, ctx.now()), -GOALS_SETTLED_AFTER_DAYS),
-  );
-
-  let merged: MergedValue[];
-  let workouts: WorkoutSummary[];
-  let partial: boolean;
-  let sources: Record<string, string[]>;
+  const scope = scopeOf(open);
+  let fetched: FetchedWindow;
   try {
-    ({ merged, partial, sources, workouts } = await fetchMerged(ctx.sparky, token, start, end, {
-      customMetrics,
-      lifts: [...lifts],
-      timezone: user.timezone,
-      goals: { known: knownGoals },
-      // Everything a challenge can be scored on is also kept for the Trends screen.
-      allCustom: true,
-      allLifts: true,
-      onSkip: (label, err) =>
-        ctx.log.warn({ err: err.message, label }, 'sparky read failed; continuing without it'),
-      priorities: user.sourcePriorities,
-    }));
+    fetched = await fetchWindow(ctx, user, token, start, end, scope);
   } catch (err) {
     if (err instanceof SparkyError && err.status === 401) {
       await markKeyInvalid(ctx, userId);
@@ -156,19 +126,8 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
     ctx.log.warn({ err, userId }, 'sync failed');
     return failSync(ctx, userId, (err as Error).message);
   }
-
-  // Metrics this sync is responsible for: a value it no longer sees was deleted in SparkyFitness.
-  const managed = new Set<string>([
-    ...BUILTIN_METRICS,
-    ...HIDDEN_METRICS,
-    ...Object.keys(customMetrics).map((n) => `custom:${n}`),
-    ...[...lifts].flatMap((l) => [`lift_max:${l}`, `lift_e1rm:${l}`]),
-  ]);
-  const isManaged = (m: string) => managed.has(m) || m.startsWith('custom:') || isLiftMetric(m);
-  const changes = await store(ctx, userId, start, end, merged, isManaged, partial);
-  await storeActivities(ctx, userId, user.timezone, start, end, workouts, partial).catch((err) =>
-    ctx.log.warn({ err: String(err), userId }, 'storing workouts failed'),
-  );
+  const { sources } = fetched;
+  const changes = await storeWindow(ctx, userId, user.timezone, start, end, fetched, scope);
   await ctx.db
     .update(users)
     .set({
@@ -189,6 +148,90 @@ async function doSync(ctx: AppContext, userId: string, opts: SyncOptions): Promi
   );
   if (opts.settle !== false) for (const ch of open) await refreshChallenge(ctx, ch.id);
   return { userId, ok: true, changed: changes.length };
+}
+
+/** What a window's metrics are read for: the custom metrics and lifts open challenges score on. */
+export interface WindowScope {
+  customMetrics: Record<string, MetricAggregate>;
+  lifts: string[];
+}
+
+export function scopeOf(open: ChallengeRow[]): WindowScope {
+  const customMetrics: Record<string, MetricAggregate> = {};
+  const lifts = new Set<string>();
+  for (const ch of open) {
+    if (isCustomMetric(ch.metric))
+      customMetrics[ch.metric.slice('custom:'.length).toLowerCase()] = ch.aggregate;
+    const lift = liftExercise(ch.metric);
+    if (lift) lifts.add(lift.exercise);
+  }
+  return { customMetrics, lifts: [...lifts] };
+}
+
+export type FetchedWindow = Awaited<ReturnType<typeof fetchMerged>>;
+
+/**
+ * Read one window from SparkyFitness. Shared by the normal sync and the history import, so both
+ * produce the same values for the same day.
+ */
+export async function fetchWindow(
+  ctx: AppContext,
+  user: UserRow,
+  token: string,
+  start: string,
+  end: string,
+  scope: WindowScope,
+  opts: { maxGoalFetches?: number } = {},
+): Promise<FetchedWindow> {
+  // Goals are read for every day with food or water logged (it is one call each, only for days that
+  // have something, and settled days are remembered), so adherence is on Trends as well as in challenges.
+  const knownGoals = await storedGoals(
+    ctx,
+    user.id,
+    start,
+    addDays(todayIn(user.timezone, ctx.now()), -GOALS_SETTLED_AFTER_DAYS),
+  );
+  return fetchMerged(ctx.sparky, token, start, end, {
+    customMetrics: scope.customMetrics,
+    lifts: scope.lifts,
+    timezone: user.timezone,
+    goals: { known: knownGoals, maxFetches: opts.maxGoalFetches },
+    // Everything a challenge can be scored on is also kept for the Trends screen.
+    allCustom: true,
+    allLifts: true,
+    onSkip: (label, err) =>
+      ctx.log.warn({ err: err.message, label }, 'sparky read failed; continuing without it'),
+    priorities: user.sourcePriorities,
+  });
+}
+
+/**
+ * Save a window's daily values and workouts. Only rows inside [start, end] are ever touched (a
+ * value missing there was deleted in SparkyFitness), so a sync never disturbs older history.
+ * Returns what changed.
+ */
+export async function storeWindow(
+  ctx: AppContext,
+  userId: string,
+  timezone: string,
+  start: string,
+  end: string,
+  fetched: FetchedWindow,
+  scope: WindowScope,
+): Promise<Change[]> {
+  // Metrics this window is responsible for: a value it no longer sees was deleted in SparkyFitness.
+  const managed = new Set<string>([
+    ...BUILTIN_METRICS,
+    ...HIDDEN_METRICS,
+    ...Object.keys(scope.customMetrics).map((n) => `custom:${n}`),
+    ...scope.lifts.flatMap((l) => [`lift_max:${l}`, `lift_e1rm:${l}`]),
+  ]);
+  const isManaged = (m: string) => managed.has(m) || m.startsWith('custom:') || isLiftMetric(m);
+  const changes = await store(ctx, userId, start, end, fetched.merged, isManaged, fetched.partial);
+  await storeActivities(ctx, userId, timezone, start, end, fetched.workouts, fetched.partial).catch(
+    (err) => ctx.log.warn({ err: String(err), userId }, 'storing workouts failed'),
+  );
+  return changes;
 }
 
 /** Remember why a sync failed, so the admin page can show it. */
@@ -236,7 +279,7 @@ async function storedGoals(
   return out;
 }
 
-interface Change {
+export interface Change {
   date: string;
   metric: string;
   before: number;

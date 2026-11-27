@@ -1,0 +1,100 @@
+/* Settings > Data sources > Import history. */
+.hi-lead {
+  display: block;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+.hi-limits {
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.hi-limits b {
+  color: var(--text);
+  font-weight: 600;
+}
+.hi-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--card-2);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.hi-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hi-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hi-name {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hi-state {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.hi-row.running .hi-state,
+.hi-row.done .hi-state {
+  color: var(--volt);
+}
+.hi-row.failed .hi-state {
+  color: var(--danger);
+}
+.hi-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.hi-bar i {
+  display: block;
+  height: 100%;
+  background: var(--volt);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.hi-row.skipped .hi-bar,
+.hi-row.waiting .hi-bar {
+  opacity: 0.4;
+}
+.hi-row small {
+  line-height: 1.45;
+}
+.hi-err {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+.hi-done {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--volt-wash);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.hi-done.done b {
+  color: var(--volt);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hi-bar i {
+    transition: none;
+  }
+}
