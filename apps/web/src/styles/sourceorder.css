@@ -1,0 +1,43 @@
+/* Ranked source lists on Data sources: a numbered row per source with up/down buttons. */
+.order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.order-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--card-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.order-rank {
+  width: 20px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.order-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  color: var(--text);
+}
+.order-btn:disabled {
+  opacity: 0.35;
+}
+.rot-up {
+  transform: rotate(-90deg);
+}
+.rot-down {
+  transform: rotate(90deg);
+}

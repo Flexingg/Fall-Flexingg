@@ -6,6 +6,7 @@ import { maintainDemo } from './services/demo.js';
 import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
 import { maybeRunScheduledImport } from './services/badgeImport/runner.js';
 import { resumeBadgeBackfill } from './services/badges/publishAll.js';
+import { runScheduledPulls } from './services/pull.js';
 import { pruneNotifications } from './services/push.js';
 import { sendWeeklyRecaps } from './services/recap.js';
 import { sendMonthReviews } from './services/review.js';
@@ -82,9 +83,23 @@ async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: numb
   return { synced, finalized };
 }
 
+const PULL_LOCK_ID = 7_340_113;
+
+/** Only one API instance re-pulls at a time. */
+export async function runPullCycle(ctx: AppContext): Promise<number> {
+  return ctx.db.transaction(async (tx) => {
+    const [lock] = await tx.execute<{ ok: boolean }>(
+      sql`select pg_try_advisory_xact_lock(${PULL_LOCK_ID}) as ok`,
+    );
+    if (!lock?.ok) return 0;
+    return runScheduledPulls(ctx);
+  });
+}
+
 export function startScheduler(ctx: AppContext, minutes: number): () => void {
   if (minutes <= 0) return () => {};
   let running = false;
+  let pullingApps = false;
   const tick = async () => {
     if (running) return;
     running = true;
@@ -92,6 +107,14 @@ export function startScheduler(ctx: AppContext, minutes: number): () => void {
     void maybeRunScheduledImport(ctx).catch((err) =>
       ctx.log.warn({ err }, 'badge import check failed'),
     );
+    // Re-ask connected apps for the last seven days. Slow (providers answer in their own time), so
+    // it runs beside the cycle on its own lock and never holds it up.
+    if (!pullingApps) {
+      pullingApps = true;
+      void runPullCycle(ctx)
+        .catch((err) => ctx.log.warn({ err }, 'scheduled app pull failed'))
+        .finally(() => (pullingApps = false));
+    }
     try {
       const r = await runSyncCycle(ctx);
       if (r.synced || r.finalized) ctx.log.info(r, 'sync cycle');

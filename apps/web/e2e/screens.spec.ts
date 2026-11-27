@@ -712,21 +712,22 @@ test('fresh data: sync now, pull to refresh, and choosing which source counts', 
   await page.getByRole('button', { name: 'Sync now' }).click();
   await expect(page.locator('.toast')).toHaveText(/Up to date|Updated/);
 
-  // Distance comes from the watch and from logged workouts: pick one, then go back to automatic.
+  // Distance comes from the watch and from logged workouts: give it its own order, then undo.
   const distance = page.getByRole('group', { name: 'Distance source' });
   await expect(distance).toBeVisible();
-  await expect(distance.getByRole('button', { name: 'Automatic' })).toHaveAttribute(
+  await expect(distance.getByRole('button', { name: 'Same as default' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await distance.getByRole('button', { name: 'Logged workouts' }).click();
-  await expect(distance.getByRole('button', { name: 'Logged workouts' })).toHaveAttribute(
+  await distance.getByRole('button', { name: 'Custom order' }).click();
+  await expect(distance.getByRole('button', { name: 'Custom order' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
+  await expect(page.getByRole('list', { name: 'Distance order of sources' })).toBeVisible();
   await snap(page, '43-source-priority');
-  await distance.getByRole('button', { name: 'Automatic' }).click();
-  await expect(distance.getByRole('button', { name: 'Automatic' })).toHaveAttribute(
+  await distance.getByRole('button', { name: 'Same as default' }).click();
+  await expect(distance.getByRole('button', { name: 'Same as default' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -2319,4 +2320,38 @@ test.describe('badge status, race and timeline', () => {
     await page.getByTestId('sheet-handle').click();
     await expect(sheet).toBeHidden();
   });
+});
+
+test('Data sources: rank which source counts with up and down buttons', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/sources');
+  const mode = page.getByRole('group', { name: 'Default order mode' });
+  await expect(mode).toBeVisible();
+  await expect(mode.getByRole('button', { name: 'Automatic (highest number)' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await mode.getByRole('button', { name: 'My order' }).click();
+  const list = page.getByRole('list', { name: 'Default order of sources' });
+  await expect(list).toBeVisible();
+  const rows = list.getByRole('listitem');
+  const first = (await rows.nth(0).innerText()).replace(/^\d+\s*/, '').trim();
+  const second = (await rows.nth(1).innerText()).replace(/^\d+\s*/, '').trim();
+  await rows
+    .nth(1)
+    .getByRole('button', { name: /Move .* up/ })
+    .click();
+  await expect(rows.nth(0)).toContainText(second);
+  await expect(rows.nth(1)).toContainText(first);
+  await snap(page, '150-source-priority');
+
+  // It is saved: still ranked after a reload, then back to automatic.
+  await page.reload();
+  const again = page.getByRole('list', { name: 'Default order of sources' });
+  await expect(again.getByRole('listitem').nth(0)).toContainText(second);
+  await page
+    .getByRole('group', { name: 'Default order mode' })
+    .getByRole('button', { name: 'Automatic (highest number)' })
+    .click();
+  await expect(again).toHaveCount(0);
 });

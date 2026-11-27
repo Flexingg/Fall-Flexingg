@@ -305,4 +305,50 @@ describe('source priorities', () => {
     expect(pick(values, '2026-10-01', 'resting_hr')).toMatchObject({ value: 58 });
     expect(pick(values, '2026-10-01', 'steps')).toMatchObject({ value: 9500 });
   });
+
+  it("uses the default order for stats without their own, and the stat's own order wins", () => {
+    const input: MergeInput = {
+      ...watchAndPhone,
+      daily: [
+        ...watchAndPhone.daily,
+        { entry_date: '2026-10-01', source_provider: 'garmin', resting_heart_rate: 50 },
+      ],
+    };
+    const def = mergeDailyDetailed({ ...input, priorities: { '*': ['garmin', 'health_connect'] } });
+    expect(pick(def.values, '2026-10-01', 'steps')).toMatchObject({ value: 9000 });
+    // Garmin has no steps on the 3rd: the next source in the default order is used.
+    expect(pick(def.values, '2026-10-03', 'steps')).toMatchObject({ value: 3000 });
+    expect(pick(def.values, '2026-10-01', 'resting_hr')).toMatchObject({ value: 50 });
+
+    const own = mergeDailyDetailed({
+      ...input,
+      priorities: { '*': ['garmin', 'health_connect'], steps: ['health_connect'] },
+    });
+    expect(pick(own.values, '2026-10-01', 'steps')).toMatchObject({ value: 9500 });
+    expect(pick(own.values, '2026-10-01', 'resting_hr')).toMatchObject({ value: 50 });
+  });
+
+  it('without any order the highest source still wins', () => {
+    const { values } = mergeDailyDetailed({ ...watchAndPhone, priorities: { '*': [] } });
+    expect(pick(values, '2026-10-01', 'steps')).toMatchObject({ value: 9500 });
+  });
+
+  it('treats numbers typed into SparkyFitness as their own source', () => {
+    expect(sourceKey('wearable')).toBe('sparkyfitness');
+    expect(sourceKey('manual')).toBe('sparkyfitness');
+    expect(sourceLabel('sparkyfitness')).toBe('SparkyFitness (logged by hand)');
+    const input: MergeInput = {
+      ...empty,
+      daily: [
+        { entry_date: '2026-10-01', total_steps: 5000 },
+        { entry_date: '2026-10-01', source_provider: 'garmin', total_steps: 9000 },
+      ],
+    };
+    const { values, sources } = mergeDailyDetailed({
+      ...input,
+      priorities: { '*': ['sparkyfitness', 'garmin'] },
+    });
+    expect(sources.steps).toEqual(['garmin', 'sparkyfitness']);
+    expect(pick(values, '2026-10-01', 'steps')).toMatchObject({ value: 5000 });
+  });
 });

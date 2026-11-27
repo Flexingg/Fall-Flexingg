@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, runMigrations, type Db } from '../src/db/index.js';
-import { dailyMetrics } from '../src/db/schema.js';
+import { dailyMetrics, users } from '../src/db/schema.js';
 import { resetPullCooldowns } from '../src/services/pull.js';
 
 const DB_URL = process.env.TEST_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:5433/gauntlet_test';
@@ -107,11 +107,14 @@ describe('choosing which source counts', () => {
       key: 'steps',
       label: 'Steps',
       preferred: null,
+      order: [],
       sources: [
         { key: 'garmin', label: 'Garmin' },
         { key: 'health_connect', label: 'Health Connect & phone' },
+        { key: 'sparkyfitness', label: 'SparkyFitness (logged by hand)' },
       ],
     });
+    expect(p.default.order).toEqual([]);
   });
 
   it('prefers a source per metric, re-syncs, and can go back to automatic', async () => {
@@ -158,5 +161,74 @@ describe('pulling fresh data', () => {
     const r = await call<SyncResponse>('POST', '/api/me/sync', {});
     expect(r.pulling).toEqual([]);
     expect(ana.garmin!.syncs).toBe(1);
+  });
+});
+
+describe('ranked source priorities', () => {
+  const put = (payload: object, status = 200) =>
+    call<SourcePriorityResponse>('PUT', '/api/me/source-priority', payload, status);
+
+  it('lists every source a person could have, not just the ones seen', async () => {
+    // Garmin is connected (earlier test); turn on phone sync too.
+    await db.update(users).set({ healthConnectSync: true }).where(eq(users.id, userId));
+    const p = await call<SourcePriorityResponse>('GET', '/api/me/source-priority');
+    const sleep = p.metrics.find((m) => m.key === 'sleep')!;
+    expect(sleep.sources.map((s) => s.key).sort()).toEqual([
+      'garmin',
+      'health_connect',
+      'sparkyfitness',
+    ]);
+    expect(p.default.sources.map((s) => s.key)).toEqual(
+      expect.arrayContaining(['garmin', 'health_connect', 'sparkyfitness']),
+    );
+    expect(p.default.sources.find((s) => s.key === 'sparkyfitness')!.label).toBe(
+      'SparkyFitness (logged by hand)',
+    );
+  });
+
+  it("applies the default order to every stat, and a stat's own order wins", async () => {
+    await put({ metric: 'steps', order: [] }); // left on garmin by the pull test above
+    const d = await put({ metric: '*', order: ['garmin', 'health_connect'] });
+    expect(d.default.order).toEqual(['garmin', 'health_connect']);
+    expect(d.metrics.every((m) => m.order.length === 0)).toBe(true);
+    expect(await steps(yesterday)).toMatchObject({ value: 9000, source: 'garmin' });
+
+    const own = await put({ metric: 'steps', order: ['health_connect', 'garmin'] });
+    expect(own.metrics.find((m) => m.key === 'steps')).toMatchObject({
+      order: ['health_connect', 'garmin'],
+      preferred: 'health_connect',
+    });
+    expect(await steps(yesterday)).toMatchObject({ value: 9500 });
+
+    // Clearing the stat's own order goes back to the default; clearing that goes back to automatic.
+    await put({ metric: 'steps', order: [] });
+    expect(await steps(yesterday)).toMatchObject({ value: 9000 });
+    const auto = await put({ metric: '*', order: [] });
+    expect(auto.default.order).toEqual([]);
+    expect(await steps(yesterday)).toMatchObject({ value: 9500 });
+  });
+
+  it('still accepts the older one-source shape', async () => {
+    const p = await put({ metric: 'steps', preferred: 'garmin' });
+    expect(p.metrics.find((m) => m.key === 'steps')!.order).toEqual(['garmin']);
+    await put({ metric: 'steps', preferred: null });
+  });
+
+  it('rejects bad orders', async () => {
+    await put({ metric: 'steps', order: ['garmin', 'garmin'] }, 400);
+    await put({ metric: 'steps', order: ['Not Valid!'] }, 400);
+    await put({ metric: 'workouts', order: ['garmin'] }, 400);
+    await put({ metric: '*', preferred: 'garmin' }, 400);
+    await put({ metric: '*', order: Array.from({ length: 17 }, (_, i) => `s${i}`) }, 400);
+  });
+
+  it('keeps a stored "wearable" choice working as SparkyFitness', async () => {
+    await db
+      .update(users)
+      .set({ sourcePriorities: { steps: ['wearable'] } })
+      .where(eq(users.id, userId));
+    const p = await call<SourcePriorityResponse>('GET', '/api/me/source-priority');
+    expect(p.metrics.find((m) => m.key === 'steps')!.order).toEqual(['sparkyfitness']);
+    await put({ metric: 'steps', order: [] });
   });
 });
