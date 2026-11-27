@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "ring_config" jsonb;

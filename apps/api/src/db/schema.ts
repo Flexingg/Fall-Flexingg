@@ -1,4 +1,4 @@
-import type { SoloConfig } from '@gauntlet/shared';
+import type { RingConfig, SoloConfig } from '@gauntlet/shared';
 import { sql } from 'drizzle-orm';
 import type {
   BadgeDraft,
@@ -75,6 +75,8 @@ export const users = pgTable('users', {
   displayLocale: text('display_locale'),
   /** Sum of XP from earned badges (kept in step by the badge engine; levels derive from it). */
   badgeXp: integer('badge_xp').notNull().default(0),
+  /** The three Today rings: which stat each shows and its daily goal (null = the defaults). */
+  ringConfig: jsonb('ring_config').$type<RingConfig>(),
   /** Up to 3 badge keys pinned to the profile. */
   badgeShowcase: jsonb('badge_showcase').$type<string[]>().notNull().default([]),
   /** Last time the person used Gauntlet (signed in, refreshed a session, opened the app). */

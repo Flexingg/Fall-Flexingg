@@ -10,6 +10,7 @@ import { isTrendMetric } from './derive.js';
 import { soloConfigSchema, type SoloConfig, type SoloProgress } from './solo.js';
 import { SCORING_MODES, type ScoringMode } from './scoring.js';
 import type { BadgeFeedPayload } from './badges.js';
+import type { TodayRing } from './rings.js';
 import { recurrenceSchema, type Reaction, type Recurrence } from './notify.js';
 import { teamsInputSchema, type ChallengeTeam, type TeamScoring } from './teams.js';
 import type { SeriesInfo } from './recurring.js';
@@ -480,6 +481,12 @@ export interface TodayResponse {
     goal: number | null;
   }[];
   featured: ChallengeSummary | null;
+  /**
+   * The person's three rings (outer first) from their ring config (see rings.ts): GET/PUT
+   * /api/me/rings saves it. Optional only so older servers still parse; the app falls back to
+   * DEFAULT_RINGS read from `metrics`.
+   */
+  rings?: TodayRing[];
   /**
    * False when nothing feeds this account yet (no data in the last 30 days, no linked app, no
    * Health Connect): the app nudges the person to connect a source.

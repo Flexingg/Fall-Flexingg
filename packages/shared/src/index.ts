@@ -19,6 +19,7 @@ export * from './review.js';
 export * from './stakes.js';
 export * from './format.js';
 export * from './badges.js';
+export * from './rings.js';
 export * from './badgeText.js';
 export * from './adminUsers.js';
 export * from './history.js';
