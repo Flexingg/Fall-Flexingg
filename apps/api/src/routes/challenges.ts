@@ -369,7 +369,10 @@ export function challengeRoutes(app: FastifyInstance, ctx: AppContext) {
     auth,
     async (req): Promise<ChallengeProgress> => {
       const ch = await getChallenge(ctx, uuid(req.params.id));
-      const parts = await assertCanView(ctx, ch, req.userId, { allowPublic: true });
+      const parts = await assertCanView(ctx, ch, req.userId, {
+        allowPublic: true,
+        allowAdmin: true,
+      });
       const { byUser } = await loadSeries(ctx, ch, parts);
       const rules = scoringRules(ctx, ch);
       const everyone = [...byUser].map(([userId, days]) => ({ userId, days }));

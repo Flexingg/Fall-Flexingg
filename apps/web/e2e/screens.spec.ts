@@ -1793,3 +1793,148 @@ test('badge admin is for admins only', async ({ page }) => {
   await page.goto('/admin/badges');
   await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
 });
+
+// ---------- Admin: accounts, challenges, publish all ----------
+
+test('Admin → Accounts: list, filters, an account page, and scheduling a deletion', async ({
+  page,
+}) => {
+  expect((await page.request.post('/api/_e2e/stale-accounts')).ok()).toBe(true);
+  await signIn(page, 'riley@example.com');
+  await page.goto('/admin');
+  await expect(page.getByRole('link', { name: /Accounts \(\d+\)/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Challenges \(\d+ running\)/ })).toBeVisible();
+  await snap(page, '120-admin-home');
+  await page.getByRole('link', { name: /Accounts/ }).click();
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  const list = page.getByTestId('admin-user-list');
+  await expect(list).toContainText('Alex Morgan');
+  await expect(list).toContainText('Taylor Quiet');
+  await snap(page, '121-admin-accounts');
+
+  await page.getByRole('button', { name: /^Expired/ }).click();
+  await expect(list).toContainText('Taylor Quiet');
+  await expect(list).toContainText('Morgan Gone');
+  await expect(list).not.toContainText('Alex Morgan');
+  await expect(page.getByText(/has not been used at all for 180 days/)).toBeVisible();
+  await snap(page, '122-admin-expired');
+
+  await page.getByRole('button', { name: /^All/ }).click();
+  await page.getByLabel('Search accounts').fill('casey');
+  await expect(list).toContainText('Casey Diaz');
+  await expect(list).not.toContainText('Alex Morgan');
+  await page.getByRole('link', { name: 'Open Casey Diaz' }).click();
+  await expect(page.getByRole('heading', { name: /Casey Diaz/ })).toBeVisible();
+  await expect(page.getByText('Remove this account')).toBeVisible();
+  await snap(page, '123-admin-account');
+
+  await page.getByRole('button', { name: 'Schedule deletion' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Schedule deletion' });
+  await expect(sheet).toContainText('30 days');
+  await sheet.getByLabel('Reason').fill('Never used it');
+  await snap(page, '124-admin-schedule-sheet');
+  await sheet.getByRole('button', { name: 'Schedule deletion' }).click();
+  await expect(page.getByText(/Scheduled for deletion on/).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cancel scheduled deletion' })).toBeVisible();
+  await snap(page, '125-admin-scheduled');
+
+  // Delete now needs their name typed.
+  await page.getByRole('button', { name: 'Delete now' }).click();
+  const del = page.getByRole('dialog', { name: 'Delete account now' });
+  const go = del.getByRole('button', { name: 'Delete now' });
+  await expect(go).toBeDisabled();
+  await del.getByLabel('Type Casey Diaz to confirm').fill('Casey Diaz');
+  await expect(go).toBeEnabled();
+  await snap(page, '126-admin-delete-sheet');
+  await del.getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('the person sees a banner when an admin has scheduled their account, and can keep it', async ({
+  page,
+}) => {
+  // The previous test left Casey scheduled for deletion.
+  await signIn(page, 'casey@example.com');
+  const banner = page.getByRole('alert').filter({ hasText: 'will be deleted on' });
+  await expect(banner).toContainText("because it hasn't been used");
+  await snap(page, '127-deletion-banner');
+  await page.goto('/notifications');
+  await expect(page.getByText('Your account is scheduled for deletion')).toBeVisible();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Keep my account' }).click();
+  await expect(page.getByText('will be deleted on')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await expect(page.getByText('will be deleted on')).toHaveCount(0);
+});
+
+test('Admin → Accounts: clean up expired shows who, then schedules them', async ({ page }) => {
+  expect((await page.request.post('/api/_e2e/stale-accounts')).ok()).toBe(true);
+  await signIn(page, 'riley@example.com');
+  await page.goto('/admin/users');
+  await page.getByRole('button', { name: 'Clean up expired' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Clean up expired' });
+  await expect(sheet).toContainText('Taylor Quiet');
+  await expect(sheet).toContainText('Morgan Gone');
+  await expect(sheet).toContainText('Nothing is deleted today');
+  await snap(page, '128-admin-cleanup');
+  await sheet.getByRole('button', { name: /Schedule \d+ for deletion/ }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Scheduled for deletion/ }).click();
+  const list = page.getByTestId('admin-user-list');
+  await expect(list).toContainText('Taylor Quiet');
+  await expect(page.getByText('cleaned up expired accounts')).toBeVisible();
+  await snap(page, '129-admin-scheduled-list');
+});
+
+test('Admin → Challenges: filters and opening one', async ({ page }) => {
+  await signIn(page, 'riley@example.com');
+  await page.goto('/admin');
+  await page.getByRole('link', { name: /Challenges \(/ }).click();
+  await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+  const list = page.getByTestId('admin-challenge-list');
+  await expect(list).toContainText('Weekend 100K');
+  await snap(page, '130-admin-challenges');
+  await page.getByRole('button', { name: /^Finished/ }).click();
+  await expect(page.getByRole('button', { name: /^Finished/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: /^All/ }).click();
+  await page.getByLabel('Search challenges').fill('weekend');
+  await expect(list).toContainText('Weekend 100K');
+  await expect(list).not.toContainText('Coffee Run');
+  await page.getByRole('link', { name: 'Open Weekend 100K' }).click();
+  await expect(page.getByLabel('Top three')).toBeVisible();
+  await expect(page.getByText('Private challenge, viewing as a server admin')).toBeVisible();
+  await snap(page, '131-admin-challenge-detail');
+});
+
+test('Admin → Badges: publish all drafts with progress', async ({ page }) => {
+  expect((await page.request.post('/api/_e2e/drafts')).ok()).toBe(true);
+  await signIn(page, 'riley@example.com');
+  await page.goto('/admin/badges');
+  await page.getByRole('tab', { name: /Drafts/ }).click();
+  const list = page.getByTestId('admin-badge-list');
+  await expect(list).toContainText('Early Bird');
+  await page.getByLabel('Select Night Owl').check();
+  await expect(page.getByRole('button', { name: 'Publish selected (1)' })).toBeVisible();
+  await snap(page, '132-admin-drafts');
+
+  await page.getByRole('button', { name: 'Publish selected (1)' }).click();
+  const one = page.getByRole('dialog', { name: 'Publish badges' });
+  await expect(one).toContainText('Publishes 1 badge');
+  await one.getByRole('button', { name: 'Publish 1' }).click();
+  await expect(list).not.toContainText('Night Owl');
+  await expect(list).toContainText('Early Bird');
+
+  await page.getByRole('button', { name: /^Publish all \(\d+\)/ }).click();
+  const all = page.getByRole('dialog', { name: 'Publish badges' });
+  await expect(all).toContainText("This can't be undone, but you can retire any of them later.");
+  await snap(page, '133-admin-publish-all');
+  await all.getByRole('button', { name: /^Publish \d+$/ }).click();
+  await expect(page.getByText(/badges? published/).first()).toBeVisible();
+  await page.getByRole('tab', { name: /Live/ }).click();
+  await expect(page.getByTestId('admin-badge-list')).toContainText('Early Bird');
+  await expect(page.getByTestId('admin-badge-list')).toContainText('Weekend Warrior');
+  await snap(page, '134-admin-published');
+});

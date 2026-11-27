@@ -131,6 +131,12 @@ export function ChallengeDetailPage() {
           {c.stake && !c.stakeInfo && <StakeChip stake={c.stake} />}
           <SeriesRecord c={c} />
 
+          {user?.isAdmin && c.myState == null && c.visibility === 'private' && (
+            <div className="notice" style={{ marginBottom: 14 }}>
+              Private challenge, viewing as a server admin. This is read-only.
+            </div>
+          )}
+
           {(c.myState == null || c.myState === 'declined') &&
             c.visibility === 'public' &&
             c.status !== 'completed' && (

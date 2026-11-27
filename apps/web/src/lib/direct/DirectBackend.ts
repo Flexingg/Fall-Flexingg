@@ -173,6 +173,7 @@ export class DirectBackend {
       handle: null,
       isAdmin: false,
       demo: false,
+      deletionScheduledAt: null,
     };
     await this.o.kv.set(ME_KEY, JSON.stringify(me));
     return me;

@@ -1,9 +1,11 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppContext } from './context.js';
 import { challengeParticipants, challenges, users } from './db/schema.js';
+import { sweepScheduledDeletions } from './services/adminUsers.js';
 import { maintainDemo } from './services/demo.js';
 import { finalizeChallenge, refreshChallenge } from './services/challenges.js';
 import { maybeRunScheduledImport } from './services/badgeImport/runner.js';
+import { resumeBadgeBackfill } from './services/badges/publishAll.js';
 import { pruneNotifications } from './services/push.js';
 import { sendWeeklyRecaps } from './services/recap.js';
 import { sendMonthReviews } from './services/review.js';
@@ -71,6 +73,12 @@ async function cycle(ctx: AppContext): Promise<{ synced: number; finalized: numb
   await pruneNotifications(ctx).catch((err) => ctx.log.warn({ err }, 'notification prune failed'));
   await sendWeeklyRecaps(ctx).catch((err) => ctx.log.warn({ err }, 'weekly recap failed'));
   await sendMonthReviews(ctx).catch((err) => ctx.log.warn({ err }, 'month review failed'));
+  await sweepScheduledDeletions(ctx).catch((err) =>
+    ctx.log.warn({ err }, 'scheduled account deletions failed'),
+  );
+  await resumeBadgeBackfill(ctx).catch((err) =>
+    ctx.log.warn({ err }, 'badge backfill resume failed'),
+  );
   return { synced, finalized };
 }
 

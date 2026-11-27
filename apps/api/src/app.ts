@@ -10,6 +10,7 @@ import { HttpError } from './context.js';
 import { downloadRoutes } from './downloads.js';
 import { adminRoutes } from './routes/admin.js';
 import { adminBadgeRoutes } from './routes/adminBadges.js';
+import { adminUserRoutes } from './routes/adminUsers.js';
 import { badgeRoutes } from './routes/badges.js';
 import { registerBadgeHooks } from './services/badges/hooks.js';
 import { authRoutes } from './routes/auth.js';
@@ -102,6 +103,7 @@ export async function buildApp(
   authRoutes(app, full);
   adminRoutes(app, full);
   adminBadgeRoutes(app, full);
+  adminUserRoutes(app, full);
   badgeRoutes(app, full);
   meRoutes(app, full);
   statsRoutes(app, full);

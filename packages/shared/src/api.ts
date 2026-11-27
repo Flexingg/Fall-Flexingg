@@ -80,6 +80,8 @@ export interface MeUser extends PublicUser {
   isAdmin: boolean;
   /** The built-in demo account: sample data, nothing connected, can't be deleted. */
   demo: boolean;
+  /** Set when an admin scheduled this unused account for deletion on this date; the app shows a banner. */
+  deletionScheduledAt: string | null;
 }
 
 /** 3-20 lowercase letters, digits or underscores. */

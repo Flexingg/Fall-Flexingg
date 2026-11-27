@@ -2,9 +2,11 @@ import type { PublicUser } from '@gauntlet/shared';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router';
 import { useAuth } from '../lib/auth';
-import { ApiError } from '../lib/api';
+import { ApiError, post } from '../lib/api';
+import { fmtDate } from '../lib/format';
 import { attachToastHost, DEFAULT_TOAST_MS, toast, type ToastState } from '../lib/toast';
 import { Icon } from './Icon';
+import '../styles/adminUsers.css';
 import '../styles/feel.css';
 
 export function Avatar({
@@ -58,6 +60,7 @@ export function Screen({ children, tabs = true }: { children: ReactNode; tabs?: 
     <>
       <main className={`screen${tabs ? '' : ' no-tabs'}`}>
         <DemoBanner />
+        <DeletionBanner />
         {children}
       </main>
       {tabs && <TabBar />}
@@ -246,6 +249,46 @@ function DemoBanner() {
         }}
       >
         Create your own account
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Shown to someone whose account an admin scheduled for deletion because it was not being used.
+ * Using the app already saves it; the button just says so out loud and clears the notice.
+ */
+function DeletionBanner() {
+  const { user, setUser } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  if (!user?.deletionScheduledAt || user.demo) return null;
+  const date = fmtDate(user.deletionScheduledAt, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  async function keep() {
+    setBusy(true);
+    setError(null);
+    try {
+      await post('/api/me/keep-account');
+      setUser({ ...user!, deletionScheduledAt: null });
+      toast('Your account is staying');
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="del-banner" role="alert">
+      <span>
+        <strong>Your account will be deleted on {date}</strong> because it hasn&apos;t been used.
+        Keep using Gauntlet and it stays, or tap the button to keep it now.
+      </span>
+      <ErrorBox error={error} />
+      <button className="btn sm" onClick={keep} disabled={busy}>
+        Keep my account
       </button>
     </div>
   );

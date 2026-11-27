@@ -1,0 +1,178 @@
+/* Admin → Accounts, Account detail, Challenges overview, and the sheets they use. */
+.au-search {
+  margin: 12px 0 10px;
+}
+.au-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin: 0 -16px 8px;
+  padding-left: 16px;
+  padding-right: 16px;
+  scrollbar-width: none;
+}
+.au-chips::-webkit-scrollbar {
+  display: none;
+}
+.au-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.au-chip[aria-pressed='true'] {
+  background: var(--volt);
+  border-color: var(--volt);
+  color: var(--volt-ink);
+}
+.au-chip b {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.au-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.au-row .grow {
+  min-width: 0;
+}
+.au-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+.au-name > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.au-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.pill.warn {
+  color: var(--danger);
+  background: rgba(255, 107, 74, 0.12);
+}
+.pill.ok {
+  color: var(--volt);
+}
+.au-help {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.au-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.au-top h2 {
+  margin: 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.au-kv {
+  display: grid;
+  grid-template-columns: minmax(96px, 36%) 1fr;
+  gap: 6px 12px;
+  font-size: 14px;
+  margin: 0;
+}
+.au-kv dt {
+  color: var(--muted);
+}
+.au-kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.au-warn {
+  border-left: 3px solid var(--danger);
+  background: rgba(255, 107, 74, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.au-who {
+  max-height: 34dvh;
+  overflow-y: auto;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.au-who small {
+  color: var(--muted);
+}
+.au-audit {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.au-audit small {
+  display: block;
+  color: var(--muted);
+}
+
+/* Deletion banner shown to the person whose account is scheduled for deletion. */
+.del-banner {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--danger);
+  background: rgba(255, 107, 74, 0.1);
+  font-size: 14px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Publish all (badges) */
+.bda-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.bda-award {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+.bda-pick {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 14px;
+}
+.bda-pick input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--volt);
+}
+.bda-selrow {
+  display: flex;
+  align-items: stretch;
+}
+.bda-selrow .bda-row {
+  flex: 1;
+  min-width: 0;
+}

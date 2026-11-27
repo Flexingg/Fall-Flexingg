@@ -347,6 +347,56 @@ app.post<{
   });
   return { ok: true };
 });
+// Admin → Accounts: two accounts nobody has used for a long time (one lost its SparkyFitness
+// connection), so "expired" has something to show. They cannot sign in; they only exist as rows.
+app.post('/api/_e2e/stale-accounts', async () => {
+  const day = 86_400_000;
+  await ctx.db
+    .insert(usersTable)
+    .values([
+      {
+        sparkyUserId: 'e2e-stale-1',
+        email: 'taylor@example.com',
+        displayName: 'Taylor Quiet',
+        createdAt: new Date(Date.now() - 400 * day),
+        lastActiveAt: new Date(Date.now() - 200 * day),
+        lastSyncedAt: new Date(Date.now() - 200 * day),
+      },
+      {
+        sparkyUserId: 'e2e-stale-2',
+        email: 'morgan@example.com',
+        displayName: 'Morgan Gone',
+        keyStatus: 'invalid',
+        createdAt: new Date(Date.now() - 90 * day),
+        lastActiveAt: new Date(Date.now() - 45 * day),
+      },
+    ])
+    .onConflictDoNothing();
+  return { ok: true };
+});
+// Admin → Badges → Drafts: a few drafts to publish together.
+app.post('/api/_e2e/drafts', async () => {
+  for (const [i, name] of ['Early Bird', 'Night Owl', 'Weekend Warrior'].entries()) {
+    await createDraftBadge(
+      ctx,
+      {
+        key: `e2e-draft-${i + 1}`,
+        name,
+        description: 'Walk {n} steps in total.',
+        family: 'movement',
+        icon: 'rocket',
+        imageUrl: null,
+        secret: false,
+        rule: { type: 'lifetime_total', metric: 'steps', tiers: [40_000_000] },
+        window: null,
+        xp: null,
+        countsManual: true,
+      },
+      'admin',
+    ).catch(() => undefined);
+  }
+  return { ok: true };
+});
 app.post('/api/_e2e/notify-badge', async () => {
   const [u] = await ctx.db.select().from(usersTable).where(eq(usersTable.email, 'you@example.com'));
   await notify(ctx, u!.id, {

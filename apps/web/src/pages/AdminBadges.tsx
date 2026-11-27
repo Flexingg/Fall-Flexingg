@@ -7,6 +7,7 @@ import {
   BADGE_FAMILY_LABELS,
   describeRule,
   type AdminBadge,
+  type BadgeBackfillStatus,
   type BadgeSuggestion,
   type SuggestionStatus,
 } from '@gauntlet/shared';
@@ -22,6 +23,7 @@ import {
   useSuggestions,
 } from '../lib/adminBadges';
 import { when } from '../lib/admin';
+import { adminUserKeys, useBadgeBackfill } from '../lib/adminUsers';
 import { ApiError, post } from '../lib/api';
 import { fmtInt } from '../lib/format';
 import '../styles/admin.css';
@@ -45,6 +47,10 @@ export function AdminBadgesPage() {
   const [editor, setEditor] = useState<EditorMode | null>(null);
   const list = useAdminBadgeList();
   const status = useImportStatus();
+  const backfill = useBadgeBackfill();
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [publishing, setPublishing] = useState<string[] | null | 'all'>(null);
   const counts = {
     live: list.data?.filter((b) => b.status === 'live').length,
     draft: list.data?.filter((b) => b.status === 'draft').length,
@@ -95,6 +101,21 @@ export function AdminBadgesPage() {
         ))}
       </div>
 
+      {backfill.data?.running && <AwardProgress s={backfill.data} />}
+
+      {tab === 'draft' && (list.data?.filter((b) => b.status === 'draft').length ?? 0) > 0 && (
+        <div className="bda-bulk">
+          <button className="btn sm" onClick={() => setPublishing('all')}>
+            Publish all ({counts.draft})
+          </button>
+          {selected.size > 0 && (
+            <button className="btn sm secondary" onClick={() => setPublishing([...selected])}>
+              Publish selected ({selected.size})
+            </button>
+          )}
+        </div>
+      )}
+
       {tab === 'suggested' ? (
         <Suggested
           onOpen={(s) => setEditor({ kind: 'suggestion', suggestion: s })}
@@ -111,9 +132,30 @@ export function AdminBadgesPage() {
               rows={(list.data ?? []).filter((b) => b.status === tab)}
               tab={tab}
               onOpen={(b) => setEditor({ kind: 'edit', badge: b })}
+              selected={tab === 'draft' ? selected : undefined}
+              onToggle={(key) =>
+                setSelected((prev) => {
+                  const next = new Set(prev);
+                  if (!next.delete(key)) next.add(key);
+                  return next;
+                })
+              }
             />
           )}
         </>
+      )}
+      {publishing && (
+        <PublishAllSheet
+          count={publishing === 'all' ? (counts.draft ?? 0) : publishing.length}
+          keys={publishing === 'all' ? undefined : publishing}
+          onClose={() => setPublishing(null)}
+          onDone={async () => {
+            setPublishing(null);
+            setSelected(new Set());
+            await qc.invalidateQueries({ queryKey: ['admin'] });
+            await qc.invalidateQueries({ queryKey: adminUserKeys.backfill });
+          }}
+        />
       )}
     </Screen>
   );
@@ -123,10 +165,15 @@ function BadgeRows({
   rows,
   tab,
   onOpen,
+  selected,
+  onToggle,
 }: {
   rows: AdminBadge[];
   tab: Tab;
   onOpen: (b: AdminBadge) => void;
+  /** Drafts only: which are ticked for "Publish selected". */
+  selected?: Set<string>;
+  onToggle?: (key: string) => void;
 }) {
   if (!rows.length)
     return (
@@ -147,33 +194,40 @@ function BadgeRows({
   return (
     <div className="list" style={{ marginTop: 14 }} data-testid="admin-badge-list">
       {rows.map((b) => (
-        <button
-          key={b.key}
-          className="item bda-row"
-          onClick={() => onOpen(b)}
-          aria-label={`Edit ${b.name}`}
-        >
-          <BadgeIcon
-            icon={b.icon}
-            imageUrl={b.imageUrl}
-            medal={'tiers' in b.rule && b.rule.tiers.length > 1 ? 'gold' : 'single'}
-            size={44}
-          />
-          <div className="grow">
-            <div className="t ellipsis">{b.name}</div>
-            <small className="bda-rule">{describeRule(b.rule, b.window)}</small>
-            <div className="bda-tags">
-              <span className="pill plain">{BADGE_FAMILY_LABELS[b.family]}</span>
-              <span className="pill plain">{ORIGIN[b.origin]}</span>
-              {b.secret && <span className="pill plain">Secret</span>}
-              {b.window && <span className="pill">Limited time</span>}
+        <div key={b.key} className="bda-selrow">
+          {selected && (
+            <label className="bda-pick">
+              <input
+                type="checkbox"
+                checked={selected.has(b.key)}
+                onChange={() => onToggle?.(b.key)}
+                aria-label={`Select ${b.name}`}
+              />
+            </label>
+          )}
+          <button className="item bda-row" onClick={() => onOpen(b)} aria-label={`Edit ${b.name}`}>
+            <BadgeIcon
+              icon={b.icon}
+              imageUrl={b.imageUrl}
+              medal={'tiers' in b.rule && b.rule.tiers.length > 1 ? 'gold' : 'single'}
+              size={44}
+            />
+            <div className="grow">
+              <div className="t ellipsis">{b.name}</div>
+              <small className="bda-rule">{describeRule(b.rule, b.window)}</small>
+              <div className="bda-tags">
+                <span className="pill plain">{BADGE_FAMILY_LABELS[b.family]}</span>
+                <span className="pill plain">{ORIGIN[b.origin]}</span>
+                {b.secret && <span className="pill plain">Secret</span>}
+                {b.window && <span className="pill">Limited time</span>}
+              </div>
             </div>
-          </div>
-          <div className="bda-earned">
-            <b className="num">{fmtInt(b.earnedBy)}</b>
-            <small>earned</small>
-          </div>
-        </button>
+            <div className="bda-earned">
+              <b className="num">{fmtInt(b.earnedBy)}</b>
+              <small>earned</small>
+            </div>
+          </button>
+        </div>
       ))}
     </div>
   );
@@ -447,4 +501,71 @@ function SuggestionCard({
 function exampleDescription(d: { description: string; rule: Parameters<typeof ruleTiers>[0] }) {
   const first = ruleTiers(d.rule)[0];
   return first == null ? d.description : d.description.replace(/\{n\}/g, fmtInt(first));
+}
+
+function AwardProgress({ s }: { s: BadgeBackfillStatus }) {
+  const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+  return (
+    <div className="card bda-award" role="status" data-testid="award-progress">
+      <div className="adm-progress">
+        <span className="adm-spin" aria-hidden="true" />
+        Awarding… {s.done} of {s.total}
+      </div>
+      <div className="adm-bar" role="progressbar" aria-valuenow={pct}>
+        <i style={{ width: `${pct}%` }} />
+      </div>
+      {s.current && <small className="muted">Now: {s.current}</small>}
+    </div>
+  );
+}
+
+function PublishAllSheet({
+  count,
+  keys,
+  onClose,
+  onDone,
+}: {
+  count: number;
+  keys?: string[];
+  onClose: () => void;
+  onDone: () => void | Promise<void>;
+}) {
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  async function go() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await post<{ published: number }>(
+        '/api/admin/badges/publish-all',
+        keys ? { keys } : {},
+      );
+      toast(`${r.published} ${r.published === 1 ? 'badge' : 'badges'} published`);
+      await onDone();
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  }
+  const n = `${count} ${count === 1 ? 'badge' : 'badges'}`;
+  return (
+    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label="Publish badges">
+      <div className="card stack adm-dialog" style={{ gap: 10 }}>
+        <h2 style={{ margin: 0 }}>Publish {n}?</h2>
+        <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
+          Publishes {n} and quietly awards {count === 1 ? 'it' : 'them'} to everyone who already
+          qualifies. This can&apos;t be undone, but you can retire any of them later.
+        </p>
+        <ErrorBox error={error} />
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn" onClick={go} disabled={busy || count === 0}>
+            Publish {count}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

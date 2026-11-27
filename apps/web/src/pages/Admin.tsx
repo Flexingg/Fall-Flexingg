@@ -36,16 +36,32 @@ export function AdminPage() {
         <Skeleton height={120} />
       ) : (
         <>
-          <Link to="/admin/badges" className="list" style={{ display: 'block' }}>
-            <div className="item">
+          <div className="list">
+            <Link to="/admin/users" className="item">
+              <Icon name="friends" size={20} />
+              <div className="grow">
+                <div className="t">{`Accounts (${o.counts.users})`}</div>
+                <small>Who is active, who has gone quiet, clean up unused accounts</small>
+              </div>
+              <Icon name="chevron" size={18} />
+            </Link>
+            <Link to="/admin/challenges" className="item">
+              <Icon name="trophy" size={20} />
+              <div className="grow">
+                <div className="t">{`Challenges (${o.counts.activeChallenges} running)`}</div>
+                <small>Every challenge on the server, open any one read-only</small>
+              </div>
+              <Icon name="chevron" size={18} />
+            </Link>
+            <Link to="/admin/badges" className="item">
               <Icon name="trophy" size={20} />
               <div className="grow">
                 <div className="t">Badges</div>
                 <small>Make, preview and publish badges; review ideas from Garmin</small>
               </div>
               <Icon name="chevron" size={18} />
-            </div>
-          </Link>
+            </Link>
+          </div>
 
           <div className="lbl">Health</div>
           <div className="adm-grid">

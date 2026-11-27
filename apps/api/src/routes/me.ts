@@ -29,11 +29,12 @@ import {
 } from '@gauntlet/shared';
 import { and, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { requireUser, revokeAllRefreshTokens } from '../auth.js';
+import { requireUser } from '../auth.js';
 import type { AppContext } from '../context.js';
 import { badRequest, HttpError } from '../context.js';
 import { challengeParticipants, dailyMetrics, rankSnapshots, users } from '../db/schema.js';
 import { listForUser } from '../services/challenges.js';
+import { deleteAccount } from '../services/deleteAccount.js';
 import { displayOf, saveDisplay } from '../services/display.js';
 import { syncUser } from '../services/sync.js';
 import {
@@ -344,15 +345,16 @@ export function meRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /** Delete the Gauntlet account and the API key it holds. SparkyFitness data is untouched. */
   app.delete('/api/me', auth, async (req) => {
-    const user = await getUser(ctx, req.userId);
-    if (user.sparkyKeyId && user.sparkyKeyEnc && user.keyStatus === 'active') {
-      // A key can delete itself, which revokes Gauntlet's access.
-      await ctx.sparky
-        .deleteApiKey(sparkyToken(ctx, user), user.sparkyKeyId)
-        .catch(() => undefined);
-    }
-    await revokeAllRefreshTokens(ctx, user.id);
-    await ctx.db.delete(users).where(eq(users.id, user.id));
+    await deleteAccount(ctx, req.userId);
+    return { ok: true };
+  });
+
+  /** "Keep my account": calls off a deletion an admin scheduled for an unused account. */
+  app.post('/api/me/keep-account', auth, async (req) => {
+    await ctx.db
+      .update(users)
+      .set({ deletionScheduledAt: null, deletionReason: null })
+      .where(eq(users.id, req.userId));
     return { ok: true };
   });
 }

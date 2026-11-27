@@ -5,6 +5,7 @@ import {
   NOTIFICATION_KINDS,
   isNotificationKind,
   notificationKinds,
+  alwaysOnKinds,
   notificationPrefsSchema,
   wantsNotification,
   type AppNotification,
@@ -99,11 +100,13 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
       .from(users)
       .where(eq(users.id, userId));
     return {
-      kinds: notificationKinds.map((kind) => ({
-        kind,
-        label: NOTIFICATION_KINDS[kind].label,
-        enabled: wantsNotification(u?.prefs ?? {}, kind),
-      })),
+      kinds: notificationKinds
+        .filter((kind) => !alwaysOnKinds.includes(kind))
+        .map((kind) => ({
+          kind,
+          label: NOTIFICATION_KINDS[kind].label,
+          enabled: wantsNotification(u?.prefs ?? {}, kind),
+        })),
     };
   }
 

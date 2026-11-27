@@ -5,6 +5,7 @@ import type { AppContext } from './context.js';
 import { HttpError } from './context.js';
 import { randomToken, sha256 } from './crypto.js';
 import { refreshTokens, users } from './db/schema.js';
+import { touchActiveInBackground } from './services/activity.js';
 import { demoBlocked } from './services/users.js';
 
 const ACCESS_TTL_SECONDS = 15 * 60;
@@ -41,6 +42,8 @@ export async function issueRefreshToken(ctx: AppContext, userId: string): Promis
     tokenHash: sha256(token),
     expiresAt: new Date(ctx.now().getTime() + REFRESH_TTL_DAYS * 86_400_000),
   });
+  // Signing in and refreshing a session are the person using the app.
+  touchActiveInBackground(ctx, userId);
   return token;
 }
 
@@ -108,6 +111,8 @@ export function requireUser(ctx: AppContext) {
       throw new HttpError(401, 'Session expired', 'token_expired');
     }
     if (req.isDemo && demoRouteBlocked(req.method, req.url)) throw demoBlocked();
+    // Any signed-in request is the person using the app (throttled; background work never gets here).
+    if (!req.isDemo) touchActiveInBackground(ctx, req.userId);
   };
 }
 
