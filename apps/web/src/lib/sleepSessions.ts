@@ -18,7 +18,7 @@
  * Sending the real stages every time makes each upload replace what was stored. The stages come
  * from the same sessions the totals do (copies of the same sleep are already dropped), the totals
  * are worked out from them (so what the phone says matches what SparkyFitness stores), and a session
- * with no stage data, or time the stages don't cover, counts as asleep ('light'), as before.
+ * with no stage data counts as asleep ('light'); time a labelled session leaves unlabelled doesn't.
  */
 
 export interface SleepStageIn {
@@ -103,9 +103,10 @@ const event = (
 });
 
 /**
- * One session's stages as non-overlapping events that cover it whole: stages are clipped to the
- * session, and any time they leave uncovered (or the whole session, when it has no stage data) is
- * 'light' sleep, which is what a session without stages has always counted as.
+ * One session's stages as non-overlapping events, clipped to the session. A session with no stage
+ * data is one 'light' stage (asleep throughout). When the tracker did label stages, time it left
+ * unlabelled is not counted as sleep, the same as Health Connect's own apps (Google Health) do:
+ * counting it made a 7 h 15 m night show as 7 h 49 m.
  */
 function stageEventsOf(s: SleepSampleIn, start: number, end: number): SleepStageEvent[] {
   const wanted: { type: SleepStageEvent['stage_type']; start: number; end: number }[] = [];
@@ -129,11 +130,11 @@ function stageEventsOf(s: SleepSampleIn, start: number, end: number): SleepStage
   for (const w of wanted) {
     const from = Math.max(w.start, cursor);
     if (w.end <= from) continue;
-    if (from > cursor) out.push(event('light', cursor, from));
     out.push(event(w.type, from, w.end));
     cursor = w.end;
   }
-  if (cursor < end) out.push(event('light', cursor, end));
+  // No usable stages: the whole session counts as asleep.
+  if (!out.length) out.push(event('light', start, end));
   return out;
 }
 

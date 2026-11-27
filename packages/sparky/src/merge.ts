@@ -44,6 +44,7 @@ import type {
   GoalsRow,
   NutritionDayRow,
   SleepRow,
+  SleepStageRow,
   WaterRow,
 } from './client.js';
 
@@ -399,7 +400,9 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     const asleep = num(s.time_asleep_in_seconds);
     const inBed = num(s.duration_in_seconds);
     // Some synced sessions report more time asleep than the session lasted.
-    const secs = asleep && inBed ? Math.min(asleep, inBed) : asleep || inBed;
+    const secs =
+      stageAsleepSeconds(s.stage_events) ||
+      (asleep && inBed ? Math.min(asleep, inBed) : asleep || inBed);
     if (!d || !secs) continue;
     const key = `${d}|${s.source ?? 'sleep'}`;
     sleepRows.set(key, [...(sleepRows.get(key) ?? []), { secs, ...sleepSpan(s) }]);
@@ -455,6 +458,36 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     return { winner, rule: cands.some((c) => c.rank > winner.rank) ? 'preferred' : 'highest' };
   });
   return { values, sources: t.sourcesSeen(PRIORITY_METRICS) };
+}
+
+const ASLEEP_STAGES = new Set(['deep', 'light', 'rem', 'asleep', 'core']);
+
+/**
+ * Time asleep from an entry's stored stages: deep, light and REM, with overlapping stages counted
+ * once. SparkyFitness' own time_asleep only covers the main block of sleep (a nap hours later is
+ * stored as stages but left out), while Health Connect apps such as Google Health count every
+ * sleep in the day. 0 when there are no usable stages (the entry's totals are used instead).
+ */
+export function stageAsleepSeconds(stages: SleepStageRow[] | null | undefined): number {
+  const spans: [number, number][] = [];
+  for (const st of stages ?? []) {
+    if (!ASLEEP_STAGES.has((st.stage_type ?? '').toLowerCase())) continue;
+    const a = Date.parse(st.start_time ?? '');
+    const b = Date.parse(st.end_time ?? '');
+    if (Number.isFinite(a) && Number.isFinite(b) && b > a) spans.push([a, b]);
+  }
+  spans.sort((x, y) => x[0] - y[0]);
+  let total = 0;
+  let cur: [number, number] | null = null;
+  for (const sp of spans) {
+    if (cur && sp[0] <= cur[1]) cur[1] = Math.max(cur[1], sp[1]);
+    else {
+      if (cur) total += cur[1] - cur[0];
+      cur = [sp[0], sp[1]];
+    }
+  }
+  if (cur) total += cur[1] - cur[0];
+  return total / 1000;
 }
 
 function addNutrition(t: DayTable, input: MergeInput) {

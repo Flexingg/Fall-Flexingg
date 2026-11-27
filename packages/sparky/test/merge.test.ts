@@ -225,6 +225,36 @@ describe('mergeDaily', () => {
     expect(pick(rows, '2026-10-02', 'sleep')).toMatchObject({ value: 7, source: 'garmin' });
   });
 
+  it('counts sleep from the stored stages, naps included, and not awake time', () => {
+    const st = (stage_type: string, a: string, b: string) => ({
+      stage_type,
+      start_time: `2026-10-02T${a}:00Z`,
+      end_time: `2026-10-02T${b}:00Z`,
+    });
+    const rows = mergeDaily({
+      ...empty,
+      sleep: [
+        {
+          entry_date: '2026-10-02',
+          bedtime: '2026-10-02T00:00:00Z',
+          wake_time: '2026-10-02T08:00:00Z',
+          duration_in_seconds: 8 * 3600,
+          // SparkyFitness' own total: the main block only.
+          time_asleep_in_seconds: 7 * 3600,
+          source: 'Health Connect',
+          stage_events: [
+            st('light', '00:00', '03:00'),
+            st('awake', '03:00', '04:00'),
+            st('deep', '04:00', '06:00'),
+            st('rem', '05:30', '08:00'), // overlaps deep by 30 min: counted once
+            st('light', '14:00', '15:30'), // an afternoon nap
+          ],
+        },
+      ],
+    });
+    expect(pick(rows, '2026-10-02', 'sleep')!.value).toBe(3 + 4 + 1.5);
+  });
+
   it('counts a night stored twice by one source once', () => {
     const night = {
       entry_date: '2026-10-02',
