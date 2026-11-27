@@ -1,0 +1,40 @@
+/* Health Connect access list (components/HealthAccess.tsx). */
+.hc-access {
+  display: block;
+  cursor: default;
+}
+.hc-access h4 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #8a93a6);
+}
+.hc-access ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hc-access li {
+  font-size: 13px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.14));
+}
+.hc-access li.on {
+  color: var(--volt);
+}
+.hc-access li.off {
+  opacity: 0.55;
+}
+.hc-access p {
+  font-size: 12px;
+  margin: 12px 0 8px;
+}
+.hc-actions {
+  display: flex;
+  gap: 8px;
+}
