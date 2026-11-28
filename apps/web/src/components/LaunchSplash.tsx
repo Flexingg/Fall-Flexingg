@@ -110,7 +110,13 @@ export function LaunchSplash({ ready, onDone }: { ready: boolean; onDone: () => 
         ['--fade' as string]: `${FADE_MS}ms`,
       }}
       onAnimationEnd={(e) => {
-        if (e.target === e.currentTarget && e.animationName === 'sp-wipe' && !hold()) end();
+        // The wipe runs on the splash's layer (.splash-bg); the animation event bubbles up from it.
+        if (
+          e.animationName === 'sp-wipe' &&
+          (e.target as HTMLElement).classList.contains('splash-bg') &&
+          !hold()
+        )
+          end();
       }}
       onPointerDown={() => {
         // Tap to skip, once the logo has formed and the app is ready to show.

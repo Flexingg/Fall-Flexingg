@@ -1,6 +1,6 @@
 import { App as CapApp } from '@capacitor/app';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { WidgetBridge } from './components/WidgetBridge';
 import { AppBanner } from './components/AppBanner';
@@ -18,38 +18,90 @@ import { syncHealthConnect } from './lib/health';
 import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
-import { AdminPage } from './pages/Admin';
-import { AdminBadgesPage } from './pages/AdminBadges';
-import { AdminChallengesPage } from './pages/AdminChallenges';
-import { AdminUserPage } from './pages/AdminUser';
-import { AdminUsersPage } from './pages/AdminUsers';
-import { BadgesPage } from './pages/Badges';
-import { BadgeTimelinePage } from './pages/BadgeTimeline';
 import { BadgeCelebration } from './components/BadgeCelebration';
 import { DayPage } from './pages/Day';
-import { EditRingsPage } from './pages/EditRings';
-import { ChallengeDetailPage } from './pages/ChallengeDetail';
 import { ChallengesPage } from './pages/Challenges';
-import { FeedItemPage } from './pages/FeedItem';
 import { FriendsPage } from './pages/Friends';
-import { JoinPage } from './pages/Join';
 import { LoginPage } from './pages/Login';
-import { MePage } from './pages/Me';
-import { NotificationSettingsPage } from './pages/NotificationSettings';
-import { NotificationsPage } from './pages/Notifications';
-import { RecapPage } from './pages/Recap';
-import { ReviewPage } from './pages/Review';
-import { OAuthReturnPage } from './pages/OAuthReturn';
-import { ProfilePage } from './pages/Profile';
-import { NewChallengePage } from './pages/NewChallenge';
-import { ResultPage } from './pages/Result';
 import { SignupPage } from './pages/Signup';
-import { PhoneAppsIndexPage, PhoneAppsPage } from './pages/PhoneApps';
-import { SourcesPage } from './pages/Sources';
 import { TodayPage } from './pages/Today';
 import { TrendsPage } from './pages/Trends';
-import { WallpaperPage } from './pages/Wallpaper';
-import { WorkoutPage } from './pages/Workout';
+import { LoadFailed, RoutePrefetch, lazyPage } from './components/lazyPage';
+
+// Screens off the main tabs load on demand and are fetched quietly once the app is idle.
+const AdminPage = lazyPage(() => import('./pages/Admin').then((m) => ({ default: m.AdminPage })), {
+  admin: true,
+});
+const AdminBadgesPage = lazyPage(
+  () => import('./pages/AdminBadges').then((m) => ({ default: m.AdminBadgesPage })),
+  { admin: true },
+);
+const AdminChallengesPage = lazyPage(
+  () => import('./pages/AdminChallenges').then((m) => ({ default: m.AdminChallengesPage })),
+  { admin: true },
+);
+const AdminUserPage = lazyPage(
+  () => import('./pages/AdminUser').then((m) => ({ default: m.AdminUserPage })),
+  { admin: true },
+);
+const AdminUsersPage = lazyPage(
+  () => import('./pages/AdminUsers').then((m) => ({ default: m.AdminUsersPage })),
+  { admin: true },
+);
+const BadgesPage = lazyPage(() =>
+  import('./pages/Badges').then((m) => ({ default: m.BadgesPage })),
+);
+const BadgeTimelinePage = lazyPage(() =>
+  import('./pages/BadgeTimeline').then((m) => ({ default: m.BadgeTimelinePage })),
+);
+const EditRingsPage = lazyPage(() =>
+  import('./pages/EditRings').then((m) => ({ default: m.EditRingsPage })),
+);
+const ChallengeDetailPage = lazyPage(() =>
+  import('./pages/ChallengeDetail').then((m) => ({ default: m.ChallengeDetailPage })),
+);
+const FeedItemPage = lazyPage(() =>
+  import('./pages/FeedItem').then((m) => ({ default: m.FeedItemPage })),
+);
+const JoinPage = lazyPage(() => import('./pages/Join').then((m) => ({ default: m.JoinPage })));
+const MePage = lazyPage(() => import('./pages/Me').then((m) => ({ default: m.MePage })));
+const NotificationSettingsPage = lazyPage(() =>
+  import('./pages/NotificationSettings').then((m) => ({ default: m.NotificationSettingsPage })),
+);
+const NotificationsPage = lazyPage(() =>
+  import('./pages/Notifications').then((m) => ({ default: m.NotificationsPage })),
+);
+const RecapPage = lazyPage(() => import('./pages/Recap').then((m) => ({ default: m.RecapPage })));
+const ReviewPage = lazyPage(() =>
+  import('./pages/Review').then((m) => ({ default: m.ReviewPage })),
+);
+const OAuthReturnPage = lazyPage(() =>
+  import('./pages/OAuthReturn').then((m) => ({ default: m.OAuthReturnPage })),
+);
+const ProfilePage = lazyPage(() =>
+  import('./pages/Profile').then((m) => ({ default: m.ProfilePage })),
+);
+const NewChallengePage = lazyPage(() =>
+  import('./pages/NewChallenge').then((m) => ({ default: m.NewChallengePage })),
+);
+const ResultPage = lazyPage(() =>
+  import('./pages/Result').then((m) => ({ default: m.ResultPage })),
+);
+const SourcesPage = lazyPage(() =>
+  import('./pages/Sources').then((m) => ({ default: m.SourcesPage })),
+);
+const WallpaperPage = lazyPage(() =>
+  import('./pages/Wallpaper').then((m) => ({ default: m.WallpaperPage })),
+);
+const WorkoutPage = lazyPage(() =>
+  import('./pages/Workout').then((m) => ({ default: m.WorkoutPage })),
+);
+const PhoneAppsIndexPage = lazyPage(() =>
+  import('./pages/PhoneApps').then((m) => ({ default: m.PhoneAppsIndexPage })),
+);
+const PhoneAppsPage = lazyPage(() =>
+  import('./pages/PhoneApps').then((m) => ({ default: m.PhoneAppsPage })),
+);
 
 function Private({ children }: { children: ReactNode }) {
   const { status } = useAuth();
@@ -161,7 +213,7 @@ function NativeBridge() {
 }
 
 export function App() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   useDisplay(); // a change of units or clock re-renders every screen
   const [splash, setSplash] = useState(shouldShowSplash);
   return (
@@ -174,347 +226,352 @@ export function App() {
         <DisplaySync />
         <WidgetBridge />
         <AutoRefresh />
+        <RoutePrefetch enabled={status === 'signedIn'} admin={!!user?.isAdmin} />
         {status === 'signedIn' && <PullToRefresh />}
         <AppBanner />
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              status === 'signedIn' ? (
-                <Navigate to="/" replace />
-              ) : status === 'loading' ? (
-                <Splash />
-              ) : (
-                <LoginPage />
-              )
-            }
-          />
-          <Route
-            path="/login/advanced"
-            element={
-              status === 'signedIn' ? (
-                <Navigate to="/" replace />
-              ) : status === 'loading' ? (
-                <Splash />
-              ) : (
-                <LoginPage advanced />
-              )
-            }
-          />
-          <Route
-            path="/signup"
-            element={
-              status === 'signedIn' ? (
-                <Navigate to="/" replace />
-              ) : status === 'loading' ? (
-                <Splash />
-              ) : (
-                <SignupPage />
-              )
-            }
-          />
-          <Route
-            path="/j/:code"
-            element={
-              <NeedsServer what="Invite">
-                <JoinPage />
-              </NeedsServer>
-            }
-          />
-          <Route
-            path="/"
-            element={
-              <Private>
-                <TodayPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/day"
-            element={
-              <Private>
-                <DayPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/day/rings"
-            element={
-              <Private>
-                <EditRingsPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/challenges"
-            element={
-              <Private>
-                <NeedsServer what="Challenges">
-                  <ChallengesPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/c/new"
-            element={
-              <Private>
-                <NeedsServer what="New challenge">
-                  <NewChallengePage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/c/:id"
-            element={
-              <Private>
-                <NeedsServer what="Challenge">
-                  <ChallengeDetailPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/c/:id/result"
-            element={
-              <Private>
-                <NeedsServer what="Result">
-                  <ResultPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/feed/:eventId"
-            element={
-              <Private>
-                <NeedsServer what="Activity">
-                  <FeedItemPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/friends"
-            element={
-              <Private>
-                <NeedsServer what="Friends">
-                  <FriendsPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/u/:id"
-            element={
-              <Private>
-                <NeedsServer what="Profiles">
-                  <ProfilePage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/badges/timeline"
-            element={
-              <Private>
-                <NeedsServer what="Badges">
-                  <BadgeTimelinePage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/u/:id/badges/timeline"
-            element={
-              <Private>
-                <NeedsServer what="Badges">
-                  <BadgeTimelinePage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/badges"
-            element={
-              <Private>
-                <NeedsServer what="Badges">
-                  <BadgesPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/u/:id/badges"
-            element={
-              <Private>
-                <NeedsServer what="Badges">
-                  <BadgesPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/workouts/:id"
-            element={
-              <Private>
-                <NeedsServer what="Workout details">
-                  <WorkoutPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/trends"
-            element={
-              <Private>
-                <TrendsPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/oauth/:provider"
-            element={
-              <Private>
-                <NeedsServer what="Connect app">
-                  <OAuthReturnPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/sources"
-            element={
-              <Private>
-                <SourcesPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/sources/phone-apps"
-            element={
-              <Private>
-                <PhoneAppsIndexPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/sources/phone-apps/:metric"
-            element={
-              <Private>
-                <PhoneAppsPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/me"
-            element={
-              <Private>
-                <MePage />
-              </Private>
-            }
-          />
-          <Route
-            path="/notifications"
-            element={
-              <Private>
-                <NeedsServer what="Notifications">
-                  <NotificationsPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/me/notifications"
-            element={
-              <Private>
-                <NeedsServer what="Notifications">
-                  <NotificationSettingsPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/recap/:week"
-            element={
-              <Private>
-                <NeedsServer what="Weekly recap">
-                  <RecapPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/review/:period"
-            element={
-              <Private>
-                <NeedsServer what="Year in review">
-                  <ReviewPage />
-                </NeedsServer>
-              </Private>
-            }
-          />
-          <Route
-            path="/me/wallpaper"
-            element={
-              <Private>
-                <WallpaperPage />
-              </Private>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <Private>
-                <AdminOnly>
-                  <AdminPage />
-                </AdminOnly>
-              </Private>
-            }
-          />
-          <Route
-            path="/admin/badges"
-            element={
-              <Private>
-                <AdminOnly>
-                  <AdminBadgesPage />
-                </AdminOnly>
-              </Private>
-            }
-          />
-          <Route
-            path="/admin/users"
-            element={
-              <Private>
-                <AdminOnly>
-                  <AdminUsersPage />
-                </AdminOnly>
-              </Private>
-            }
-          />
-          <Route
-            path="/admin/users/:id"
-            element={
-              <Private>
-                <AdminOnly>
-                  <AdminUserPage />
-                </AdminOnly>
-              </Private>
-            }
-          />
-          <Route
-            path="/admin/challenges"
-            element={
-              <Private>
-                <AdminOnly>
-                  <AdminChallengesPage />
-                </AdminOnly>
-              </Private>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <LoadFailed>
+          <Suspense fallback={null}>
+            <Routes>
+              <Route
+                path="/login"
+                element={
+                  status === 'signedIn' ? (
+                    <Navigate to="/" replace />
+                  ) : status === 'loading' ? (
+                    <Splash />
+                  ) : (
+                    <LoginPage />
+                  )
+                }
+              />
+              <Route
+                path="/login/advanced"
+                element={
+                  status === 'signedIn' ? (
+                    <Navigate to="/" replace />
+                  ) : status === 'loading' ? (
+                    <Splash />
+                  ) : (
+                    <LoginPage advanced />
+                  )
+                }
+              />
+              <Route
+                path="/signup"
+                element={
+                  status === 'signedIn' ? (
+                    <Navigate to="/" replace />
+                  ) : status === 'loading' ? (
+                    <Splash />
+                  ) : (
+                    <SignupPage />
+                  )
+                }
+              />
+              <Route
+                path="/j/:code"
+                element={
+                  <NeedsServer what="Invite">
+                    <JoinPage />
+                  </NeedsServer>
+                }
+              />
+              <Route
+                path="/"
+                element={
+                  <Private>
+                    <TodayPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/day"
+                element={
+                  <Private>
+                    <DayPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/day/rings"
+                element={
+                  <Private>
+                    <EditRingsPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/challenges"
+                element={
+                  <Private>
+                    <NeedsServer what="Challenges">
+                      <ChallengesPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/c/new"
+                element={
+                  <Private>
+                    <NeedsServer what="New challenge">
+                      <NewChallengePage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/c/:id"
+                element={
+                  <Private>
+                    <NeedsServer what="Challenge">
+                      <ChallengeDetailPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/c/:id/result"
+                element={
+                  <Private>
+                    <NeedsServer what="Result">
+                      <ResultPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/feed/:eventId"
+                element={
+                  <Private>
+                    <NeedsServer what="Activity">
+                      <FeedItemPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/friends"
+                element={
+                  <Private>
+                    <NeedsServer what="Friends">
+                      <FriendsPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/u/:id"
+                element={
+                  <Private>
+                    <NeedsServer what="Profiles">
+                      <ProfilePage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/badges/timeline"
+                element={
+                  <Private>
+                    <NeedsServer what="Badges">
+                      <BadgeTimelinePage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/u/:id/badges/timeline"
+                element={
+                  <Private>
+                    <NeedsServer what="Badges">
+                      <BadgeTimelinePage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/badges"
+                element={
+                  <Private>
+                    <NeedsServer what="Badges">
+                      <BadgesPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/u/:id/badges"
+                element={
+                  <Private>
+                    <NeedsServer what="Badges">
+                      <BadgesPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/workouts/:id"
+                element={
+                  <Private>
+                    <NeedsServer what="Workout details">
+                      <WorkoutPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/trends"
+                element={
+                  <Private>
+                    <TrendsPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/oauth/:provider"
+                element={
+                  <Private>
+                    <NeedsServer what="Connect app">
+                      <OAuthReturnPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/sources"
+                element={
+                  <Private>
+                    <SourcesPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/sources/phone-apps"
+                element={
+                  <Private>
+                    <PhoneAppsIndexPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/sources/phone-apps/:metric"
+                element={
+                  <Private>
+                    <PhoneAppsPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/me"
+                element={
+                  <Private>
+                    <MePage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <Private>
+                    <NeedsServer what="Notifications">
+                      <NotificationsPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/me/notifications"
+                element={
+                  <Private>
+                    <NeedsServer what="Notifications">
+                      <NotificationSettingsPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/recap/:week"
+                element={
+                  <Private>
+                    <NeedsServer what="Weekly recap">
+                      <RecapPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/review/:period"
+                element={
+                  <Private>
+                    <NeedsServer what="Year in review">
+                      <ReviewPage />
+                    </NeedsServer>
+                  </Private>
+                }
+              />
+              <Route
+                path="/me/wallpaper"
+                element={
+                  <Private>
+                    <WallpaperPage />
+                  </Private>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <Private>
+                    <AdminOnly>
+                      <AdminPage />
+                    </AdminOnly>
+                  </Private>
+                }
+              />
+              <Route
+                path="/admin/badges"
+                element={
+                  <Private>
+                    <AdminOnly>
+                      <AdminBadgesPage />
+                    </AdminOnly>
+                  </Private>
+                }
+              />
+              <Route
+                path="/admin/users"
+                element={
+                  <Private>
+                    <AdminOnly>
+                      <AdminUsersPage />
+                    </AdminOnly>
+                  </Private>
+                }
+              />
+              <Route
+                path="/admin/users/:id"
+                element={
+                  <Private>
+                    <AdminOnly>
+                      <AdminUserPage />
+                    </AdminOnly>
+                  </Private>
+                }
+              />
+              <Route
+                path="/admin/challenges"
+                element={
+                  <Private>
+                    <AdminOnly>
+                      <AdminChallengesPage />
+                    </AdminOnly>
+                  </Private>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </LoadFailed>
         <BadgeCelebration hold={splash} />
         <ToastHost />
       </div>

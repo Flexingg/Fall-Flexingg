@@ -439,8 +439,8 @@ svg {
   max-width: 480px;
   height: calc(var(--tabbar-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
-  background: rgba(12, 12, 13, 0.94);
-  backdrop-filter: blur(12px);
+  /* Nearly opaque, so no blur is needed: a blur behind a fixed bar repaints on every scroll frame. */
+  background: rgba(12, 12, 13, 0.96);
   border-top: 1px solid var(--line);
   display: flex;
   z-index: 20;
@@ -684,14 +684,24 @@ svg {
   font-weight: 700;
 }
 .skeleton {
-  background: linear-gradient(90deg, var(--card) 0%, var(--card-2) 50%, var(--card) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.2s infinite;
+  position: relative;
+  overflow: hidden;
+  background: var(--card);
   border-radius: var(--radius);
+}
+/* The shimmer is a band sliding across (a transform runs off the main thread; animating
+   background-position repaints every frame). */
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--card-2) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: shimmer 1.2s infinite;
 }
 @keyframes shimmer {
   to {
-    background-position: -200% 0;
+    transform: translateX(100%);
   }
 }
 .spinner {
@@ -766,10 +776,12 @@ svg {
 
 /* ---------- Launch splash (from the Gauntlet Splash design) ---------- */
 /* How far down the screen the wipe has got: the splash is cleared above it and THROW IT DOWN
-   rides its edge. One animated value, so the text and the wipe can never drift apart. */
+   rides its edge. One animated value, so the text and the wipe can never drift apart. Each of the
+   three things that use it runs the same animation on the same clock. The value does not inherit:
+   animating it on the splash's root restyled every element inside it on every frame. */
 @property --wipe {
   syntax: '<percentage>';
-  inherits: true;
+  inherits: false;
   initial-value: -15%;
 }
 .splash {
@@ -1109,7 +1121,7 @@ svg {
 .play .splash-center {
   animation: sp-dim 0.25s ease-out calc(var(--t) + 0.2s) forwards;
 }
-.play {
+.play .splash-bg {
   animation: sp-wipe 1.27s linear var(--t) both;
 }
 .play .splash-throw b {
@@ -1119,7 +1131,12 @@ svg {
   animation: sp-veil 1.27s linear var(--t) both;
 }
 .play .splash-edge {
-  animation: sp-edge 1.27s linear var(--t) both;
+  animation:
+    sp-edge 1.27s linear var(--t) both,
+    sp-wipe 1.27s linear var(--t) both;
+}
+.play .splash-throw {
+  animation: sp-wipe 1.27s linear var(--t) both;
 }
 .play .splash-impact {
   animation: sp-impact 0.3s cubic-bezier(0.1, 0.6, 0.3, 1) calc(var(--t) + 0.42s) forwards;
@@ -1133,6 +1150,8 @@ svg {
 }
 /* App not ready yet: wait, landed, until it is. */
 .splash.waiting,
+.splash.waiting .splash-bg,
+.splash.waiting .splash-throw,
 .splash.waiting .splash-throw b,
 .splash.waiting .splash-veil,
 .splash.waiting .splash-edge {

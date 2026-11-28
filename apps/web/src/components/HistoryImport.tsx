@@ -28,6 +28,7 @@ import {
 import { isNative, timezone } from '../lib/platform';
 import { keys, useConnections } from '../lib/queries';
 import { ErrorBox, toast } from './ui';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 /**
  * Settings > Data sources > Import history. Pick how far back, press Import, watch each source.
@@ -71,7 +72,7 @@ export function HistoryImport() {
   const wasRunning = useRef(false);
   useEffect(() => {
     if (wasRunning.current && !serverRunning) {
-      void qc.invalidateQueries();
+      void invalidateSyncedData(qc);
       if (job?.state === 'done') toast('History imported');
     }
     wasRunning.current = serverRunning;
@@ -83,7 +84,7 @@ export function HistoryImport() {
       let proceed = true;
       if (useHc || apps.length) {
         proceed = await runPhoneImport({ days, healthConnect: useHc, apps });
-        void qc.invalidateQueries();
+        void invalidateSyncedData(qc);
       }
       // The server reads SparkyFitness after the phone has sent its data there.
       if (proceed && !direct) qc.setQueryData(keys.history, await historyApi.start(days));

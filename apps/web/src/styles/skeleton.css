@@ -3,8 +3,19 @@
 .sk-circle,
 .sk-block {
   display: block;
-  background: linear-gradient(90deg, var(--line) 0%, var(--line-2) 50%, var(--line) 100%);
-  background-size: 200% 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--line);
+}
+/* A band sliding across: a transform animates off the main thread, background-position does not. */
+.sk-bar::after,
+.sk-circle::after,
+.sk-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--line-2) 50%, transparent 100%);
+  transform: translateX(-100%);
   animation: sk-shimmer 1.4s ease-in-out infinite;
 }
 .sk-bar {
@@ -49,15 +60,15 @@
 }
 @keyframes sk-shimmer {
   to {
-    background-position: -200% 0;
+    transform: translateX(100%);
   }
 }
 /* No motion for people who ask for less: the same shapes, held still. */
 @media (prefers-reduced-motion: reduce) {
-  .sk-bar,
-  .sk-circle,
-  .sk-block {
+  .sk-bar::after,
+  .sk-circle::after,
+  .sk-block::after {
     animation: none;
-    background: var(--line);
+    display: none;
   }
 }

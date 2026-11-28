@@ -22,6 +22,7 @@ import {
 } from '../lib/format';
 import { HeadToHead } from '../components/HeadToHead';
 import { CalendarHeatmap } from '../components/CalendarHeatmap';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 /** Someone's profile (or your own): record, trophy board, milestones and all-time stats. */
 export function ProfilePage() {
@@ -125,7 +126,7 @@ function FriendActions({ p }: { p: ProfileResponse }) {
     try {
       await fn();
       toast(done);
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -195,7 +196,7 @@ function FriendActions({ p }: { p: ProfileResponse }) {
               commit: () => del(`/api/friends/${u.id}`),
               settle: (err) => {
                 if (err) toast(err instanceof Error ? err.message : 'Something went wrong');
-                void qc.invalidateQueries();
+                void invalidateSyncedData(qc);
               },
             })
           }

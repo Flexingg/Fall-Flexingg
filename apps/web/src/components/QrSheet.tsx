@@ -1,4 +1,3 @@
-import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 import { useSheetDrag } from '../lib/useSheetDrag';
 import { SheetHandle } from './SheetHandle';
@@ -25,13 +24,19 @@ export function QrSheet({
   const drag = useSheetDrag(onClose);
 
   useEffect(() => {
-    if (!canvas.current) return;
-    QRCode.toCanvas(canvas.current, url, {
-      width: 560,
-      margin: 2,
-      errorCorrectionLevel: 'M',
-      color: { dark: '#000000', light: '#ffffff' },
-    }).catch(() => setFailed(true));
+    const el = canvas.current;
+    if (!el) return;
+    // The QR library is only needed here, so it loads when a sheet opens, not with the app.
+    import('qrcode')
+      .then((m) =>
+        m.default.toCanvas(el, url, {
+          width: 560,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#000000', light: '#ffffff' },
+        }),
+      )
+      .catch(() => setFailed(true));
   }, [url]);
 
   useEffect(() => {
