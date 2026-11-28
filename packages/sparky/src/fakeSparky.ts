@@ -297,11 +297,30 @@ export class FakeSparky {
       });
     }
     const water = /^\/api\/measurements\/water-intake-range\/([\d-]+)\/([\d-]+)$/.exec(path);
-    if (method === 'GET' && water)
+    if (method === 'GET' && water) {
+      // Like SparkyFitness: one total a day, every source added together.
+      const totals = new Map<string, number>();
+      for (const r of user.water)
+        if (inRange(r.entry_date, water[1]!, water[2]!))
+          totals.set(r.entry_date, (totals.get(r.entry_date) ?? 0) + Number(r.water_ml ?? 0));
       return json(
         200,
-        user.water.filter((r) => inRange(r.entry_date, water[1]!, water[2]!)),
+        [...totals].map(([entry_date, water_ml]) => ({ entry_date, water_ml })),
       );
+    }
+    const waterDay = /^\/api\/measurements\/water-intake\/(\d{4}-\d{2}-\d{2})$/.exec(path);
+    if (method === 'GET' && waterDay) {
+      const rows = user.water.filter((r) => r.entry_date === waterDay[1]);
+      const sum = (pick: (r: WaterRow) => boolean) =>
+        rows.filter(pick).reduce((a, r) => a + Number(r.water_ml ?? 0), 0);
+      const manual = sum((r) => !r.source || r.source === 'manual');
+      return json(200, {
+        water_ml: sum(() => true),
+        manual_ml: manual,
+        ledger_ml: sum(() => true),
+        food_ml: 0,
+      });
+    }
     const goals = /^\/api\/goals\/by-date\/([\d-]+)$/.exec(path);
     if (method === 'GET' && goals) {
       const set = user.goals.filter((g) => g.from <= goals[1]!).at(-1);
@@ -345,6 +364,22 @@ export class FakeSparky {
         200,
         user.sleep.filter((r) => inRange(r.entry_date, q.get('startDate')!, q.get('endDate')!)),
       );
+    const sleepId = /^\/api\/sleep\/([^/]+)$/.exec(path);
+    if (sleepId && (method === 'PUT' || method === 'DELETE')) {
+      const at = user.sleep.findIndex((r) => r.id === decodeURIComponent(sleepId[1]!));
+      if (at < 0) return json(500, { error: 'Sleep entry not found' });
+      if (method === 'DELETE') {
+        user.sleep.splice(at, 1);
+        return json(200, { message: 'deleted' });
+      }
+      // Like SparkyFitness: every stored stage goes, the given ones are stored, entry_date stays.
+      const row = user.sleep[at]!;
+      row.bedtime = body.bedtime ?? row.bedtime;
+      row.wake_time = body.wake_time ?? row.wake_time;
+      row.duration_in_seconds = body.duration_in_seconds ?? row.duration_in_seconds;
+      if (body.stage_events) row.stage_events = body.stage_events;
+      return json(200, row);
+    }
     if (path.startsWith('/api/integrations/garmin/')) {
       const g = path.slice('/api/integrations/garmin/'.length);
       if (g === 'status')
@@ -572,6 +607,35 @@ export class FakeSparky {
           if (column === 'height') row.height = r.unit === 'm' ? v * 100 : v;
           else if (column) row.body_fat_percentage = v;
           else row.bmr = v;
+        }
+        // Like SparkyFitness: one entry per day and source; an upload only replaces the stored
+        // stages inside its own window, so stages from an earlier upload outside it linger.
+        if (r.type === 'SleepSession' && r.entry_date) {
+          const src = String(r.source ?? 'Health Connect');
+          const from = Date.parse(r.bedtime);
+          const to = Date.parse(r.wake_time);
+          const incoming = (r.stage_events ?? []) as SleepRow['stage_events'] & object;
+          const have = user.sleep.find((x) => x.entry_date === r.entry_date && x.source === src);
+          if (!have)
+            user.sleep.push({
+              id: `sleep-${++this.seq}`,
+              entry_date: r.entry_date,
+              source: src,
+              bedtime: r.bedtime,
+              wake_time: r.wake_time,
+              duration_in_seconds: r.duration_in_seconds,
+              stage_events: incoming,
+            });
+          else {
+            const outside = (have.stage_events ?? []).filter((s) => {
+              const a = Date.parse(s.start_time ?? '');
+              return !(a >= from && a < to);
+            });
+            have.stage_events = [...outside, ...incoming];
+            have.bedtime = r.bedtime;
+            have.wake_time = r.wake_time;
+            have.duration_in_seconds = r.duration_in_seconds;
+          }
         }
         if ((r.type === 'TotalCaloriesBurned' || r.type === 'total_calories') && r.date) {
           const src = String(r.source ?? 'Health Connect');

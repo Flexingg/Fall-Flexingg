@@ -7,6 +7,7 @@ import { Health, type HealthDataType, type Workout } from '@capgo/capacitor-heal
 import {
   addDays,
   type HcOrigin,
+  type SleepDaysBody,
   localDate,
   planChunks,
   type HcAppOrder,
@@ -62,7 +63,8 @@ import {
   replacedRecordTypes,
 } from './hcAppFilter';
 import { combineSleep } from './sleepSessions';
-import { hcApps, sendHealthOrigins, sendHealthRecords } from './session';
+import { hcApps, sendHealthOrigins, sendHealthRecords, sendSleepDays } from './session';
+import { sleepDaysNote } from './sleepDaysNote';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
 
@@ -127,7 +129,7 @@ async function readRange(
   sleepDays: { from: string; to: string },
   /** Which apps count per stat (see hcAppFilter.ts); `{}` is Health Connect's own totals. */
   appOrder: HcAppOrder = {},
-): Promise<{ records: HcRecord[]; origins: HcOrigin[] }> {
+): Promise<{ records: HcRecord[]; origins: HcOrigin[]; sleepNote: SleepDaysBody | null }> {
   const order = activeOrder(appOrder);
   // Stats with a chosen app are read a day at a time, so a busy day can't push another app's
   // samples out of the plugin's newest-N window.
@@ -332,7 +334,36 @@ async function readRange(
   } catch {
     /* a filter that can't be applied leaves Health Connect's own totals */
   }
-  return { records: sent, origins: await nameOrigins(origins) };
+  // The nights this read holds, for the server to drop any it no longer has (null: not read in full).
+  const sleepNote = sleepDaysNote({
+    read: sleepRead,
+    cap: SLEEP_READ_CAP,
+    sleepAllowed: sleepRead && !sleepRead.length ? await sleepAllowed() : null,
+    range: sleepDays,
+    records: sent,
+  });
+  return { records: sent, origins: await nameOrigins(origins), sleepNote };
+}
+
+/** Is sleep access granted (null when Health Connect can't say)? */
+async function sleepAllowed(): Promise<boolean | null> {
+  try {
+    return (
+      await Health.checkAuthorization({ read: ['sleep'], write: [] })
+    ).readAuthorized.includes('sleep');
+  } catch {
+    return null;
+  }
+}
+
+/** Send the nights a fully read range holds (extra: a failure never fails the sync). */
+async function sendSleepNote(note: SleepDaysBody | null): Promise<void> {
+  if (!note) return;
+  try {
+    await sendSleepDays(note);
+  } catch {
+    /* an older server without the endpoint, or offline: the next sync sends it again */
+  }
 }
 
 /** Send origins (extra information: a failure here never fails the sync). */
@@ -360,12 +391,13 @@ export async function syncHealthConnect(opts: { days?: number } = {}): Promise<n
   const end = new Date();
   // Re-sends the last week every time (see RESEND_DAYS), so late data and sleep totals overwrite.
   const start = syncStart(end, syncDays(!!last, opts.days));
-  const { records, origins } = await readRange(
+  const { records, origins, sleepNote } = await readRange(
     { startDate: start.toISOString(), endDate: end.toISOString() },
     { from: day(start.toISOString()), to: day(end.toISOString()) },
     (await hcApps()).order,
   );
   await sendAll(records);
+  await sendSleepNote(sleepNote);
   await sendOrigins(origins);
   await storage.set(LAST_SYNC_KEY, end.toISOString());
   return records.length;
@@ -474,7 +506,7 @@ export async function importHealthConnectHistory(
       reason = 'cancelled';
       break;
     }
-    const { records, origins } = await readRange(
+    const { records, origins, sleepNote } = await readRange(
       {
         startDate: localMidnight(w.start).toISOString(),
         endDate: localMidnight(addDays(w.end, 1)).toISOString(),
@@ -483,6 +515,7 @@ export async function importHealthConnectHistory(
       appOrder,
     );
     sent += await sendAll(records);
+    await sendSleepNote(sleepNote);
     await sendOrigins(origins);
     doneDays += windowDays(w);
     if (records.length) {

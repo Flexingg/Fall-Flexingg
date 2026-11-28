@@ -92,7 +92,8 @@ async function sourcePriorities(ctx: AppContext, user: UserRow): Promise<SourceP
   const all = new Set<string>();
   const metrics = PRIORITY_METRIC_KEYS.map((key) => {
     const order = norm(stored[key]);
-    const seen = norm(user.seenSources[key]);
+    // A water day not split by source yet is called 'water': not a source a person can pick.
+    const seen = norm(user.seenSources[key]).filter((k) => !(key === 'water' && k === 'water'));
     const keys = [...new Set([...order, ...seen, ...extra, 'sparkyfitness'])];
     for (const k of keys) all.add(k);
     return {

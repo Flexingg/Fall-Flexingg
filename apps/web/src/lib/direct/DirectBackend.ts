@@ -35,6 +35,7 @@ import {
   type MeUser,
   type MetricKey,
   type MetricRow,
+  type SleepDaysBody,
   type SourcesResponse,
   type TodayResponse,
   type TrendRange,
@@ -55,6 +56,9 @@ import {
   describeSources,
   fetchMerged,
   SparkyClient,
+  removeMissingSleep,
+  replaceSleep,
+  sleepRecordsOf,
   SparkyError,
   type SparkyUser,
 } from '@gauntlet/sparky';
@@ -244,6 +248,7 @@ export class DirectBackend {
       // Everything a challenge can be scored on is on Trends too; goals only for recent days to
       // keep the phone's refresh quick.
       goals: { maxFetches: 14 },
+      water: { maxFetches: 14 },
       allCustom: true,
       allLifts: true,
     });
@@ -392,7 +397,19 @@ export class DirectBackend {
     } catch (err) {
       throw explain(err, this.o.sparkyUrl);
     }
+    // A rescored night keeps stale stages in SparkyFitness unless it is rewritten (never fails the sync).
+    await replaceSleep(this.client, this.o.apiKey, sleepRecordsOf(records)).catch(() => 0);
     // Make the next screen reload pick the new data up.
+    await this.o.kv.set(ROWS_KEY, null);
+  }
+
+  /** The phone read every night of a range: drop Health Connect nights it no longer has. */
+  async removeMissingSleep(note: SleepDaysBody): Promise<void> {
+    try {
+      await removeMissingSleep(this.client, this.o.apiKey, note);
+    } catch (err) {
+      throw explain(err, this.o.sparkyUrl);
+    }
     await this.o.kv.set(ROWS_KEY, null);
   }
 
