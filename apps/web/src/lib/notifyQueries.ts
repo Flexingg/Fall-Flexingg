@@ -16,13 +16,13 @@ export const notifyKeys = {
   recap: (week: string) => ['recap', week] as const,
 };
 
-/** The number on the bell. Refreshed every minute and when the app comes back to the front. */
+/** The number on the bell. Refreshed every two minutes and when the app comes back to the front. */
 export const useUnreadCount = (enabled = true) =>
   useQuery({
     queryKey: notifyKeys.unread,
     queryFn: () => get<{ count: number }>('/api/notifications/unread-count'),
     enabled,
-    refetchInterval: 60_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
 

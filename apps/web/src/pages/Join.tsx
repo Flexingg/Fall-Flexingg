@@ -7,6 +7,7 @@ import { Avatar, ErrorBox, Screen, ShowEventsNotice, Skeleton } from '../compone
 import { post, publicGet } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateRange } from '../lib/format';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 export function JoinPage() {
   const { code = '' } = useParams();
@@ -31,7 +32,7 @@ export function JoinPage() {
       const r = await post<{ challengeId: string | null }>(
         `/api/invites/${encodeURIComponent(code)}/accept`,
       );
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
       navigate(r.challengeId ? `/c/${r.challengeId}` : '/friends', { replace: true });
     } catch (err) {
       setError(err);

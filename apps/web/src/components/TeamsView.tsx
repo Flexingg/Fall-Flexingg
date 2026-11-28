@@ -11,6 +11,7 @@ import { patch, post } from '../lib/api';
 import { fmt, shortName } from '../lib/format';
 import { CountUp, useFlip } from './RankMotion';
 import { Avatar, ErrorBox, toast } from './ui';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 const tc = (color: string) => ({ '--tc': color }) as CSSProperties;
 
@@ -108,7 +109,7 @@ export function ArrangeTeams({ c }: { c: ChallengeDetail }) {
     setError(null);
     try {
       await fn();
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
       if (done) toast(done);
     } catch (err) {
       setError(err);

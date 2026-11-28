@@ -12,6 +12,7 @@ import { timeAgo } from '../lib/format';
 import { useFriends, useUserSearch } from '../lib/queries';
 import { shareLink } from '../lib/share';
 import { QrSheet } from '../components/QrSheet';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 export function FriendsPage() {
   const q = useFriends();
@@ -63,7 +64,7 @@ export function FriendsPage() {
     try {
       const r = await post<{ status: string }>('/api/friends/requests', body);
       toast(r.status === 'friends' ? "You're now friends" : 'Request sent');
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
     } catch (err) {
       setError(err);
     }
@@ -78,7 +79,7 @@ export function FriendsPage() {
       toast(r.status === 'friends' ? "You're now friends" : 'Request sent');
       setEmail('');
       setAdding(false);
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'not_on_gauntlet') {
         setError(err);
@@ -92,7 +93,7 @@ export function FriendsPage() {
     try {
       if (accept) await post(`/api/friends/requests/${userId}/accept`);
       else await del(`/api/friends/${userId}`);
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
     } catch (err) {
       setError(err);
     }

@@ -2698,3 +2698,42 @@ test.describe('predictive back', () => {
     await expect(sheet).toBeHidden();
   });
 });
+
+// Screens off the main tabs load as separate files (speed). A file that is gone after an update must
+// not leave a blank page: the app reloads once and recovers.
+// (No service worker here: it would serve the file from its cache and bypass the route below.)
+test.describe('after an update', () => {
+  test.use({ serviceWorkers: 'block' });
+
+  test('a screen file that fails to load reloads the app once and recovers', async ({ page }) => {
+    await signIn(page);
+    // The file is "gone" until the page has been reloaded, as after an update.
+    let documents = 0;
+    page.on('request', (r) => r.resourceType() === 'document' && documents++);
+    const before = documents;
+    let blocked = 0;
+    await page.route(/\/assets\/Me-[\w-]+\.js/, (route) => {
+      if (documents === before) {
+        blocked++;
+        return route.abort();
+      }
+      return route.continue();
+    });
+    await page.getByRole('link', { name: 'Profile' }).click();
+    await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible();
+    expect(blocked).toBeGreaterThanOrEqual(1);
+    expect(documents).toBe(before + 1);
+  });
+});
+
+test('the first screen does not download the whole app', async ({ page }) => {
+  const scripts: string[] = [];
+  page.on('response', (r) => {
+    if (r.url().endsWith('.js')) scripts.push(r.url());
+  });
+  await signIn(page);
+  const first = scripts.filter((u) => /\/assets\/(index|react|router|query)-/.test(u));
+  expect(first.length).toBeGreaterThan(0);
+  // Admin and the other screens are fetched later, once the app is idle.
+  expect(scripts.some((u) => /\/assets\/AdminBadges-/.test(u))).toBe(false);
+});

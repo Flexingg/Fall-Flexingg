@@ -5,6 +5,7 @@ import { post } from '../lib/api';
 import { keys, useFast } from '../lib/queries';
 import { Icon } from './Icon';
 import { ErrorBox, toast } from './ui';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 const LENGTHS = [16, 18, 24];
 
@@ -31,7 +32,7 @@ export function FastCard() {
     try {
       qc.setQueryData(keys.fast, await post<FastStatus>(path, body));
       if (done) toast(done);
-      void qc.invalidateQueries();
+      void invalidateSyncedData(qc);
     } catch (err) {
       setError(err);
     } finally {

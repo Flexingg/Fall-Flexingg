@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth';
 import { dateRange } from '../lib/format';
 import { StakeField } from './Stake';
 import { ErrorBox, toast, Toggle } from './ui';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 /** What the creator can change after a challenge exists. Dates stay as they were created. */
 export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () => void }) {
@@ -45,7 +46,7 @@ export function EditChallenge({ c, onDone }: { c: ChallengeDetail; onDone: () =>
     setError(null);
     try {
       await patch(`/api/challenges/${c.id}`, body);
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
       toast('Saved');
       onDone();
     } catch (err) {

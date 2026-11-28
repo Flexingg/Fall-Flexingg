@@ -68,5 +68,26 @@ export default defineConfig(({ mode }) => ({
     port: 4173,
     proxy,
   },
-  build: { target: 'es2022', sourcemap: true },
+  build: {
+    target: 'es2022',
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        // Big libraries that rarely change get their own files, so an app update does not make
+        // the web app download them again.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (
+            /[\\/]node_modules[\\/](\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(react-dom|react|scheduler)[\\/]/.test(
+              id,
+            )
+          )
+            return 'react';
+          if (/[\\/]react-router[\\/]/.test(id)) return 'router';
+          if (/[\\/]@tanstack[\\/]/.test(id)) return 'query';
+          return undefined;
+        },
+      },
+    },
+  },
 }));

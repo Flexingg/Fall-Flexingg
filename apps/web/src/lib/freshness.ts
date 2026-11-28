@@ -14,6 +14,7 @@ import { syncHealthConnect } from './health';
 import { isNative } from './platform';
 import { syncNow } from './session';
 import { toast } from '../components/ui';
+import { invalidateSyncedData } from './syncedData';
 
 /** Look again after the apps have had time to pull. */
 const FOLLOW_UPS_MS = [15_000, 40_000, 90_000];
@@ -27,8 +28,15 @@ let syncing: Promise<SyncOutcome> | null = null;
 const listeners = new Set<(busy: boolean) => void>();
 const setBusy = (b: boolean) => listeners.forEach((fn) => fn(b));
 
+let followUps: ReturnType<typeof setTimeout>[] = [];
+/** Look again a few times; a newer sync replaces the pending looks, and a hidden app skips them. */
 function followUp(qc: QueryClient) {
-  for (const ms of FOLLOW_UPS_MS) setTimeout(() => void qc.invalidateQueries(), ms);
+  followUps.forEach(clearTimeout);
+  followUps = FOLLOW_UPS_MS.map((ms) =>
+    setTimeout(() => {
+      if (document.visibilityState !== 'hidden') void invalidateSyncedData(qc);
+    }, ms),
+  );
 }
 
 /** Run a full sync (shared, so a second tap while one is running just waits for it). */
@@ -46,7 +54,7 @@ export async function syncEverything(
           healthConnectFailed = true;
         });
       const r = await syncNow({ providers: true });
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
       if (r.pulling.length) followUp(qc);
       return { ...r, healthConnectFailed };
     })().finally(() => {
@@ -115,7 +123,7 @@ export function AutoRefresh() {
       if (Date.now() - last.current < AUTO_EVERY_MS) return;
       last.current = Date.now();
       void syncNow({})
-        .then(() => qc.invalidateQueries())
+        .then(() => invalidateSyncedData(qc))
         .catch(() => undefined);
     };
     document.addEventListener('visibilitychange', maybe);

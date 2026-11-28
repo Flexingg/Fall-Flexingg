@@ -51,7 +51,10 @@ export const keys = {
   wallpaper: ['wallpaper'] as const,
 };
 
+/** Numbers that move while you watch (today, a live challenge): look again every minute. */
 const live = { refetchInterval: 60_000, refetchOnWindowFocus: true };
+/** Lists that change slowly (feed, challenge list, friends): every few minutes and on coming back. */
+const calm = { refetchInterval: 180_000, refetchOnWindowFocus: true };
 
 // In direct mode (Android talking straight to SparkyFitness) these read from the phone; otherwise
 // they ask the Gauntlet server. Switching modes clears the query cache, so the two never mix.
@@ -69,14 +72,14 @@ export const useWallpaper = (enabled = true) =>
     queryFn: () =>
       session.direct ? session.direct.wallpaper() : get<WallpaperResponse>('/api/me/wallpaper'),
     enabled,
-    ...live,
+    ...calm,
   });
 export const useFeed = () =>
   useQuery({
     queryKey: keys.feed,
     queryFn: () => get<FeedEvent[]>('/api/feed?limit=20'),
     enabled: !session.direct,
-    ...live,
+    ...calm,
   });
 export const useChallenges = (enabled = true) => {
   // A challenge you just left (still undoable) is already gone from the list.
@@ -89,7 +92,7 @@ export const useChallenges = (enabled = true) => {
       (list: ChallengeSummary[]) => list.filter((c) => !waiting.has(`leave:${c.id}`)),
       [waiting],
     ),
-    ...live,
+    ...calm,
   });
 };
 export const useDiscover = (enabled = true) =>
@@ -150,7 +153,7 @@ export const useFriends = () => {
       }),
       [waiting],
     ),
-    ...live,
+    ...calm,
   });
 };
 export const useTrendsOverview = (range: 'day' | 'week' | 'month') =>
@@ -221,7 +224,7 @@ export const useFast = (enabled: boolean) =>
     queryKey: keys.fast,
     queryFn: () => get<FastStatus>('/api/me/fast'),
     enabled: enabled && !session.direct,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
 
 /** Someone's profile, or your own (needs a Gauntlet server). */
