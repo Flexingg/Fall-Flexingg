@@ -32,3 +32,4 @@ export * from './hcOriginMetrics.js';
 export * from './statSourceMeta.js';
 export * from './hcApps.js';
 export * from './hcAppsSeen.js';
+export * from './sleepDays.js';

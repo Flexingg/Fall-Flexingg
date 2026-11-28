@@ -1,5 +1,15 @@
-import { HEALTH_INGEST_TYPES, ingestSchema, type SourcesResponse } from '@gauntlet/shared';
-import { describeSources } from '@gauntlet/sparky';
+import {
+  HEALTH_INGEST_TYPES,
+  ingestSchema,
+  sleepDaysSchema,
+  type SourcesResponse,
+} from '@gauntlet/shared';
+import {
+  describeSources,
+  removeMissingSleep,
+  replaceSleep,
+  sleepRecordsOf,
+} from '@gauntlet/sparky';
 import type { FastifyInstance } from 'fastify';
 import { requireUser } from '../auth.js';
 import type { AppContext } from '../context.js';
@@ -36,11 +46,26 @@ export function miscRoutes(app: FastifyInstance, ctx: AppContext) {
     const bad = records.find((r) => typeof r.type !== 'string' || !INGEST_TYPES.has(r.type));
     if (bad) throw badRequest(`Unsupported record type: ${String(bad.type)}`);
     const user = await getUser(ctx, req.userId);
+    const token = sparkyToken(ctx, user);
     const result = await ctx.sparky.ingestHealthData(
-      sparkyToken(ctx, user),
+      token,
       records.map((r) => ({ ...r, source: 'Health Connect' })),
     );
+    // SparkyFitness only half-replaces a rescored night's stages: make the stored night match.
+    // Extra care, so a failure here never fails the upload (the next sync tries again).
+    await replaceSleep(ctx.sparky, token, sleepRecordsOf(records)).catch(() => 0);
     void syncUser(ctx, user.id).catch(() => undefined);
     return { forwarded: records.length, processed: result.processed, errors: result.errors.length };
+  });
+
+  /**
+   * After every batch of a read went through, the phone lists the nights it sent for a range it read
+   * in full. Health Connect entries in that range it didn't send were deleted there, so they go here
+   * too. Without this call nothing is ever deleted.
+   */
+  app.post('/api/ingest/health-connect/sleep-days', auth, async (req) => {
+    const days = sleepDaysSchema.parse(req.body);
+    const user = await getUser(ctx, req.userId);
+    return { removed: await removeMissingSleep(ctx.sparky, sparkyToken(ctx, user), days) };
   });
 }

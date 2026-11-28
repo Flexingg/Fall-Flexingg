@@ -8,6 +8,7 @@ import {
   todayIn,
   type HcAppsResponse,
   type HcOrigin,
+  type SleepDaysBody,
   type SyncResponse,
   type ConnectionInfo,
   type ConnectionsResponse,
@@ -103,6 +104,15 @@ export async function updateSettings(settings: Partial<UserSettings>): Promise<M
 export async function sendHealthRecords(records: Record<string, unknown>[]): Promise<void> {
   if (session.direct) await session.direct.ingest(records);
   else await post('/api/ingest/health-connect', { records });
+}
+
+/**
+ * Tell SparkyFitness which nights a fully read range holds, so a night deleted in Health Connect
+ * goes too (see sleepDaysNote.ts). Callers ignore a failure: an older server lacks the endpoint.
+ */
+export async function sendSleepDays(note: SleepDaysBody): Promise<void> {
+  if (session.direct) await session.direct.removeMissingSleep(note);
+  else await post('/api/ingest/health-connect/sleep-days', note);
 }
 
 /**

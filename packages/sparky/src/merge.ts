@@ -47,6 +47,7 @@ import type {
   SleepStageRow,
   WaterRow,
 } from './client.js';
+import { WATER_UNSPLIT } from './waterSplit.js';
 
 export interface MergedValue {
   date: string;
@@ -95,6 +96,7 @@ export const PRIORITY_METRICS = [
   'active_minutes',
   'sleep',
   'resting_hr',
+  'water',
 ] as const;
 export type PriorityMetric = (typeof PRIORITY_METRICS)[number];
 
@@ -457,6 +459,23 @@ export function mergeDailyDetailed(input: MergeInput): MergeResult {
     // A lower rank beat a bigger number: a built-in preference, not the highest.
     return { winner, rule: cands.some((c) => c.rank > winner.rank) ? 'preferred' : 'highest' };
   });
+  // % of the water goal comes from the amount that counted (the winning source's), so it follows
+  // whichever source is chosen rather than a sum of them all.
+  for (const v of [...values]) {
+    const goalMl = v.metric === 'water' ? num(input.goals?.[v.date]?.water_goal_ml) : null;
+    if (goalMl == null || goalMl <= 0) continue;
+    const pct = round(Math.min(100, ((v.value * 1000) / goalMl) * 100));
+    values.push({
+      date: v.date,
+      metric: 'water_goal',
+      value: pct,
+      source: v.source,
+      detail: { rule: 'combined', candidates: [{ source: v.source, value: pct }] },
+    });
+  }
+  values.sort((a, b) =>
+    a.date === b.date ? a.metric.localeCompare(b.metric) : a.date.localeCompare(b.date),
+  );
   return { values, sources: t.sourcesSeen(PRIORITY_METRICS) };
 }
 
@@ -508,13 +527,20 @@ function addNutrition(t: DayTable, input: MergeInput) {
     t.add(d, 'carbs', day.carbs, 'food', 0, true);
     t.add(d, 'fat', day.fat, 'food', 0, true);
   }
-  const water = new Map<string, number>();
+  // Water: a day's rows add up within one source (several drinks), and each source is a candidate,
+  // so the same drink logged in SparkyFitness and written by another app isn't counted twice.
+  const waterBySource = new Map<string, Map<string, number>>();
   for (const row of input.water ?? []) {
     const d = normDate(row.entry_date);
     const ml = num(row.water_ml);
-    if (d && ml && ml > 0) water.set(d, (water.get(d) ?? 0) + ml);
+    if (!d || !ml || ml <= 0) continue;
+    const key = row.source ?? WATER_UNSPLIT;
+    const day = waterBySource.get(d) ?? new Map<string, number>();
+    day.set(key, (day.get(key) ?? 0) + ml);
+    waterBySource.set(d, day);
   }
-  for (const [d, ml] of water) t.add(d, 'water', ml / 1000, 'water', 0, true);
+  for (const [d, bySource] of waterBySource)
+    for (const [source, ml] of bySource) t.add(d, 'water', ml / 1000, source, 0, true);
 
   for (const [d, g] of Object.entries(input.goals ?? {})) {
     const goal = {
@@ -550,9 +576,6 @@ function addNutrition(t: DayTable, input: MergeInput) {
           true,
         );
     }
-    const drank = water.get(d);
-    if (drank && goal.water && goal.water > 0)
-      t.add(d, 'water_goal', Math.min(100, (drank / goal.water) * 100), 'water', 0, true);
   }
 }
 

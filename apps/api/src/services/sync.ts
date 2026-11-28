@@ -19,7 +19,14 @@ import {
 import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { AppContext } from '../context.js';
 import { dailyMetrics, feedEvents, users } from '../db/schema.js';
-import { fetchMerged, SparkyError, type GoalsRow, type MergedValue } from '@gauntlet/sparky';
+import {
+  fetchMerged,
+  SparkyError,
+  WATER_UNSPLIT,
+  type GoalsRow,
+  type MergedValue,
+  type WaterRow,
+} from '@gauntlet/sparky';
 import { storeActivities } from './badges/activities.js';
 import { checkBadges } from './badges/engine.js';
 import { checkPersonalRecords } from './records.js';
@@ -193,7 +200,11 @@ export async function fetchWindow(
     start,
     addDays(todayIn(user.timezone, ctx.now()), -GOALS_SETTLED_AFTER_DAYS),
   );
+  const settledBefore = addDays(todayIn(user.timezone, ctx.now()), -GOALS_SETTLED_AFTER_DAYS);
   return fetchMerged(ctx.sparky, token, start, end, {
+    // Water is looked up a day at a time (to tell SparkyFitness's own log from what the phone
+    // wrote); settled days keep the split stored by an earlier sync.
+    water: { known: await storedWater(ctx, user.id, start, settledBefore) },
     customMetrics: scope.customMetrics,
     lifts: scope.lifts,
     timezone: user.timezone,
@@ -279,6 +290,38 @@ async function storedGoals(
     if (r.metric === 'goal_carbs') g.carbs = r.value;
     if (r.metric === 'goal_fat') g.fat = r.value;
     if (r.metric === 'goal_water') g.water_goal_ml = r.value * 1000;
+  }
+  return out;
+}
+
+/** Per-source water already stored for settled days, so it isn't looked up again. */
+async function storedWater(
+  ctx: AppContext,
+  userId: string,
+  start: string,
+  before: string,
+): Promise<Record<string, WaterRow[]>> {
+  const rows = await ctx.db
+    .select({ date: dailyMetrics.date, detail: dailyMetrics.detail })
+    .from(dailyMetrics)
+    .where(
+      and(
+        eq(dailyMetrics.userId, userId),
+        gte(dailyMetrics.date, start),
+        lte(dailyMetrics.date, before),
+        eq(dailyMetrics.metric, 'water'),
+      ),
+    );
+  const out: Record<string, WaterRow[]> = {};
+  for (const r of rows) {
+    const cands = r.detail?.candidates ?? [];
+    // Only a split counts: older rows (and days not looked up yet) hold one unsplit total.
+    if (!cands.length || cands.some((c) => !c.source || c.source === WATER_UNSPLIT)) continue;
+    out[r.date] = cands.map((c) => ({
+      entry_date: r.date,
+      water_ml: c.value * 1000,
+      source: c.source,
+    }));
   }
   return out;
 }
