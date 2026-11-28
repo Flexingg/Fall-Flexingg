@@ -481,7 +481,10 @@ async function runSync(opts: { days?: number }): Promise<number> {
   const t0 = Date.now();
   pause = createYielder();
   stats = { aggregated: 0, sampleReads: 0, samples: 0, workoutPages: 0 };
-  const state = await loadPlanState();
+  const stored = await loadPlanState();
+  // Updated from a version without a plan but synced before: a normal full week, not a first sync.
+  const state: PlanState =
+    stored.lastFull == null && (await storage.get(LAST_SYNC_KEY)) ? { lastFull: 0 } : stored;
   const plan = planSync({ now: t0, state, days: opts.days });
   const end = new Date();
   const start = syncStart(end, syncDays(true, plan.days));
