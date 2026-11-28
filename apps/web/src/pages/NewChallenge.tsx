@@ -45,6 +45,7 @@ import {
   RepeatSetup,
   type RepeatDraft,
 } from '../components/RepeatSetup';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 type Duration = '3' | 'weekend' | '7' | '30' | 'custom';
 const CUSTOM = 'custom' as const;
@@ -300,7 +301,7 @@ export function NewChallengePage() {
         params: needsTarget && weightGoal ? { weightGoal } : undefined,
       };
       const created = await post<ChallengeDetail>('/api/challenges', body);
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
       navigate(`/c/${created.id}`, { replace: true });
     } catch (err) {
       setError(err);

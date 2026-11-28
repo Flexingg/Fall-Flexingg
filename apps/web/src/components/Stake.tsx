@@ -5,6 +5,7 @@ import { post } from '../lib/api';
 import { firstName } from '../lib/format';
 import { ErrorBox } from './ui';
 import '../styles/challenges.css';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 /** "Side bet" input with a few tappable ideas. Plain text only; never about money. */
 export function StakeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -80,7 +81,7 @@ export function StakeResult({ c }: { c: ChallengeDetail }) {
     setError(null);
     try {
       await post(`/api/challenges/${c.id}/stake/settle`, { settled });
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
     } catch (err) {
       setError(err);
     } finally {

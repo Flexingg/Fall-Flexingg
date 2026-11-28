@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '../lib/auth';
 import { getDisplay, useDisplay } from '../lib/display';
 import { updateSettings } from '../lib/session';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 /**
  * Keeps the display settings (units, clock, number format) in step with the account: the first
@@ -21,7 +22,7 @@ export function DisplaySync() {
       first.current = false;
       return;
     }
-    qc.invalidateQueries();
+    invalidateSyncedData(qc);
   }, [display, qc]);
 
   const unset = !!user && mode === 'server' && !user.demo && user.settings.units == null;

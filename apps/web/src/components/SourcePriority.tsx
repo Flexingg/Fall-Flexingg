@@ -12,6 +12,7 @@ import { keys } from '../lib/queries';
 import '../styles/sourceorder.css';
 import { Icon } from './Icon';
 import { ErrorBox, Skeleton, toast } from './ui';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 /** "Sync now": Health Connect, every connected app, and SparkyFitness, with when it last ran. */
 export function SyncNowCard({ lastSyncedAt }: { lastSyncedAt: string | null | undefined }) {
@@ -123,7 +124,7 @@ export function SourcePriority() {
     try {
       qc.setQueryData(keys.sourcePriority, await put('/api/me/source-priority', { metric, order }));
       // Re-synced with the new order: every screen's numbers may have moved.
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
       toast('Saved. Your numbers were updated.');
     } catch (err) {
       setError(err);

@@ -31,7 +31,7 @@ export const useDay = (date: string) =>
       session.direct
         ? session.direct.day(date || undefined)
         : get<DayResponse>(`/api/me/day${date ? `?date=${encodeURIComponent(date)}` : ''}`),
-    refetchInterval: 60_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
 

@@ -27,6 +27,7 @@ import { deferAction } from '../lib/undo';
 import { QrSheet } from '../components/QrSheet';
 import { SeriesRecord, StakeChip, StakeResult } from '../components/Stake';
 import type { ChallengeDetail, Invite } from '@gauntlet/shared';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 export function ChallengeDetailPage() {
   const { id = '' } = useParams();
@@ -57,7 +58,7 @@ export function ChallengeDetailPage() {
     setError(null);
     try {
       await fn();
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
     } catch (err) {
       setError(err);
     } finally {
@@ -324,7 +325,7 @@ export function ChallengeDetailPage() {
                       settle: (err) => {
                         if (err) toast(err instanceof Error ? err.message : 'Something went wrong');
                         qc.removeQueries({ queryKey: keys.challenge(id) });
-                        void qc.invalidateQueries();
+                        void invalidateSyncedData(qc);
                       },
                     });
                     navigate('/challenges');

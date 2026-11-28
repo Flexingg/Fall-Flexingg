@@ -9,6 +9,7 @@ import { post } from '../lib/api';
 import { fmt, shortName, unitLabel } from '../lib/format';
 import { useResult } from '../lib/queries';
 import { SeriesRecord, StakeResult } from '../components/Stake';
+import { invalidateSyncedData } from '../lib/syncedData';
 
 function headline(rank: number | null, n: number): string {
   if (rank == null) return 'No data';
@@ -32,7 +33,7 @@ export function ResultPage() {
     setBusy(true);
     try {
       const next = await post<ChallengeDetail>(`/api/challenges/${id}/rematch`);
-      await qc.invalidateQueries();
+      await invalidateSyncedData(qc);
       navigate(`/c/${next.id}`);
     } catch (err) {
       setError(err);
