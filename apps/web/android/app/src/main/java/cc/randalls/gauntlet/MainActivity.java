@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppLabelsPlugin.class);
         registerPlugin(GauntletWidgetPlugin.class);
         registerPlugin(GauntletPushPlugin.class);
+        registerPlugin(PredictiveBackPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

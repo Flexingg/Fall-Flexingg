@@ -10,6 +10,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { Icon } from '../components/Icon';
 import { LevelChip } from '../components/LevelChip';
 import { Avatar, ErrorBox, Header, Screen, Skeleton, toast } from '../components/ui';
+import { useBackHandler } from '../lib/useBackHandler';
 import { when } from '../lib/admin';
 import { adminUserKeys, lastActiveText, useAdminUser } from '../lib/adminUsers';
 import { api, post } from '../lib/api';
@@ -276,6 +277,7 @@ function ScheduleSheet({
   const [reason, setReason] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const back = useBackHandler(() => !busy && onClose());
   async function go() {
     setBusy(true);
     setError(null);
@@ -290,8 +292,14 @@ function ScheduleSheet({
     }
   }
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label="Schedule deletion">
-      <div className="card stack adm-dialog" style={{ gap: 10 }}>
+    <div
+      ref={back.overlayRef}
+      className="adm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Schedule deletion"
+    >
+      <div ref={back.targetRef} className="card stack adm-dialog" style={{ gap: 10 }}>
         <h2 style={{ margin: 0 }}>Schedule deletion of {u.displayName}?</h2>
         <ul className="adm-steps">
           <li>
@@ -340,6 +348,7 @@ function DeleteSheet({
   const [text, setText] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const back = useBackHandler(() => !busy && onClose());
   async function go() {
     setBusy(true);
     setError(null);
@@ -352,8 +361,14 @@ function DeleteSheet({
     }
   }
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label="Delete account now">
-      <div className="card stack adm-dialog" style={{ gap: 10 }}>
+    <div
+      ref={back.overlayRef}
+      className="adm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Delete account now"
+    >
+      <div ref={back.targetRef} className="card stack adm-dialog" style={{ gap: 10 }}>
         <h2 style={{ margin: 0 }}>Delete {u.displayName} now?</h2>
         <ul className="adm-steps">
           <li>

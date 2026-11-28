@@ -22,6 +22,7 @@ import {
   useImportStatus,
   useSuggestions,
 } from '../lib/adminBadges';
+import { useBackHandler } from '../lib/useBackHandler';
 import { when } from '../lib/admin';
 import { adminUserKeys, useBadgeBackfill } from '../lib/adminUsers';
 import { ApiError, post } from '../lib/api';
@@ -532,6 +533,7 @@ function PublishAllSheet({
 }) {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const back = useBackHandler(() => !busy && onClose());
   async function go() {
     setBusy(true);
     setError(null);
@@ -549,8 +551,14 @@ function PublishAllSheet({
   }
   const n = `${count} ${count === 1 ? 'badge' : 'badges'}`;
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label="Publish badges">
-      <div className="card stack adm-dialog" style={{ gap: 10 }}>
+    <div
+      ref={back.overlayRef}
+      className="adm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Publish badges"
+    >
+      <div ref={back.targetRef} className="card stack adm-dialog" style={{ gap: 10 }}>
         <h2 style={{ margin: 0 }}>Publish {n}?</h2>
         <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
           Publishes {n} and quietly awards {count === 1 ? 'it' : 'them'} to everyone who already

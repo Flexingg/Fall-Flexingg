@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { WidgetBridge } from './components/WidgetBridge';
 import { AppBanner } from './components/AppBanner';
 import { DisplaySync } from './components/DisplaySync';
+import { PredictiveBack } from './components/PredictiveBack';
 import { PullToRefresh } from './components/PullToRefresh';
 import { Shortcuts } from './components/Shortcuts';
 import { AutoRefresh } from './lib/freshness';
@@ -116,6 +117,7 @@ function NativeBridge() {
     CapApp.getLaunchUrl()
       .then((l) => l?.url && openNotification(l.url))
       .catch(() => undefined);
+    // (Back is not handled here: PredictiveBack owns it, so Android can animate it.)
     const subs = [
       CapApp.addListener('appUrlOpen', ({ url }) => {
         openNotification(url);
@@ -128,9 +130,6 @@ function NativeBridge() {
         const w = /^gauntlet-widget:\/\/open\/c\/([\w-]+)/.exec(url);
         if (w) navigate(`/c/${w[1]}`);
       }),
-      CapApp.addListener('backButton', ({ canGoBack }) =>
-        canGoBack ? window.history.back() : CapApp.minimizeApp(),
-      ),
     ];
     // Tapped the widget's challenge while the app was closed: the link it launched with.
     CapApp.getLaunchUrl()
@@ -170,6 +169,7 @@ export function App() {
       {splash && <LaunchSplash ready={status !== 'loading'} onDone={() => setSplash(false)} />}
       <div className="app">
         <NativeBridge />
+        <PredictiveBack />
         <Shortcuts />
         <DisplaySync />
         <WidgetBridge />

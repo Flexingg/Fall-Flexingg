@@ -7,6 +7,7 @@
  * set on the elements directly, not through React state, so a drag costs no renders.
  */
 import { useEffect, useRef } from 'react';
+import { useBackHandler } from './useBackHandler';
 import {
   dimAmount,
   dragIntent,
@@ -42,6 +43,8 @@ export function useSheetDrag(onClose: () => void) {
   useEffect(() => {
     closeRef.current = onClose;
   });
+  // Android back (gesture or button) closes the sheet first, sinking it as the finger moves.
+  useBackHandler(onClose, { kind: 'sheet', target: sheetRef, overlay: overlayRef });
   const g = useRef<Gesture | null>(null);
   /** True after a real drag, so the click that follows it on the handle doesn't also close. */
   const dragged = useRef(false);
