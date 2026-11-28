@@ -12,6 +12,9 @@ const config: CapacitorConfig = {
   plugins: {
     // Native HTTP bypasses CORS, so direct mode can call SparkyFitness without any server-side change.
     CapacitorHttp: { enabled: true },
+    // Back is handled by our own PredictiveBackPlugin (so Android can animate it); the App plugin's
+    // always-on callback would swallow every back press.
+    App: { disableBackButtonHandler: true },
   },
 };
 

@@ -1,0 +1,29 @@
+/* Android predictive back (lib/predictiveBackMotion.ts): what shows behind a shrinking page, and the fade-in of the page we land on. */
+html.pb-active,
+html.pb-active body {
+  background: color-mix(in srgb, #000 calc(var(--pb-dim, 0) * 100%), var(--bg));
+}
+@keyframes pb-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+html.pb-enter .app > main,
+html.pb-enter .app > .story {
+  animation: pb-in 200ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.pb-enter .app > main,
+  html.pb-enter .app > .story {
+    animation: none;
+  }
+}
+/* The shrinking page reads as a card in front of a darker surface. */
+html.pb-active .app > main {
+  background: #151517;
+}
