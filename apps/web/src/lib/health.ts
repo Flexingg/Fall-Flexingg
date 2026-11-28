@@ -65,12 +65,48 @@ import {
 import { combineSleep } from './sleepSessions';
 import { hcApps, sendHealthOrigins, sendHealthRecords, sendSleepDays } from './session';
 import { sleepDaysNote } from './sleepDaysNote';
+import { nextState, planSync, resumeDue, type PlanState } from './hcSyncPlan';
+import {
+  changedItems,
+  originKey,
+  parseSent,
+  recordKey,
+  remember,
+  type Pending,
+  type SentMap,
+} from './hcSent';
+import { createYielder } from './yieldToUi';
 import { isNative, timezone } from './platform';
 import { storage } from './storage';
 
 const READ = READ_TYPES;
 const LAST_SYNC_KEY = 'gauntlet.hc.lastSync';
+const PLAN_KEY = 'gauntlet.hc.plan';
+const SENT_KEY = 'gauntlet.hc.sent';
 const CHUNK = 500;
+/** Fingerprints of days older than this many days are forgotten (a full sync reaches back 7). */
+const KEEP_SENT_DAYS = 14;
+
+/** What the last sync cost, for the dev console: bridge reads and samples that crossed it. */
+export interface HcSyncStats {
+  kind: string;
+  aggregated: number;
+  sampleReads: number;
+  samples: number;
+  workoutPages: number;
+  records: number;
+  recordsSent: number;
+  origins: number;
+  originsSent: number;
+  ms: number;
+}
+let stats: Omit<
+  HcSyncStats,
+  'kind' | 'records' | 'recordsSent' | 'origins' | 'originsSent' | 'ms'
+> = { aggregated: 0, sampleReads: 0, samples: 0, workoutPages: 0 };
+export let lastSyncStats: HcSyncStats | null = null;
+/** Lets the screen paint between heavy steps (replaced for each sync). */
+let pause = createYielder();
 
 export async function healthAvailable(): Promise<{ available: boolean; reason?: string }> {
   if (!isNative)
@@ -129,6 +165,12 @@ async function readRange(
   sleepDays: { from: string; to: string },
   /** Which apps count per stat (see hcAppFilter.ts); `{}` is Health Connect's own totals. */
   appOrder: HcAppOrder = {},
+  /**
+   * From when the samples read only to learn who wrote a stat (steps, heart rate...) are read, when
+   * that is later than `range.startDate` (see hcSyncPlan.ts). A stat with a chosen app is always
+   * read for the whole range: its value is made from them.
+   */
+  originsFrom?: string,
 ): Promise<{ records: HcRecord[]; origins: HcOrigin[]; sleepNote: SleepDaysBody | null }> {
   const order = activeOrder(appOrder);
   // Stats with a chosen app are read a day at a time, so a busy day can't push another app's
@@ -143,6 +185,7 @@ async function readRange(
     } catch {
       /* permission not granted for this type */
     }
+    await pause();
   };
   // Each type is read once: the record mappers and the origins (which app wrote it) share it.
   const sampleReads = new Map<string, OriginSample[]>();
@@ -150,11 +193,17 @@ async function readRange(
     const have = sampleReads.get(dataType);
     if (have) return have;
     const limit = readCapOf(dataType);
-    const read = async (w: { startDate: string; endDate: string }) =>
-      (await Health.readSamples({ ...w, dataType, limit })).samples;
+    const read = async (w: { startDate: string; endDate: string }) => {
+      const got = (await Health.readSamples({ ...w, dataType, limit })).samples;
+      stats.sampleReads++;
+      stats.samples += got.length;
+      return got;
+    };
+    const narrow = originsFrom && !perDay.has(dataType) && ORIGIN_ONLY_TYPES.includes(dataType);
+    const window = narrow ? { ...range, startDate: originsFrom } : range;
     const got = perDay.has(dataType)
       ? await readInWindows(read, dayWindows(range.startDate, range.endDate), limit)
-      : await read(range);
+      : await read(window);
     sampleReads.set(dataType, got);
     return got;
   };
@@ -166,6 +215,7 @@ async function readRange(
   ): Promise<AggregatedBucket[]> => {
     const got = (await Health.queryAggregated({ ...range, dataType, bucket: 'day', aggregation }))
       .samples;
+    stats.aggregated++;
     bucketReads.set(dataType, got);
     return got;
   };
@@ -223,6 +273,7 @@ async function readRange(
     } catch {
       /* not allowed, or Health Connect is rate limiting: no origins for this type */
     }
+    await pause();
   }
 
   // Sleep: one entry per night (SparkyFitness keeps one per day and source, so separate sessions
@@ -238,6 +289,8 @@ async function readRange(
       limit: SLEEP_READ_CAP,
     });
     sleepRead = samples;
+    stats.sampleReads++;
+    stats.samples += samples.length;
     // Only the chosen app's sessions (if the person picked one), then the usual one entry a night.
     const counted = keepChosenApp(
       samples,
@@ -276,6 +329,7 @@ async function readRange(
     let anchor: string | undefined;
     do {
       const res = await Health.queryWorkouts({ ...range, limit: 100, anchor });
+      stats.workoutPages++;
       for (const w of res.workouts) {
         workoutsRead.push({ startDate: w.startDate, sourceId: w.sourceId });
         found.push({ w, date: day(w.startDate) });
@@ -366,41 +420,113 @@ async function sendSleepNote(note: SleepDaysBody | null): Promise<void> {
   }
 }
 
-/** Send origins (extra information: a failure here never fails the sync). */
-async function sendOrigins(origins: HcOrigin[]): Promise<void> {
-  if (!origins.length) return;
+/** Send origins (extra information: a failure here never fails the sync). Returns the ones taken. */
+async function sendOrigins(origins: HcOrigin[]): Promise<boolean> {
+  if (!origins.length) return true;
   try {
     await sendHealthOrigins(origins);
+    return true;
   } catch {
     /* an older server without the endpoint, or offline: the next sync sends them again */
+    return false;
   }
 }
 
-/** Send records in batches. Returns how many went. */
-async function sendAll(records: HcRecord[]): Promise<number> {
+/** Send records in batches, letting the screen paint between them. Returns how many went. */
+async function sendAll(records: HcRecord[], onSent?: (n: number) => void): Promise<number> {
   for (let i = 0; i < records.length; i += CHUNK) {
     await sendHealthRecords(records.slice(i, i + CHUNK));
+    onSent?.(Math.min(i + CHUNK, records.length));
+    await pause();
   }
   return records.length;
 }
 
-/** Pull the last few days from Health Connect and forward them. Returns records sent. */
-export async function syncHealthConnect(opts: { days?: number } = {}): Promise<number> {
-  if (!isNative) return 0;
-  const last = await storage.get(LAST_SYNC_KEY);
+async function loadPlanState(): Promise<PlanState> {
+  try {
+    const raw = await storage.get(PLAN_KEY);
+    return raw ? (JSON.parse(raw) as PlanState) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** One at a time: a resume and the Sync now button (or two resumes) share the run that is going. */
+let inflight: Promise<number> | null = null;
+
+/**
+ * Pull recent days from Health Connect and forward them. Returns records sent. What is read and what
+ * is sent depends on how long ago the last full read was (hcSyncPlan.ts); `days` forces a full range.
+ */
+export function syncHealthConnect(opts: { days?: number } = {}): Promise<number> {
+  if (!isNative) return Promise.resolve(0);
+  inflight ??= runSync(opts).finally(() => {
+    inflight = null;
+  });
+  return inflight;
+}
+
+/**
+ * Coming back to the app: sync unless one finished in the last few minutes (or is running).
+ * Resolves to the records sent, or null when it was skipped.
+ */
+export async function syncHealthConnectIfDue(now = Date.now()): Promise<number | null> {
+  if (!isNative || inflight) return null;
+  const last = Date.parse((await storage.get(LAST_SYNC_KEY)) ?? '');
+  if (!resumeDue(now, Number.isFinite(last) ? last : null)) return null;
+  return syncHealthConnect();
+}
+
+async function runSync(opts: { days?: number }): Promise<number> {
+  const t0 = Date.now();
+  pause = createYielder();
+  stats = { aggregated: 0, sampleReads: 0, samples: 0, workoutPages: 0 };
+  const stored = await loadPlanState();
+  // Updated from a version without a plan but synced before: a normal full week, not a first sync.
+  const state: PlanState =
+    stored.lastFull == null && (await storage.get(LAST_SYNC_KEY)) ? { lastFull: 0 } : stored;
+  const plan = planSync({ now: t0, state, days: opts.days });
   const end = new Date();
-  // Re-sends the last week every time (see RESEND_DAYS), so late data and sleep totals overwrite.
-  const start = syncStart(end, syncDays(!!last, opts.days));
+  const start = syncStart(end, syncDays(true, plan.days));
+  // The old resend-everything rule is now this plan; late data is picked up by the next full read.
+  const recent = plan.originsFull ? undefined : syncStart(end, 1).toISOString();
   const { records, origins, sleepNote } = await readRange(
     { startDate: start.toISOString(), endDate: end.toISOString() },
     { from: day(start.toISOString()), to: day(end.toISOString()) },
     (await hcApps()).order,
+    recent,
   );
-  await sendAll(records);
-  await sendSleepNote(sleepNote);
-  await sendOrigins(origins);
+  const sent: SentMap = parseSent(await storage.get(SENT_KEY));
+  const keepFrom = addDays(todayIn(timezone), -KEEP_SENT_DAYS);
+  const recs = changedItems(records, recordKey, sent, plan.sendAll);
+  const origs = changedItems(origins, originKey, sent, plan.sendAll);
+  const done: Pending<unknown>[] = [];
+  try {
+    await sendAll(
+      recs.map((p) => p.item),
+      (n) => done.push(...recs.slice(done.length, n)),
+    );
+    // Sleep nights are named from every record read, not only the ones that changed.
+    await sendSleepNote(sleepNote);
+    if (await sendOrigins(origs.map((p) => p.item))) done.push(...origs);
+  } finally {
+    // Remember what the server took, even when a later batch failed.
+    await storage.set(SENT_KEY, JSON.stringify(remember(sent, done, keepFrom)));
+  }
+  await storage.set(PLAN_KEY, JSON.stringify(nextState(state, plan, t0)));
   await storage.set(LAST_SYNC_KEY, end.toISOString());
-  return records.length;
+  lastSyncStats = {
+    kind: plan.kind,
+    ...stats,
+    records: records.length,
+    recordsSent: recs.length,
+    origins: origins.length,
+    originsSent: origs.length,
+    ms: Date.now() - t0,
+  };
+  if (import.meta.env.DEV && import.meta.env.MODE !== 'test')
+    console.debug('[health connect sync]', lastSyncStats);
+  return recs.length;
 }
 
 // ---------------------------------------------------------------- history
@@ -500,6 +626,7 @@ export async function importHealthConnectHistory(
   let reason: HealthHistoryResult['reason'] = 'done';
   let doneDays = resumeFrom ? daysSpan(resumeFrom, today) : 0;
   const appOrder = (await hcApps()).order;
+  pause = createYielder();
 
   for (const w of planChunks(target, first, HC_HISTORY_CHUNK_DAYS)) {
     if (signal?.aborted) {

@@ -14,7 +14,7 @@ import { LaunchSplash, shouldShowSplash } from './components/LaunchSplash';
 import { ToastHost } from './components/ui';
 import { useAuth } from './lib/auth';
 import { useDisplay } from './lib/display';
-import { syncHealthConnect } from './lib/health';
+import { syncHealthConnectIfDue } from './lib/health';
 import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
@@ -195,8 +195,8 @@ function NativeBridge() {
   useEffect(() => {
     if (!isNative || status !== 'signedIn' || !user?.settings.healthConnectSync) return;
     const run = () =>
-      syncHealthConnect()
-        .then(() => qc.invalidateQueries())
+      syncHealthConnectIfDue()
+        .then((sent) => (sent ? qc.invalidateQueries() : undefined))
         .catch(() => undefined);
     run();
     const sub = CapApp.addListener('resume', run);
