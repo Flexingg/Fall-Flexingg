@@ -21,6 +21,7 @@ import {
 } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useBackHandler } from '../lib/useBackHandler';
 import { adminBadgeKeys } from '../lib/adminBadges';
 import { ApiError, del, post, put } from '../lib/api';
 import {
@@ -484,9 +485,16 @@ export function ConfirmSheet({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const back = useBackHandler(() => !busy && onCancel());
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="card stack adm-dialog" style={{ gap: 10 }}>
+    <div
+      ref={back.overlayRef}
+      className="adm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div ref={back.targetRef} className="card stack adm-dialog" style={{ gap: 10 }}>
         <h2 style={{ margin: 0 }}>{title}</h2>
         <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
           {children}

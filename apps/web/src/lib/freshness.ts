@@ -20,7 +20,10 @@ const FOLLOW_UPS_MS = [15_000, 40_000, 90_000];
 /** Coming back to the app re-reads at most this often. */
 const AUTO_EVERY_MS = 5 * 60_000;
 
-let syncing: Promise<SyncResponse> | null = null;
+/** A sync's result, plus whether the phone's Health Connect upload failed (so it isn't "Up to date"). */
+export type SyncOutcome = SyncResponse & { healthConnectFailed?: boolean };
+
+let syncing: Promise<SyncOutcome> | null = null;
 const listeners = new Set<(busy: boolean) => void>();
 const setBusy = (b: boolean) => listeners.forEach((fn) => fn(b));
 
@@ -32,16 +35,20 @@ function followUp(qc: QueryClient) {
 export async function syncEverything(
   qc: QueryClient,
   opts: { healthConnect: boolean },
-): Promise<SyncResponse> {
+): Promise<SyncOutcome> {
   if (!syncing) {
     setBusy(true);
     syncing = (async () => {
       // Health Connect first, so the re-read below already includes it.
-      if (isNative && opts.healthConnect) await syncHealthConnect().catch(() => 0);
+      let healthConnectFailed = false;
+      if (isNative && opts.healthConnect)
+        await syncHealthConnect().catch(() => {
+          healthConnectFailed = true;
+        });
       const r = await syncNow({ providers: true });
       await qc.invalidateQueries();
       if (r.pulling.length) followUp(qc);
-      return r;
+      return { ...r, healthConnectFailed };
     })().finally(() => {
       syncing = null;
       setBusy(false);
@@ -51,8 +58,10 @@ export async function syncEverything(
 }
 
 /** A plain-words summary of a sync, for a toast. */
-export function describeSync(r: SyncResponse): string {
+export function describeSync(r: SyncOutcome): string {
   if (!r.ok) return 'Couldn’t reach SparkyFitness. Try again in a minute.';
+  if (r.healthConnectFailed)
+    return 'Couldn’t send your phone’s Health Connect data. Try again in a minute.';
   const apps = r.pulling;
   const pulling = !apps.length
     ? ''

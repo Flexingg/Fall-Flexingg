@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { LevelChip } from '../components/LevelChip';
 import { Avatar, Empty, ErrorBox, Header, Screen, Skeleton, toast } from '../components/ui';
+import { useBackHandler } from '../lib/useBackHandler';
 import { when } from '../lib/admin';
 import { adminUserKeys, lastActiveText, useAdminAudit, useAdminUsers } from '../lib/adminUsers';
 import { post } from '../lib/api';
@@ -191,6 +192,7 @@ function CleanupSheet({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<CleanupResult | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const back = useBackHandler(() => !busy && onClose());
 
   useEffect(() => {
     post<CleanupResult>('/api/admin/users/cleanup-expired', { dryRun: true })
@@ -214,8 +216,14 @@ function CleanupSheet({ onClose }: { onClose: () => void }) {
 
   const n = preview?.accounts.length ?? 0;
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label="Clean up expired">
-      <div className="card stack adm-dialog" style={{ gap: 10 }}>
+    <div
+      ref={back.overlayRef}
+      className="adm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Clean up expired"
+    >
+      <div ref={back.targetRef} className="card stack adm-dialog" style={{ gap: 10 }}>
         <h2 style={{ margin: 0 }}>Clean up expired accounts</h2>
         <p className="au-help" style={{ margin: 0 }}>
           {EXPIRED_RULE_TEXT}

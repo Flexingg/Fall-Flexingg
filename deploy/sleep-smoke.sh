@@ -4,7 +4,11 @@
 # forever, because every later upload without stages kept the one made-up stage. The phone now sends
 # the real stages every time (apps/web/src/lib/sleepSessions.ts); this checks, on a throwaway
 # account, that a night sent partial and then whole ends up whole, that its totals are the stage
-# totals, and that sending it again changes nothing.
+# totals, and that sending it again changes nothing. It also checks the two things SparkyFitness
+# does not do on its own: a night rescored in Health Connect (shorter, so older stages lie outside
+# the new window) ends up with exactly the stages last sent (Gauntlet rewrites it with PUT
+# /api/sleep/:id), and a night the phone no longer has is removed once the phone says the range
+# was read in full (POST /api/ingest/health-connect/sleep-days, then DELETE /api/sleep/:id).
 #
 #   SPARKY_PSQL='docker compose -f deploy/docker-compose.yml --env-file .env exec -T db psql -U postgres -d sparkyfitness_db -At -c' \
 #     deploy/sleep-smoke.sh http://localhost:8080
@@ -76,10 +80,47 @@ send_night "$today" "$bed" "$wake" "$whole"
 if row=$(night_row); then [ "$row" = "$want" ] || fail "re-send: got $row, want $want"; echo "sleep-smoke: re-send is idempotent"; fi
 
 # 4. What Gauntlet shows for the night (8.2 hours asleep).
-for _ in $(seq 1 20); do
-  curl -sS "${h[@]}" "${auth[@]}" -X POST "$G/api/me/sync" -d '{}' >/dev/null || true
-  hours=$(curl -sS "${h[@]}" "${auth[@]}" "$G/api/me/day/stat?date=$today&metric=sleep" | jq -r '.value // empty')
-  [ -n "$hours" ] && awk -v h="$hours" 'BEGIN{exit !(h>8.19 && h<8.21)}' && { echo "sleep-smoke: the day screen shows $hours hours asleep. OK"; exit 0; }
-  sleep 3
-done
-fail "the day screen shows sleep=${hours:-none}, expected 8.2"
+shows() { # shows MIN MAX  (hours the day screen reports for $today)
+  for _ in $(seq 1 20); do
+    curl -sS "${h[@]}" "${auth[@]}" -X POST "$G/api/me/sync" -d '{}' >/dev/null || true
+    hours=$(curl -sS "${h[@]}" "${auth[@]}" "$G/api/me/day/stat?date=$today&metric=sleep" | jq -r '.value // empty')
+    [ -n "$hours" ] && awk -v h="$hours" -v lo="$1" -v hi="$2" 'BEGIN{exit !(h>lo && h<hi)}' && return 0
+    sleep 3
+  done
+  fail "the day screen shows sleep=${hours:-none}, expected between $1 and $2"
+}
+shows 8.19 8.21
+echo "sleep-smoke: the day screen shows $hours hours asleep"
+
+# 5. The night is rescored in Health Connect: it ends at 05:00 and the afternoon stages are gone.
+#    SparkyFitness alone keeps the old stages that lie outside the new upload's window; Gauntlet
+#    rewrites the entry, so what is stored is exactly what was sent (5.37 hours asleep).
+rescored=$(jq -s . \
+  <(stage light "$bed" "${today}T01:00:00Z") \
+  <(stage deep "${today}T01:00:00Z" "${today}T02:30:00Z") \
+  <(stage rem "${today}T02:30:00Z" "${today}T04:00:00Z") \
+  <(stage light "${today}T04:00:00Z" "${today}T05:00:00Z"))
+send_night "$today" "$bed" "${today}T05:00:00Z" "$rescored"
+if row=$(night_row); then
+  [ "${row%%|*}" = "19320" ] && [ "${row##*|}" = "4" ] || fail "rescored night: got $row, want 19320 asleep over 4 stages"
+  echo "sleep-smoke: the rescored night replaced the old stages: $row"
+fi
+shows 5.36 5.38
+echo "sleep-smoke: the day screen follows the rescored night ($hours hours)"
+
+# 6. The night is deleted in Health Connect: the phone lists the nights it still has for the range
+#    it read in full (none), and the stored night goes. Nothing is removed without that call.
+send_night "$today" "$bed" "${today}T05:00:00Z" "$rescored"
+if q "select 1" >/dev/null 2>&1; then
+  nights() { q "select count(*) from sleep_entries e join \"user\" u on u.id::text = e.user_id::text where u.email = '$email' and e.source = 'Health Connect'"; }
+  [ "$(nights)" = 1 ] || fail "expected one stored night before deleting"
+fi
+curl -sS "${h[@]}" "${auth[@]}" -X POST "$G/api/ingest/health-connect/sleep-days" \
+  -d "{\"from\":\"$yday\",\"to\":\"$today\",\"dates\":[\"$today\"]}" | jq -e '.removed == 0' >/dev/null || fail "kept night was removed"
+resp=$(curl -sS "${h[@]}" "${auth[@]}" -X POST "$G/api/ingest/health-connect/sleep-days" \
+  -d "{\"from\":\"$yday\",\"to\":\"$today\",\"dates\":[]}")
+jq -e '.removed == 1' <<<"$resp" >/dev/null || fail "deleted night: $resp"
+if q "select 1" >/dev/null 2>&1; then
+  [ "$(nights)" = 0 ] || fail "the deleted night is still stored"
+fi
+echo "sleep-smoke: a night deleted in Health Connect is removed. OK"

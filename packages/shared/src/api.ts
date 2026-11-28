@@ -693,6 +693,7 @@ export const PRIORITY_METRIC_KEYS = [
   'active_minutes',
   'sleep',
   'resting_hr',
+  'water',
 ] as const;
 
 export interface SourceChoice {

@@ -5,8 +5,9 @@ import {
   type MetricAggregate,
   type WorkoutSummary,
 } from '@gauntlet/shared';
-import type { CustomMeasurementRow, GoalsRow, SparkyClient } from './client.js';
+import type { CustomMeasurementRow, GoalsRow, SparkyClient, WaterRow } from './client.js';
 import { SparkyError } from './client.js';
+import { splitMatches, unsplitWaterRow, waterRowsOfDay } from './waterSplit.js';
 import {
   buildEvents,
   DISTANCE_CATEGORIES,
@@ -39,6 +40,12 @@ export interface FetchOptions {
    */
   goals?: { known?: Record<string, GoalsRow>; maxFetches?: number };
   /**
+   * Split each day's water by source (one call per day with water). `known` holds splits already
+   * stored for settled days, which are reused while they still add up to SparkyFitness's total.
+   * Without this option a day's water is one total.
+   */
+  water?: { known?: Record<string, WaterRow[]>; maxFetches?: number };
+  /**
    * Also read the person's other numeric custom measurements (up to a handful), as daily averages,
    * so they can be charted on Trends. Challenge metrics keep their own aggregate.
    */
@@ -52,6 +59,8 @@ export interface FetchOptions {
 
 /** At most this many goal look-ups per sync; the rest come on later syncs. */
 const MAX_GOAL_FETCHES = 40;
+/** At most this many water splits are looked up per sync (the rest come on later syncs). */
+const MAX_WATER_FETCHES = 40;
 /** Custom measurements and exercises tracked beyond what challenges ask for. */
 const MAX_EXTRA_CUSTOM = 8;
 const MAX_LIFTS = 30;
@@ -103,7 +112,7 @@ export async function fetchMerged(
   const effectiveCustom: Record<string, MetricAggregate> = { ...customMetrics };
   for (const c of extra) effectiveCustom[c.name.toLowerCase()] ??= 'avg';
   const matched = categories.filter((c) => wanted.has(c.name.toLowerCase()) || extra.includes(c));
-  const [daily, checkIns, exerciseDays, report, sleep, water, fasts, customRows] =
+  const [daily, checkIns, exerciseDays, report, sleep, waterTotals, fasts, customRows] =
     await Promise.all([
       settle('daily', sparky.dailyHealthMetrics(token, start, end), []),
       settle('checkins', sparky.checkIns(token, start, end), []),
@@ -127,6 +136,10 @@ export async function fetchMerged(
         ),
       ),
     ]);
+
+  const water = opts.water
+    ? await splitWater(sparky, token, start, end, waterTotals, opts.water, settle)
+    : waterTotals;
 
   const custom: MergeInput['custom'] = {};
   for (const [category, rows] of customRows) {
@@ -222,4 +235,49 @@ export async function fetchEvents(
     timezone: opts.timezone,
     display: opts.display,
   }).filter((e) => opts.kinds.includes(e.event.kind as 'workout' | 'lift' | 'fast'));
+}
+
+/**
+ * Water per source: SparkyFitness's range endpoint adds every source into one total a day, so the
+ * days that have water are looked up one by one (newest first, a few at a time). A day that can't
+ * be split (not looked up yet, or the call failed) stays one total of its own.
+ */
+async function splitWater(
+  sparky: SparkyClient,
+  token: string,
+  start: string,
+  end: string,
+  totals: WaterRow[],
+  opts: NonNullable<FetchOptions['water']>,
+  settle: <T>(label: string, p: Promise<T>, fallback: T) => Promise<T>,
+): Promise<WaterRow[]> {
+  const perDay = new Map<string, number>();
+  for (const r of totals) {
+    const d = String(r.entry_date ?? '').slice(0, 10);
+    const ml = Number(r.water_ml);
+    if (d >= start && d <= end && Number.isFinite(ml) && ml > 0)
+      perDay.set(d, (perDay.get(d) ?? 0) + ml);
+  }
+  const out = new Map<string, WaterRow[]>();
+  const todo: string[] = [];
+  for (const [d, total] of perDay) {
+    const known = opts.known?.[d];
+    if (known && splitMatches(known, total)) out.set(d, known);
+    else todo.push(d);
+  }
+  todo.sort().reverse();
+  const cap = opts.maxFetches ?? MAX_WATER_FETCHES;
+  const look = todo.slice(0, cap);
+  for (let i = 0; i < look.length; i += 4) {
+    const batch = look.slice(i, i + 4);
+    const got = await Promise.all(
+      batch.map((d) => settle(`water:${d}`, sparky.waterDay(token, d), null)),
+    );
+    batch.forEach((d, j) => {
+      const rows = got[j] ? waterRowsOfDay(d, got[j]!) : [];
+      // A split that doesn't add up to the total (food water, a day that changed) isn't trusted.
+      if (splitMatches(rows, perDay.get(d)!)) out.set(d, rows);
+    });
+  }
+  return [...perDay].flatMap(([d, total]) => out.get(d) ?? [unsplitWaterRow(d, total)]);
 }

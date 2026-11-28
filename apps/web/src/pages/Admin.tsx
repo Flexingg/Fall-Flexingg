@@ -14,6 +14,7 @@ import {
   useBackupJob,
   when,
 } from '../lib/admin';
+import { useBackHandler } from '../lib/useBackHandler';
 import { del, getApiBase, post } from '../lib/api';
 import '../styles/admin.css';
 import { BackupScheduleCard, describeSchedule } from '../components/BackupSchedule';
@@ -372,6 +373,7 @@ function RestoreDialog({
   const [text, setText] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [sending, setSending] = useState(false);
+  const back = useBackHandler(() => !sending && onClose());
   async function go() {
     setSending(true);
     setError(null);
@@ -385,8 +387,14 @@ function RestoreDialog({
     }
   }
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label="Restore a backup">
-      <div className="card stack adm-dialog" style={{ gap: 10 }}>
+    <div
+      ref={back.overlayRef}
+      className="adm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Restore a backup"
+    >
+      <div ref={back.targetRef} className="card stack adm-dialog" style={{ gap: 10 }}>
         <h2 style={{ margin: 0 }}>Restore this backup?</h2>
         <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
           Backup from <b>{when(backup.createdAt)}</b> ({formatBytes(backup.sizeBytes)}).

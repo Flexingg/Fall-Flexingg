@@ -11,6 +11,7 @@ import type { BadgeView } from '@gauntlet/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useBackHandler } from '../lib/useBackHandler';
 import { post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { badgeKeys, useUnseenBadges } from '../lib/badgeQueries';
@@ -95,6 +96,8 @@ export function BadgeCelebration({ hold = false }: { hold?: boolean }) {
     }
   }, [plan, current, index, markSeen, tellQuiet]);
 
+  const back = useBackHandler(next, { enabled: !!current });
+
   useEffect(() => {
     if (!current) return;
     const onKey = (e: KeyboardEvent) => (e.key === 'Escape' || e.key === 'Enter') && next();
@@ -107,6 +110,7 @@ export function BadgeCelebration({ hold = false }: { hold?: boolean }) {
   const first = index === 0;
   return (
     <div
+      ref={back.targetRef}
       className={`cele${reduced() ? ' still' : ''}`}
       role="dialog"
       aria-modal="true"

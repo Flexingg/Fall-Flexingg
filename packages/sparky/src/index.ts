@@ -5,3 +5,5 @@ export * from './sources.js';
 export * from './garmin.js';
 export * from './connections.js';
 export * from './workouts.js';
+export * from './sleepSync.js';
+export * from './waterSplit.js';

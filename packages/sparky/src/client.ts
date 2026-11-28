@@ -140,6 +140,22 @@ export interface NutritionDayRow {
 export interface WaterRow {
   entry_date: string;
   water_ml?: number | string | null;
+  /**
+   * Where the water was logged ('manual' for SparkyFitness's own app, 'Health Connect', ...). The
+   * range endpoint doesn't say, so rows carry it only once split (see waterSplit.ts).
+   */
+  source?: string | null;
+}
+
+/** One day's water as SparkyFitness's day endpoint reports it. */
+export interface WaterDayRow {
+  /** Everything counted: logged drinks plus food water when the person opted in. */
+  water_ml?: number | string | null;
+  /** Drinks typed in SparkyFitness itself. */
+  manual_ml?: number | string | null;
+  /** Logged drinks of every source (manual and synced). */
+  ledger_ml?: number | string | null;
+  food_ml?: number | string | null;
 }
 
 /** The person's goals in effect on a day (SparkyFitness falls back to its defaults). */
@@ -162,6 +178,8 @@ export interface FastRow {
 }
 
 export interface SleepRow {
+  /** SparkyFitness's id for the entry (needed to rewrite or remove it). */
+  id?: string;
   entry_date: string;
   duration_in_seconds?: number | null;
   time_asleep_in_seconds?: number | null;
@@ -413,6 +431,11 @@ export class SparkyClient {
     );
   }
 
+  /** One day's water broken into manual and synced (the range endpoint only adds them up). */
+  async waterDay(token: string, date: string): Promise<WaterDayRow> {
+    return this.request<WaterDayRow>('GET', `/api/measurements/water-intake/${date}`, { token });
+  }
+
   async goalsByDate(token: string, date: string): Promise<GoalsRow> {
     return this.request<GoalsRow>('GET', `/api/goals/by-date/${date}`, { token });
   }
@@ -451,6 +474,27 @@ export class SparkyClient {
       },
     );
     return Array.isArray(body) ? body : (body.data ?? []);
+  }
+
+  /**
+   * Rewrite a sleep entry: SparkyFitness drops every stored stage of it and stores `stage_events`
+   * instead, and works time asleep out from them. Leaves entry_date and source as they are.
+   */
+  async updateSleep(
+    token: string,
+    id: string,
+    body: {
+      bedtime: string;
+      wake_time: string;
+      duration_in_seconds: number;
+      stage_events: SleepStageRow[];
+    },
+  ): Promise<void> {
+    await this.request('PUT', `/api/sleep/${encodeURIComponent(id)}`, { token, body });
+  }
+
+  async deleteSleep(token: string, id: string): Promise<void> {
+    await this.request('DELETE', `/api/sleep/${encodeURIComponent(id)}`, { token });
   }
 
   async syncedSources(token: string): Promise<SyncedSource[]> {

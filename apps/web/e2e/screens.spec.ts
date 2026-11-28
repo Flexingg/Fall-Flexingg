@@ -2623,3 +2623,78 @@ test.describe('which phone apps count', () => {
     await expect(page.getByTestId('phone-apps-saved')).toBeVisible();
   });
 });
+
+test.describe('predictive back', () => {
+  // Android sends the gesture through a native plugin; in a browser the same events can be sent as a window event.
+  const send = (page: Page, detail: Record<string, unknown>) =>
+    page.evaluate(
+      (d) => window.dispatchEvent(new CustomEvent('gauntlet:predictive-back', { detail: d })),
+      detail,
+    );
+
+  test('back closes a sheet first, then goes back a page', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/day');
+    const sheet = page.getByTestId('stat-source-sheet');
+    const open = async () => {
+      await page.getByTestId('day-stat').filter({ hasText: 'Steps' }).first().click({
+        button: 'right',
+      });
+      await expect(sheet).toBeVisible();
+    };
+    const panel = sheet.locator('.bd-sheet');
+
+    // A swipe that is let go of: the sheet sinks with the finger, then springs back.
+    await open();
+    await send(page, { type: 'started', edge: 0 });
+    await send(page, { type: 'progress', progress: 0.6, edge: 0 });
+    await expect
+      .poll(() => panel.evaluate((el) => (el as HTMLElement).style.transform))
+      .toContain('translateY');
+    await send(page, { type: 'cancelled' });
+    await expect.poll(() => panel.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
+    await expect(sheet).toBeVisible();
+
+    // A swipe that goes through: the sheet closes and we are still on the same page.
+    await send(page, { type: 'started', edge: 1 });
+    await send(page, { type: 'progress', progress: 0.5, edge: 1 });
+    await expect
+      .poll(() => panel.evaluate((el) => (el as HTMLElement).style.transform))
+      .toMatch(/translateY\([1-9]/);
+    await snap(page, '5x-predictive-back');
+    await send(page, { type: 'invoked' });
+    await expect(sheet).toBeHidden();
+    await expect(page).toHaveURL(/\/day$/);
+
+    // With no sheet, back goes to the page before: the old page shrinks, then the last one fades in.
+    await page.getByRole('link', { name: 'Challenges' }).click();
+    await expect(page).toHaveURL(/\/challenges$/);
+    await expect(page.getByRole('heading', { name: 'Challenges' })).toBeVisible();
+    await send(page, { type: 'started', edge: 0 });
+    await send(page, { type: 'progress', progress: 0.5, edge: 0 });
+    await expect
+      .poll(() => page.locator('.app > main').evaluate((el) => (el as HTMLElement).style.transform))
+      .toContain('scale(0.95');
+    await snap(page, '5x-predictive-back-page');
+    await send(page, { type: 'invoked' });
+    await expect(page).toHaveURL(/\/day$/);
+    await expect(page.locator('.app > main')).toHaveCSS('opacity', '1');
+    await expect
+      .poll(() => page.locator('.app > main').evaluate((el) => (el as HTMLElement).style.transform))
+      .toBe('');
+  });
+
+  test('a plain back press (older Android) closes a sheet without any animation', async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto('/day');
+    await page.getByTestId('day-stat').filter({ hasText: 'Steps' }).first().click({
+      button: 'right',
+    });
+    const sheet = page.getByTestId('stat-source-sheet');
+    await expect(sheet).toBeVisible();
+    await send(page, { type: 'invoked' });
+    await expect(sheet).toBeHidden();
+  });
+});
