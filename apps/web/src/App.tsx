@@ -15,6 +15,7 @@ import { ToastHost } from './components/ui';
 import { useAuth } from './lib/auth';
 import { useDisplay } from './lib/display';
 import { syncHealthConnectIfDue } from './lib/health';
+import { invalidateSyncedData } from './lib/syncedData';
 import { isNative } from './lib/platform';
 import { useWallpaper } from './lib/queries';
 import { publishWallpaper } from './lib/wallpaper';
@@ -196,7 +197,7 @@ function NativeBridge() {
     if (!isNative || status !== 'signedIn' || !user?.settings.healthConnectSync) return;
     const run = () =>
       syncHealthConnectIfDue()
-        .then((sent) => (sent ? qc.invalidateQueries() : undefined))
+        .then((sent) => (sent ? invalidateSyncedData(qc) : undefined))
         .catch(() => undefined);
     run();
     const sub = CapApp.addListener('resume', run);
